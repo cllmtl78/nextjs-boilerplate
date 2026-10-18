@@ -2,12 +2,6 @@ import Link from "next/link";
 import Weather from "./Weather";
 import MarketBar from "./MarketBar";
 
-const menu = [
-  { ad: "Haberler", href: "/" },
-  { ad: "Hakkımızda", href: "/hakkimizda" },
-  { ad: "İletişim", href: "/iletisim" },
-];
-
 export default function Header() {
   const bugun = new Date().toLocaleDateString("tr-TR", {
     day: "numeric",
@@ -18,30 +12,20 @@ export default function Header() {
 
   return (
     <header className="site-header">
-      <div className="topbar">
-        <div className="topbar-inner">
-          <span>{bugun}</span>
-          <Weather />
-        </div>
-      </div>
-
       <div className="mainbar">
         <div className="mainbar-inner">
-          <Link href="/" className="brand" style={{ padding: "8px 0" }}>
+          <Link href="/" className="brand" style={{ padding: "6px 0" }}>
             <img
               src="/logo.png"
               alt="BPT Finans"
-              style={{ height: "64px", width: "auto", display: "block" }}
+              style={{ height: "52px", width: "auto", display: "block" }}
             />
           </Link>
 
-          <nav className="site-nav">
-            {menu.map((m) => (
-              <Link key={m.href} href={m.href}>
-                {m.ad}
-              </Link>
-            ))}
-          </nav>
+          <div className="header-sag" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px", fontSize: "12.5px", color: "#93c5fd" }}>
+            <span style={{ fontWeight: 600, color: "#e2e8f0" }}>{bugun}</span>
+            <Weather />
+          </div>
         </div>
       </div>
 
