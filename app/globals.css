@@ -496,3 +496,23 @@ a {
     padding-bottom: 12px;
   }
 }
+/* Fiyat değişimlerinde yanıp sönme (flash) efektleri */
+@keyframes flashYesil {
+  0% { background-color: rgba(74, 222, 128, 0.35); }
+  100% { background-color: transparent; }
+}
+
+@keyframes flashKirmizi {
+  0% { background-color: rgba(248, 113, 113, 0.35); }
+  100% { background-color: transparent; }
+}
+
+.ticker-item.flash-yesil {
+  animation: flashYesil 1s ease-out;
+  border-radius: 4px;
+}
+
+.ticker-item.flash-kirmizi {
+  animation: flashKirmizi 1s ease-out;
+  border-radius: 4px;
+}
