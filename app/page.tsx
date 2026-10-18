@@ -1,65 +1,112 @@
-import Image from "next/image";
+import Link from "next/link";
+import { client } from "../lib/sanity";
+import FeedBox from "../components/FeedBox";
 
-export default function Home() {
+type Haber = {
+  _id: string;
+  baslik: string;
+  slug: string;
+  spot?: string;
+  kategori?: string;
+  yayinTarihi?: string;
+};
+
+const kategoriAdlari: Record<string, string> = {
+  borsa: "Borsa",
+  doviz: "Döviz",
+  emtia: "Emtia",
+  ekonomi: "Ekonomi",
+  kripto: "Kripto",
+};
+
+const sorgu = `*[_type == "haber" && defined(slug.current)] | order(yayinTarihi desc)[0...20]{
+  _id,
+  baslik,
+  "slug": slug.current,
+  spot,
+  kategori,
+  yayinTarihi
+}`;
+
+// Geçici içerik. API bağlanınca gerçek veriyle değişecek.
+const kap = [
+  { kaynak: "KAP", baslik: "Özel durum açıklaması yayımlandı" },
+  { kaynak: "KAP", baslik: "Finansal rapor bildirimi yapıldı" },
+  { kaynak: "KAP", baslik: "Genel kurul toplantı çağrısı duyuruldu" },
+  { kaynak: "KAP", baslik: "Pay geri alım işlemi hakkında bildirim" },
+  { kaynak: "KAP", baslik: "Sözleşme imzalanmasına ilişkin açıklama" },
+  { kaynak: "KAP", baslik: "Sermaye artırımı bildirimi paylaşıldı" },
+];
+
+const resmi = [
+  { kaynak: "@TCMB", baslik: "Para Politikası Kurulu toplantı özeti resmi sitede yayımlandı." },
+  { kaynak: "@HMBakanligi", baslik: "Orta Vadeli Program kapsamında mali disiplin kararlılıkla sürüyor." },
+  { kaynak: "@SPK_Kurumsal", baslik: "Halka arz başvurularına ilişkin haftalık bülten kamuoyuna duyuruldu." },
+  { kaynak: "@BDDKResmi", baslik: "Bankacılık sektörü günlük ve haftalık temel göstergeleri güncellendi." },
+  { kaynak: "@TUIKBilgi", baslik: "Tüketici fiyat endeksi ve enflasyon verileri saat 10.00'da açıklanacak." },
+];
+
+const terminal = [
+  { kaynak: "KAYNAK A", baslik: "Küresel piyasalarda haftanın gündemi belirlendi" },
+  { kaynak: "KAYNAK B", baslik: "Merkez bankası toplantısına ilişkin özet geldi" },
+  { kaynak: "KAYNAK A", baslik: "Petrol fiyatlarında yeni hareket gözlendi" },
+  { kaynak: "KAYNAK C", baslik: "Teknoloji hisselerinde işlem hacmi arttı" },
+  { kaynak: "KAYNAK B", baslik: "Altın için yeni fiyat beklentileri paylaşıldı" },
+  { kaynak: "KAYNAK C", baslik: "Kripto piyasasında günlük özet yayımlandı" },
+];
+
+const global = [
+  { kaynak: "KAYNAK X", baslik: "Avrupa borsaları karışık seyirle açıldı" },
+  { kaynak: "KAYNAK Y", baslik: "ABD'de enflasyon verisi bekleniyor" },
+  { kaynak: "KAYNAK X", baslik: "Asya piyasalarında yön aşağı" },
+  { kaynak: "KAYNAK Z", baslik: "Küresel tahvil faizlerinde hareketlilik sürüyor" },
+  { kaynak: "KAYNAK Y", baslik: "Dolar endeksi dar bantta işlem görüyor" },
+  { kaynak: "KAYNAK Z", baslik: "Emtia fiyatlarında haftalık değişim netleşti" },
+];
+
+function tarihYaz(tarih?: string) {
+  if (!tarih) return "";
+  return new Date(tarih).toLocaleDateString("tr-TR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+export const revalidate = 60;
+
+export default async function Home() {
+  const haberler = await client.fetch<Haber[]>(sorgu);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <>
+      <div className="top-grid">
+        <FeedBox baslik="Terminal" satirlar={terminal} />
+        <FeedBox baslik="Global" satirlar={global} />
+        <div className="right-stack">
+          <FeedBox baslik="KAP" satirlar={kap} />
+          <FeedBox baslik="Resmi" satirlar={resmi} tur="tweet" />
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </div>
+
+      <h2 className="section-title">Son Haberler</h2>
+
+      {haberler.length === 0 ? (
+        <p>Henüz yayınlanmış haber yok.</p>
+      ) : (
+        <div className="grid">
+          {haberler.map((h) => (
+            <Link href={`/haber/${h.slug}`} key={h._id} className="card">
+              <span className="badge">
+                {kategoriAdlari[h.kategori ?? ""] ?? h.kategori}
+              </span>
+              <h3>{h.baslik}</h3>
+              <p>{h.spot}</p>
+              <div className="meta">{tarihYaz(h.yayinTarihi)}</div>
+            </Link>
+          ))}
         </div>
-      </main>
-    </div>
+      )}
+    </>
   );
 }
