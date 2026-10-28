@@ -38,6 +38,22 @@ const ACTIVE_FEEDS: FeedConfig[] = [
   },
 ];
 
+const formatTimeTR = (dateStr: string | number | Date): string => {
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "--:--:--";
+    return new Intl.DateTimeFormat("tr-TR", {
+      timeZone: "Europe/Istanbul",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(d);
+  } catch {
+    return "--:--:--";
+  }
+};
+
 function cleanHtmlText(str?: string | null): string {
   if (!str) return "";
   return str
@@ -128,25 +144,16 @@ function parseFeedXml(xml: string, feed: FeedConfig): ApiNewsItem[] {
     let timestamp = Date.now();
     let zaman = "";
     if (pubDateMatch) {
-      const parsedDate = new Date(pubDateMatch.trim());
+      const dateStr = pubDateMatch.trim();
+      const parsedDate = new Date(dateStr);
       if (!isNaN(parsedDate.getTime())) {
         timestamp = parsedDate.getTime();
-        zaman = parsedDate.toLocaleTimeString("tr-TR", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: false,
-        });
+        zaman = formatTimeTR(dateStr);
       }
     }
 
-    if (!zaman) {
-      zaman = new Date(timestamp).toLocaleTimeString("tr-TR", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      });
+    if (!zaman || zaman === "--:--:--") {
+      zaman = formatTimeTR(timestamp);
     }
 
     const descMatch =

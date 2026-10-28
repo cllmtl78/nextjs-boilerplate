@@ -52,13 +52,32 @@ button {
 
 /* ================= CONTAINER (KOMPAKT & ORTALI) ================= */
 .container {
-  max-width: 1360px;
+  max-width: 1320px;
   margin: 0 auto;
-  padding: 0 32px;
+  padding: 0 52px;
+}
+
+@media (min-width: 1536px) {
+  .container {
+    max-width: 1380px;
+    padding: 0 68px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .container {
+    padding: 0 32px;
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 0 18px;
+  }
 }
 
 .main {
-  padding: 12px 0 20px;
+  padding: 14px 0 24px;
 }
 
 /* ================= 1. HEADER (KOMPAKT TOPBAR & MAINBAR) ================= */
@@ -78,13 +97,26 @@ button {
 }
 
 .topbar-inner {
-  max-width: 1360px;
+  max-width: 1320px;
   margin: 0 auto;
-  padding: 4px 32px;
+  padding: 4px 52px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+
+@media (min-width: 1536px) {
+  .topbar-inner {
+    max-width: 1380px;
+    padding: 4px 68px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .topbar-inner {
+    padding: 4px 32px;
+  }
 }
 
 /* Mainbar */
@@ -94,12 +126,25 @@ button {
 }
 
 .mainbar-inner {
-  max-width: 1360px;
+  max-width: 1320px;
   margin: 0 auto;
-  padding: 7px 32px;
+  padding: 7px 52px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+@media (min-width: 1536px) {
+  .mainbar-inner {
+    max-width: 1380px;
+    padding: 7px 68px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .mainbar-inner {
+    padding: 7px 32px;
+  }
 }
 
 .brand-group {

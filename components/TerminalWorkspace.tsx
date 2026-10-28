@@ -64,6 +64,23 @@ export function cleanWireText(text: string): string {
     .trim();
 }
 
+// Türkiye Yerel Saat Dilimi Formatlayıcı (Europe/Istanbul UTC+3)
+export const formatTimeTR = (dateStr: string | number | Date): string => {
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "--:--:--";
+    return new Intl.DateTimeFormat("tr-TR", {
+      timeZone: "Europe/Istanbul",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(d);
+  } catch {
+    return "--:--:--";
+  }
+};
+
 export function formatNaturalCase(text: string): string {
   if (!text) return "";
   let prefix = "";
@@ -161,151 +178,28 @@ const PROTECTED_TERMS: { pattern: RegExp; token: string; restore: string }[] = [
   { pattern: /\bM\/M\b/gi, token: "ZXMOMXZ", restore: "Aylık (M/M)" },
 ];
 
-// Başlangıç Fallback Global Haberleri (/ ile başlayan gerçekçi Türkçe finans akışı)
-const INITIAL_GLOBAL_HABERLER: GlobalNewsItem[] = [
-  {
-    id: "tg_init_1",
-    zaman: "20:18:33",
-    timestamp: Date.now() - 60000,
-    baslik: "/ Bessent: Yapay zeka yatırımları ve şirket borçlanmaları piyasa için risk teşkil etmiyor",
-    rawText: "*BESSENT: DON'T THINK AI BORROWING PROBLEMATIC AT ALL",
-    rawClean: "/ BESSENT: DON'T THINK AI BORROWING PROBLEMATIC AT ALL",
-  },
-  {
-    id: "tg_init_2",
-    zaman: "20:02:23",
-    timestamp: Date.now() - 120000,
-    baslik: "/ Alphabet 3. Çeyrek Hasılat 127.58 milyar dolar (Beklenti: 127.93 milyar dolar), Faaliyet Kârı 40.58 milyar dolar (Beklenti: 43.16 milyar dolar)",
-    rawText: "*ALPHABET 3Q REV. $127.58B, EST. $127.93B *ALPHABET 3Q OPER INCOME $40.58B, EST. $43.16B",
-    rawClean: "/ ALPHABET 3Q REV. $127.58B, EST. $127.93B · ALPHABET 3Q OPER INCOME $40.58B, EST. $43.16B",
-  },
-  {
-    id: "tg_init_3",
-    zaman: "20:01:22",
-    timestamp: Date.now() - 180000,
-    baslik: "/ Microsoft 1. Çeyrek Düzeltilmiş Hisse Başı Kârı (EPS) 4.89 dolar (Beklenti: 4.73 dolar), Hasılat 92.28 milyar dolar (Beklenti: 90.63 milyar dolar)",
-    rawText: "*MICROSOFT 1Q ADJ EPS $4.89, EST. $4.73 *MICROSOFT 1Q REV. $92.28B, EST. $90.63B",
-    rawClean: "/ MICROSOFT 1Q ADJ EPS $4.89, EST. $4.73 · MICROSOFT 1Q REV. $92.28B, EST. $90.63B",
-  },
-  {
-    id: "tg_init_4",
-    zaman: "18:35:57",
-    timestamp: Date.now() - 300000,
-    baslik: "/ Fed FOMC toplantısında gösterge faiz oranını 10'a karşı 2 oyla %3.75-%4 aralığında sabit tuttu",
-    rawText: "*FED VOTES 10-2 TO HOLD BENCHMARK RATE IN 3.75%-4% RANGE",
-    rawClean: "/ FED VOTES 10-2 TO HOLD BENCHMARK RATE IN 3.75%-4% RANGE",
-  },
-  {
-    id: "tg_init_5",
-    zaman: "18:24:02",
-    timestamp: Date.now() - 400000,
-    baslik: "/ ABD Adalet Bakanlığı (DOJ), Nvidia'nın yapay zeka platformu Hugging Face satın alımını incelemeye aldı",
-    rawText: "*US DOJ EXAMINING NVIDIA ACQUISITION OF AI PLATFORM HUGGING FACE, TWO PEOPLE SAY",
-    rawClean: "/ US DOJ EXAMINING NVIDIA ACQUISITION OF AI PLATFORM HUGGING FACE, TWO PEOPLE SAY",
-  },
-  {
-    id: "tg_init_6",
-    zaman: "18:05:02",
-    timestamp: Date.now() - 500000,
-    baslik: "/ ECB: Dezenflasyon süreci rotasında devam ederken faiz patikasında temkinli duruş sürecek",
-    rawText: "*ECB: DISINFLATION PROCESS ON TRACK, RATE PATH REMAINS DATA DEPENDENT",
-    rawClean: "/ ECB: DISINFLATION PROCESS ON TRACK, RATE PATH REMAINS DATA DEPENDENT",
-  },
-];
-
-// Başlangıç Fallback BIST Haberleri (Sayfa yenilendiğinde anında görünen zengin akış)
-const INITIAL_BIST_HABERLER: TerminalHaber[] = [
-  {
-    id: "bist_init_1",
-    zaman: "20:04:48",
-    tarih: "Bugün",
-    kaynak: "FOREKS",
-    baslik: "Microsoft bilançosu açıklandı, Azure yüzde 48 büyüdü",
-    detay: "Yazılım devi Microsoft mali ilk çeyrek finansal sonuçlarını duyurdu. Bulut bilişim segmenti Azure gelirlerinde beklentilerin üzerinde yüzde 48 oranında güçlü artış kaydedildi.",
-    paragraflar: [
-      "Yazılım devi Microsoft mali ilk çeyrek finansal sonuçlarını duyurdu. Bulut bilişim segmenti Azure gelirlerinde beklentilerin üzerinde yüzde 48 oranında güçlü artış kaydedildi.",
-      "Yapay zeka altyapısına yönelik sermaye harcamaları çeyreklik bazda artarken kurumsal talep güçlü seyrini sürdürüyor."
-    ],
-    url: "https://www.foreks.com",
-    kategori: "bist",
-    timestamp: Date.now() - 30000,
-  },
-  {
-    id: "bist_init_2",
-    zaman: "19:42:15",
-    tarih: "Bugün",
-    kaynak: "AA FİNANS",
-    baslik: "Hazine ve Maliye Bakanlığı 2026 finansman programını paylaştı",
-    detay: "Hazine ve Maliye Bakanlığı, borçlanma maliyetlerini düşürmeyi ve iç borç çevirme oranını makul seviyelerde tutmayı amaçlayan finansman programını kamuoyuyla paylaştı.",
-    paragraflar: [
-      "Hazine ve Maliye Bakanlığı, borçlanma maliyetlerini düşürmeyi ve iç borç çevirme oranını makul seviyelerde tutmayı amaçlayan finansman programını kamuoyuyla paylaştı.",
-      "Piyasa yapıcı bankalarla gerçekleştirilen istişareler neticesinde tahvil ihraç takvimi ve likidite adımları belirlendi."
-    ],
-    url: "https://www.aa.com.tr",
-    kategori: "bist",
-    timestamp: Date.now() - 120000,
-  },
-  {
-    id: "bist_init_3",
-    zaman: "19:20:05",
-    tarih: "Bugün",
-    kaynak: "EKONOMİM",
-    baslik: "Borsa İstanbul kapanışta bankacılık endeksi öncülüğünde prim yaptı",
-    detay: "BIST 100 endeksi günü yüzde 1.85 yükselişle tamamlarken XBANK bankacılık endeksinde günlük getiri yüzde 2.42 seviyesine ulaştı.",
-    paragraflar: [
-      "Borsa İstanbul günü alıcılı seyirle tamamlarken sanayi ve ulaştırma hisselerinde para girişi dikkat çekti.",
-      "İşlem hacmi 110 milyar TL barajını aşarak son iki haftanın en yüksek günlük seviyesine yerleşti."
-    ],
-    url: "https://www.ekonomim.com",
-    kategori: "bist",
-    timestamp: Date.now() - 240000,
-  },
-  {
-    id: "bist_init_4",
-    zaman: "18:55:40",
-    tarih: "Bugün",
-    kaynak: "CNBC-E",
-    baslik: "Uluslararası kredi derecelendirme kuruluşlarından Türkiye değerlendirmesi",
-    detay: "Kredi derecelendirme kuruluşları yayımladıkları ara raporda Türkiye'nin rezerv birikimi ve cari açık daralmasına dikkat çekti.",
-    paragraflar: [
-      "Analistler, dezenflasyon sürecinin kararlılıkla devam etmesi halinde not görünümüne ilişkin pozitif adımların süreceğini belirtti.",
-      "Dış finansman koşullarındaki iyileşme CDS primlerinde 250 baz puanın altındaki kalıcılığı destekliyor."
-    ],
-    url: "https://www.cnbce.com",
-    kategori: "bist",
-    timestamp: Date.now() - 360000,
-  },
-  {
-    id: "bist_init_5",
-    zaman: "18:30:12",
-    tarih: "Bugün",
-    kaynak: "NTV PARA",
-    baslik: "TCMB brüt rezervlerinde 1.4 milyar dolarlık haftalık artış kaydedildi",
-    detay: "Türkiye Cumhuriyet Merkez Bankası toplam rezervleri swap hariç net pozisyondaki toparlanmayla yükseliş trendini korudu.",
-    paragraflar: [
-      "Bankacılık kaynaklarından edinilen haftalık bülten verilerine göre rezerv dinamikleri güçlü seyrini sürdürüyor.",
-      "Kur korumalı mevduattan çıkışlar hız kesmeden devam ederken standart TL mevduat payı artıyor."
-    ],
-    url: "https://www.ntv.com.tr",
-    kategori: "bist",
-    timestamp: Date.now() - 480000,
-  },
-  {
-    id: "bist_init_6",
-    zaman: "18:05:50",
-    tarih: "Bugün",
-    kaynak: "UZMAN PARA",
-    baslik: "Şirket bilançolarında son çeyrek operasyonel marjlar beklentileri aştı",
-    detay: "BIST 30 şirketlerinin konsolide FAVÖK ve net kâr büyüme performansı analist tahminlerinin üzerinde gerçekleşti.",
-    paragraflar: [
-      "Özellikle havacılık, perakende ve teknoloji sektörlerinde faaliyet marjlarında güçlü iyileşme kaydedildi.",
-      "Yatırımcıların temettü beklentileriyle birlikte temettü verimi yüksek hisselerde işlem hacmi arttı."
-    ],
-    url: "https://uzmanpara.milliyet.com.tr",
-    kategori: "bist",
-    timestamp: Date.now() - 600000,
-  },
-];
+// Profesyonel Terminal Skeleton Loader (Haberler çekilirken gösterilen zarif animasyon)
+function TerminalSkeletonList({ count = 5 }: { count?: number }) {
+  return (
+    <div className="p-3 flex flex-col space-y-3">
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="pb-3 border-b border-white/[0.04] last:border-0 flex items-start gap-3 px-1"
+        >
+          <div className="w-12 h-3 bg-slate-800/80 rounded animate-pulse shrink-0 mt-0.5" />
+          <div className="flex-1 flex flex-col gap-1.5">
+            <div
+              className={`h-3 bg-slate-800/60 rounded animate-pulse ${
+                i % 3 === 0 ? "w-4/5" : i % 2 === 0 ? "w-3/4" : "w-11/12"
+              }`}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // Statik KAP Bildirimleri (Belirgin Cyan Hisse Kodu + İnce Bildirim Türü)
 const KAP_BILDIRIMLERI: TerminalHaber[] = [
@@ -593,25 +487,16 @@ function parseRssWithDomParser(
       let timestamp = Date.now();
       let zaman = "";
       if (pubDateEl?.textContent) {
-        const parsedDate = new Date(pubDateEl.textContent.trim());
+        const dateStr = pubDateEl.textContent.trim();
+        const parsedDate = new Date(dateStr);
         if (!isNaN(parsedDate.getTime())) {
           timestamp = parsedDate.getTime();
-          zaman = parsedDate.toLocaleTimeString("tr-TR", {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hour12: false,
-          });
+          zaman = formatTimeTR(dateStr);
         }
       }
 
-      if (!zaman) {
-        zaman = new Date(timestamp).toLocaleTimeString("tr-TR", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: false,
-        });
+      if (!zaman || zaman === "--:--:--") {
+        zaman = formatTimeTR(timestamp);
       }
 
       const descEl = node.getElementsByTagName("description")[0];
@@ -671,24 +556,15 @@ function parseRssWithDomParser(
       let timestamp = Date.now();
       let zaman = "";
       if (pubDateMatch) {
-        const parsed = new Date(pubDateMatch.trim());
+        const dateStr = pubDateMatch.trim();
+        const parsed = new Date(dateStr);
         if (!isNaN(parsed.getTime())) {
           timestamp = parsed.getTime();
-          zaman = parsed.toLocaleTimeString("tr-TR", {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hour12: false,
-          });
+          zaman = formatTimeTR(dateStr);
         }
       }
-      if (!zaman) {
-        zaman = new Date(timestamp).toLocaleTimeString("tr-TR", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: false,
-        });
+      if (!zaman || zaman === "--:--:--") {
+        zaman = formatTimeTR(timestamp);
       }
 
       const descMatch =
@@ -718,8 +594,10 @@ function parseRssWithDomParser(
 }
 
 export default function TerminalWorkspace() {
-  const [bistHaberleri, setBistHaberleri] = useState<TerminalHaber[]>(INITIAL_BIST_HABERLER);
-  const [globalHaberler, setGlobalHaberler] = useState<GlobalNewsItem[]>(INITIAL_GLOBAL_HABERLER);
+  const [bistHaberleri, setBistHaberleri] = useState<TerminalHaber[]>([]);
+  const [globalHaberler, setGlobalHaberler] = useState<GlobalNewsItem[]>([]);
+  const [loadingBist, setLoadingBist] = useState<boolean>(true);
+  const [loadingGlobal, setLoadingGlobal] = useState<boolean>(true);
   const [seciliHaber, setSeciliHaber] = useState<TerminalHaber | null>(null);
   const [newlyArrivedIds, setNewlyArrivedIds] = useState<Set<string>>(new Set());
 
@@ -863,12 +741,7 @@ export default function TerminalWorkspace() {
 
                 if (!raw) continue;
                 const dObj = timeM?.[1] ? new Date(timeM[1]) : new Date();
-                const zStr = dObj.toLocaleTimeString("tr-TR", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  second: "2-digit",
-                  hour12: false,
-                });
+                const zStr = formatTimeTR(timeM?.[1] || dObj);
                 const pId = postM ? postM[1] : `tg_proxy_${dObj.getTime()}_${i}`;
                 const cleanText = cleanWireText(raw);
                 items.push({
@@ -923,7 +796,7 @@ export default function TerminalWorkspace() {
     } catch {
       // Hata durumunda mevcut liste ekranda korunur
     } finally {
-      // Tamamlandı
+      setLoadingGlobal(false);
     }
   }, [translateToTurkish]);
 
@@ -931,26 +804,6 @@ export default function TerminalWorkspace() {
 
   // 8 Kaynaklı Canlı RSS Çekme Motoru (Promise.allSettled & allorigins proxy)
   const loadNews = useCallback(async () => {
-
-    // İlk açılışta yerel önbellek varsa boş ekranı önlemek için hemen yükle
-    if (knownIdsRef.current.size === 0) {
-      try {
-        const cached = localStorage.getItem(CACHE_KEY_BIST);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setBistHaberleri(parsed);
-            parsed.forEach((h: TerminalHaber) => {
-              knownIdsRef.current.add(h.id);
-              knownIdsRef.current.add(h.baslik.slice(0, 30));
-            });
-          }
-        }
-      } catch {
-        // Önbellek okuma hatası yoksayılır
-      }
-    }
-
     try {
       // Tarayıcının dosyayı doğrudan indirmesini engellemek ve CORS kuralını aşmak için allorigins proxy kullanımı
       const fetchUrl = (rssUrl: string) => {
@@ -1001,7 +854,7 @@ export default function TerminalWorkspace() {
             if (data.items && Array.isArray(data.items) && data.items.length > 0) {
               items = data.items.map((it: ApiNewsItemResponse) => ({
                 id: it.id,
-                zaman: it.zaman,
+                zaman: it.timestamp ? formatTimeTR(it.timestamp) : (it.zaman || formatTimeTR(Date.now())),
                 tarih: it.tarih || "Bugün",
                 kaynak: it.kaynak,
                 baslik: it.baslik,
@@ -1074,6 +927,8 @@ export default function TerminalWorkspace() {
       }
     } catch {
       // Ağ veya proxy hatasında ekran asla boş kalmaz; mevcut önbellek ekranda tutulur
+    } finally {
+      setLoadingBist(false);
     }
   }, []);
 
@@ -1155,34 +1010,48 @@ export default function TerminalWorkspace() {
           </div>
 
           <div className="pane-scroll">
-            {bistHaberleri.map((h) => {
-              const isNew = newlyArrivedIds.has(h.id);
-              return (
-                <article
-                  key={h.id}
-                  onClick={() => setSeciliHaber(h)}
-                  className={`terminal-row group transition-all duration-300 ${
-                    isNew ? "terminal-row-new" : ""
-                  }`}
-                >
-                  <div className="flex items-center gap-2 font-mono text-[10.5px]">
-                    <span className="row-time tabular-nums text-slate-500">{h.zaman}</span>
-                    <span className="px-1.5 py-0.5 rounded bg-[#0a1120] border border-slate-700/60 text-slate-300 font-mono text-[9.5px] uppercase tracking-wide">
-                      [{h.kaynak}]
-                    </span>
-                    {isNew && (
-                      <span className="px-1 py-0.2 rounded bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 text-[8.5px] font-bold animate-pulse">
-                        YENİ
+            {loadingBist ? (
+              <TerminalSkeletonList count={6} />
+            ) : bistHaberleri.length === 0 ? (
+              <div className="p-6 flex flex-col items-center justify-center h-48 text-center gap-2.5 font-mono select-none">
+                <div className="flex items-center gap-2 text-cyan-400 text-xs font-semibold">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                  <span>Canlı akış bekleniyor...</span>
+                </div>
+                <p className="text-[11px] text-slate-500 max-w-[320px]">
+                  Ekonomi ve finans kaynakları taranıyor, yeni haberler düştükçe akışa eklenecek.
+                </p>
+              </div>
+            ) : (
+              bistHaberleri.map((h) => {
+                const isNew = newlyArrivedIds.has(h.id);
+                return (
+                  <article
+                    key={h.id}
+                    onClick={() => setSeciliHaber(h)}
+                    className={`terminal-row group transition-all duration-300 ${
+                      isNew ? "terminal-row-new" : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-mono text-[10.5px]">
+                      <span className="row-time tabular-nums text-slate-500">{h.zaman}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-[#0a1120] border border-slate-700/60 text-slate-300 font-mono text-[9.5px] uppercase tracking-wide">
+                        [{h.kaynak}]
                       </span>
-                    )}
-                  </div>
+                      {isNew && (
+                        <span className="px-1 py-0.2 rounded bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 text-[8.5px] font-bold animate-pulse">
+                          YENİ
+                        </span>
+                      )}
+                    </div>
 
-                  <h3 className="row-headline font-medium text-slate-200 group-hover:text-cyan-400 cursor-pointer transition text-xs leading-snug">
-                    {h.baslik}
-                  </h3>
-                </article>
-              );
-            })}
+                    <h3 className="row-headline font-medium text-slate-200 group-hover:text-cyan-400 cursor-pointer transition text-xs leading-snug">
+                      {h.baslik}
+                    </h3>
+                  </article>
+                );
+              })
+            )}
           </div>
         </section>
 
@@ -1194,25 +1063,39 @@ export default function TerminalWorkspace() {
             </div>
           </div>
 
-          <div className="pane-scroll space-y-1.5 p-1">
-            {globalHaberler.map((h) => {
-              const displayTitle = formatNaturalCase(h.baslik);
+          <div className="pane-scroll p-3 flex flex-col space-y-3">
+            {loadingGlobal ? (
+              <TerminalSkeletonList count={6} />
+            ) : globalHaberler.length === 0 ? (
+              <div className="p-6 flex flex-col items-center justify-center h-48 text-center gap-2.5 font-mono select-none">
+                <div className="flex items-center gap-2 text-cyan-400 text-xs font-semibold">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                  <span>Küresel canlı akış bekleniyor...</span>
+                </div>
+                <p className="text-[11px] text-slate-500 max-w-[320px]">
+                  Telegram @trad_fin bağlantısı kuruluyor.
+                </p>
+              </div>
+            ) : (
+              globalHaberler.map((h) => {
+                const displayTitle = formatNaturalCase(h.baslik);
 
-              return (
-                <article
-                  key={h.id}
-                  className="flex items-start gap-4 px-4 py-4 rounded bg-[#0a101d]/40 border border-white/[0.05] transition-all hover:bg-[#111a2e]/60 select-text"
-                >
-                  <span className="font-mono text-slate-500 text-[10.5px] tabular-nums shrink-0 pt-0.5 select-none">
-                    {h.zaman}
-                  </span>
+                return (
+                  <article
+                    key={h.id}
+                    className="pb-3 border-b border-white/[0.06] last:border-0 flex items-start gap-3 select-text transition-colors hover:bg-white/[0.02] px-1"
+                  >
+                    <span className="font-mono text-slate-500 text-xs shrink-0 select-none pt-0.5 tabular-nums">
+                      {h.zaman}
+                    </span>
 
-                  <p className="text-xs text-slate-200 leading-relaxed font-normal flex-1 break-words">
-                    {displayTitle}
-                  </p>
-                </article>
-              );
-            })}
+                    <p className="text-xs text-slate-200 leading-relaxed font-normal flex-1 break-words">
+                      {displayTitle}
+                    </p>
+                  </article>
+                );
+              })
+            )}
           </div>
         </section>
 

@@ -22,6 +22,22 @@ function cleanHtml(html: string): string {
     .trim();
 }
 
+const formatTimeTR = (dateStr: string | number | Date): string => {
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "--:--:--";
+    return new Intl.DateTimeFormat("tr-TR", {
+      timeZone: "Europe/Istanbul",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(d);
+  } catch {
+    return "--:--:--";
+  }
+};
+
 function formatNaturalCase(text: string): string {
   if (!text) return "";
   let prefix = "";
@@ -133,25 +149,16 @@ export async function GET() {
         let zamanStr = "";
 
         if (timeMatch && timeMatch[1]) {
-          const dateObj = new Date(timeMatch[1]);
+          const dateStr = timeMatch[1];
+          const dateObj = new Date(dateStr);
           if (!isNaN(dateObj.getTime())) {
             timestamp = dateObj.getTime();
-            zamanStr = dateObj.toLocaleTimeString("tr-TR", {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-              hour12: false,
-            });
+            zamanStr = formatTimeTR(dateStr);
           }
         }
 
-        if (!zamanStr) {
-          zamanStr = new Date(timestamp).toLocaleTimeString("tr-TR", {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hour12: false,
-          });
+        if (!zamanStr || zamanStr === "--:--:--") {
+          zamanStr = formatTimeTR(timestamp);
         }
 
         const postId = postMatch ? postMatch[1] : `trad_fin_${timestamp}_${i}`;
