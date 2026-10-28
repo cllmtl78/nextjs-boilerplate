@@ -2,14 +2,11 @@
 
 import { useState, useEffect } from "react";
 import {
-  TrendingUp,
-  Globe,
-  Building2,
-  Landmark,
   X,
   ExternalLink,
   Layers,
 } from "lucide-react";
+import MarketIntelligence from "@/components/MarketIntelligence";
 
 export type TerminalHaber = {
   id: string;
@@ -495,7 +492,6 @@ export default function TerminalWorkspace() {
         <section className="terminal-pane">
           <div className="pane-header">
             <div className="pane-title-group">
-              <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
               <h2 className="pane-title">BIST & Türkiye</h2>
             </div>
             <div className="flex items-center gap-1.5 font-mono text-[10px] text-slate-500">
@@ -533,15 +529,9 @@ export default function TerminalWorkspace() {
                     </span>
                   </div>
 
-                  <h3 className="row-headline font-medium text-slate-200 group-hover:text-cyan-400 cursor-pointer transition text-xs line-clamp-2 leading-snug">
+                  <h3 className="row-headline font-medium text-slate-200 group-hover:text-cyan-400 cursor-pointer transition text-xs leading-snug">
                     {h.baslik}
                   </h3>
-
-                  {h.ozet && (
-                    <p className="text-slate-400 text-[11px] truncate leading-normal">
-                      {h.ozet}
-                    </p>
-                  )}
                 </article>
               ))
             )}
@@ -552,7 +542,6 @@ export default function TerminalWorkspace() {
         <section className="terminal-pane">
           <div className="pane-header">
             <div className="pane-title-group">
-              <Globe className="w-3.5 h-3.5 text-slate-400" />
               <h2 className="pane-title">Global</h2>
             </div>
             <div className="font-mono text-[10px] text-slate-500">
@@ -588,7 +577,6 @@ export default function TerminalWorkspace() {
           <section className="terminal-pane pane-kap">
             <div className="pane-header">
               <div className="pane-title-group">
-                <Building2 className="w-3.5 h-3.5 text-slate-400" />
                 <h2 className="pane-title">KAP Bildirimleri</h2>
               </div>
               <div className="font-mono text-[10px] text-slate-500">
@@ -633,7 +621,6 @@ export default function TerminalWorkspace() {
           <section className="terminal-pane pane-resmi">
             <div className="pane-header">
               <div className="pane-title-group">
-                <Landmark className="w-3.5 h-3.5 text-slate-400" />
                 <h2 className="pane-title">Resmi Kurumlar</h2>
               </div>
               <div className="font-mono text-[10px] text-slate-500">
@@ -662,6 +649,9 @@ export default function TerminalWorkspace() {
           </section>
         </div>
       </div>
+
+      {/* 3-KOLONLU MARKET INTELLIGENCE TABANI (BIST MOVERS, SECTOR FLOW, CALENDAR) */}
+      <MarketIntelligence />
 
       {/* ŞIK ENDÜSTRİYEL HABER DETAY KARTI (MODAL / DIALOG POPUP) */}
       {seciliHaber && (
