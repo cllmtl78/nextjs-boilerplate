@@ -24,6 +24,8 @@ function cleanHtml(html: string): string {
 
 function formatHeadline(text: string): string {
   let cleaned = text.trim();
+  // Borsa Ticker Temizliği ($MSFT, $GOOGL, $NVDA vb.)
+  cleaned = cleaned.replace(/\$[A-Z]{1,6}\b/gi, "");
   // Baştaki * işaretini / ile değiştir veya başına / ekle
   if (cleaned.startsWith("*")) {
     cleaned = "/ " + cleaned.slice(1).trim();
@@ -32,6 +34,8 @@ function formatHeadline(text: string): string {
   }
   // İçerdeki * işaretlerini temizle
   cleaned = cleaned.replace(/\s+\*\s*/g, " · ");
+  // Birden fazla boşlukları teke indir
+  cleaned = cleaned.replace(/\s{2,}/g, " ").trim();
   return cleaned;
 }
 

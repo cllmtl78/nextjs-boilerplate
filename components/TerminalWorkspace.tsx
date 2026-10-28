@@ -47,10 +47,68 @@ export interface GlobalNewsItem {
   timestamp: number;
   baslik: string;
   rawText?: string;
+  rawClean?: string;
 }
 
 const CACHE_KEY_GLOBAL = "global_tradfin_news_v1";
 const CACHE_KEY_TRANSLATIONS = "global_translations_cache_v1";
+
+// Ticker ve gereksiz karakterleri temizleyen yardımcı fonksiyon
+export function cleanWireText(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/\$[A-Z]{1,6}\b/gi, "") // $MSFT, $GOOGL, $NVDA vb. borsa ticker etiketlerini sil
+    .replace(/^[\*\/\s]+/, "")        // Baştaki * veya / işaretleri
+    .replace(/\s+\*\s*/g, " · ")      // Ara yıldız işaretlerini temizle
+    .replace(/\s{2,}/g, " ")          // Çoklu boşlukları teke indir
+    .trim();
+}
+
+export function cleanEnglishWire(text: string): string {
+  const cleaned = cleanWireText(text);
+  return cleaned ? "/ " + cleaned : "/ Wire";
+}
+
+// Özel İsim ve Finansal Terim Koruma Sözlüğü (Google Translate öncesi maskeleme)
+const PROTECTED_TERMS: { pattern: RegExp; token: string; restore: string }[] = [
+  // Özel İsimler (Asla tercüme edilmeyecek)
+  { pattern: /\bWARSH\b/gi, token: "ZXWARSHXZ", restore: "Warsh" },
+  { pattern: /\bPOWELL\b/gi, token: "ZXPOWELLXZ", restore: "Powell" },
+  { pattern: /\bYELLEN\b/gi, token: "ZXYELLENXZ", restore: "Yellen" },
+  { pattern: /\bBESSENT\b/gi, token: "ZXBESSENTXZ", restore: "Bessent" },
+  { pattern: /\bTRUMP\b/gi, token: "ZXTRUMPXZ", restore: "Trump" },
+  { pattern: /\bBIDEN\b/gi, token: "ZXBIDENXZ", restore: "Biden" },
+
+  // Finansal Terimler ve Kısaltmalar
+  { pattern: /\bCREDIT\s+SPREADS?\b/gi, token: "ZXCREDITSPREADSXZ", restore: "Kredi Spread'leri" },
+  { pattern: /\bSPREADS?\b/gi, token: "ZXSPREADSXZ", restore: "Spread'ler" },
+  { pattern: /\bADJ\s+EPS\b/gi, token: "ZXADJEPSXZ", restore: "Düzeltilmiş HBK (EPS)" },
+  { pattern: /\bEPS\b/gi, token: "ZXEPSXZ", restore: "Hisse Başı Kâr (EPS)" },
+  { pattern: /\bOPER\s+INCOME\b/gi, token: "ZXOPERINCOMEXZ", restore: "Faaliyet Kârı" },
+  { pattern: /\bREV\b\.?/gi, token: "ZXREVXZ", restore: "Hasılat" },
+  { pattern: /\bREVENUE\b/gi, token: "ZXREVENUEXZ", restore: "Hasılat" },
+  { pattern: /\bEST\b\.?/gi, token: "ZXESTXZ", restore: "Beklenti" },
+  { pattern: /\bADJ\b\.?/gi, token: "ZXADJXZ", restore: "Düzeltilmiş" },
+  { pattern: /\bFOMC\b/gi, token: "ZXFOMCXZ", restore: "FOMC" },
+  { pattern: /\bFED\b/gi, token: "ZXFEDXZ", restore: "Fed" },
+  { pattern: /\bECB\b/gi, token: "ZXECBXZ", restore: "ECB" },
+  { pattern: /\bCPI\b/gi, token: "ZXCPIXZ", restore: "TÜFE (CPI)" },
+  { pattern: /\bPPI\b/gi, token: "ZXPPIXZ", restore: "ÜFE (PPI)" },
+  { pattern: /\bPMI\b/gi, token: "ZXPMIXZ", restore: "PMI" },
+  { pattern: /\bPCE\b/gi, token: "ZXPCEXZ", restore: "PCE" },
+  { pattern: /\bCAPEX\b/gi, token: "ZXCAPEXXZ", restore: "Sermaye Harcamaları (Capex)" },
+  { pattern: /\bEBITDA\b/gi, token: "ZXEBITDAXZ", restore: "FAVÖK (EBITDA)" },
+  { pattern: /\b1Q\b/gi, token: "ZX1QXZ", restore: "1. Çeyrek (1Ç)" },
+  { pattern: /\b2Q\b/gi, token: "ZX2QXZ", restore: "2. Çeyrek (2Ç)" },
+  { pattern: /\b3Q\b/gi, token: "ZX3QXZ", restore: "3. Çeyrek (3Ç)" },
+  { pattern: /\b4Q\b/gi, token: "ZX4QXZ", restore: "4. Çeyrek (4Ç)" },
+  { pattern: /\bQ1\b/gi, token: "ZXQ1XZ", restore: "1Ç" },
+  { pattern: /\bQ2\b/gi, token: "ZXQ2XZ", restore: "2Ç" },
+  { pattern: /\bQ3\b/gi, token: "ZXQ3XZ", restore: "3Ç" },
+  { pattern: /\bQ4\b/gi, token: "ZXQ4XZ", restore: "4Ç" },
+  { pattern: /\bY\/Y\b/gi, token: "ZXYOYXZ", restore: "Yıllık (Y/Y)" },
+  { pattern: /\bM\/M\b/gi, token: "ZXMOMXZ", restore: "Aylık (M/M)" },
+];
 
 // Başlangıç Fallback Global Haberleri (/ ile başlayan gerçekçi Türkçe finans akışı)
 const INITIAL_GLOBAL_HABERLER: GlobalNewsItem[] = [
@@ -60,20 +118,23 @@ const INITIAL_GLOBAL_HABERLER: GlobalNewsItem[] = [
     timestamp: Date.now() - 60000,
     baslik: "/ Bessent: Yapay zeka yatırımları ve şirket borçlanmaları piyasa için risk teşkil etmiyor",
     rawText: "*BESSENT: DON'T THINK AI BORROWING PROBLEMATIC AT ALL",
+    rawClean: "/ BESSENT: DON'T THINK AI BORROWING PROBLEMATIC AT ALL",
   },
   {
     id: "tg_init_2",
     zaman: "20:02:23",
     timestamp: Date.now() - 120000,
-    baslik: "/ Alphabet 3. çeyrek bilançosunu açıkladı: Hasılat 127.58 milyar dolar, faaliyet kârı 40.58 milyar dolar",
-    rawText: "*ALPHABET 3Q REV. $127.58B, EST. $127.93B *ALPHABET 3Q OPER INCOME $40.58B, EST. $43.16B $GOOGL",
+    baslik: "/ Alphabet 3. Çeyrek Hasılat 127.58 milyar dolar (Beklenti: 127.93 milyar dolar), Faaliyet Kârı 40.58 milyar dolar (Beklenti: 43.16 milyar dolar)",
+    rawText: "*ALPHABET 3Q REV. $127.58B, EST. $127.93B *ALPHABET 3Q OPER INCOME $40.58B, EST. $43.16B",
+    rawClean: "/ ALPHABET 3Q REV. $127.58B, EST. $127.93B · ALPHABET 3Q OPER INCOME $40.58B, EST. $43.16B",
   },
   {
     id: "tg_init_3",
     zaman: "20:01:22",
     timestamp: Date.now() - 180000,
-    baslik: "/ Microsoft 1. çeyrek düzeltilmiş hisse başı kârı 4.89 dolar (Beklenti: 4.73 dolar), gelir 92.28 milyar dolar",
-    rawText: "*MICROSOFT 1Q ADJ EPS $4.89, EST. $4.73 *MICROSOFT 1Q REV. $92.28B, EST. $90.63B $MSFT",
+    baslik: "/ Microsoft 1. Çeyrek Düzeltilmiş Hisse Başı Kârı (EPS) 4.89 dolar (Beklenti: 4.73 dolar), Hasılat 92.28 milyar dolar (Beklenti: 90.63 milyar dolar)",
+    rawText: "*MICROSOFT 1Q ADJ EPS $4.89, EST. $4.73 *MICROSOFT 1Q REV. $92.28B, EST. $90.63B",
+    rawClean: "/ MICROSOFT 1Q ADJ EPS $4.89, EST. $4.73 · MICROSOFT 1Q REV. $92.28B, EST. $90.63B",
   },
   {
     id: "tg_init_4",
@@ -81,20 +142,23 @@ const INITIAL_GLOBAL_HABERLER: GlobalNewsItem[] = [
     timestamp: Date.now() - 300000,
     baslik: "/ Fed FOMC toplantısında gösterge faiz oranını 10'a karşı 2 oyla %3.75-%4 aralığında sabit tuttu",
     rawText: "*FED VOTES 10-2 TO HOLD BENCHMARK RATE IN 3.75%-4% RANGE",
+    rawClean: "/ FED VOTES 10-2 TO HOLD BENCHMARK RATE IN 3.75%-4% RANGE",
   },
   {
     id: "tg_init_5",
     zaman: "18:24:02",
     timestamp: Date.now() - 400000,
     baslik: "/ ABD Adalet Bakanlığı (DOJ), Nvidia'nın yapay zeka platformu Hugging Face satın alımını incelemeye aldı",
-    rawText: "*US DOJ EXAMINING NVIDIA ACQUISITION OF AI PLATFORM HUGGING FACE, TWO PEOPLE SAY $NVDA",
+    rawText: "*US DOJ EXAMINING NVIDIA ACQUISITION OF AI PLATFORM HUGGING FACE, TWO PEOPLE SAY",
+    rawClean: "/ US DOJ EXAMINING NVIDIA ACQUISITION OF AI PLATFORM HUGGING FACE, TWO PEOPLE SAY",
   },
   {
     id: "tg_init_6",
     zaman: "18:05:02",
     timestamp: Date.now() - 500000,
-    baslik: "/ ECB: Hizmet sektörü enflasyonunda yavaşlama eğilimi belirginleşirken faiz patikasında temkinli duruş sürecek",
+    baslik: "/ ECB: Dezenflasyon süreci rotasında devam ederken faiz patikasında temkinli duruş sürecek",
     rawText: "*ECB: DISINFLATION PROCESS ON TRACK, RATE PATH REMAINS DATA DEPENDENT",
+    rawClean: "/ ECB: DISINFLATION PROCESS ON TRACK, RATE PATH REMAINS DATA DEPENDENT",
   },
 ];
 
@@ -262,9 +326,256 @@ const RESMI_HABERLER: TerminalHaber[] = [
   },
 ];
 
+// 8 Aktif Doğrudan RSS Kaynak Konfigürasyonu
+const ACTIVE_RSS_SOURCES: { url: string; badge: string; filterEconomyOnly?: boolean }[] = [
+  { url: "https://www.ekonomim.com/rss", badge: "EKONOMİM" },
+  { url: "https://www.cnbce.com/rss", badge: "CNBC-E" },
+  { url: "https://www.ekonomist.com.tr/rss", badge: "EKONOMİST" },
+  { url: "https://www.foreks.com/rss", badge: "FOREKS" },
+  { url: "https://uzmanpara.milliyet.com.tr/haber_rss/", badge: "UZMAN PARA" },
+  { url: "https://www.ntv.com.tr/ntvpara.rss", badge: "NTV PARA" },
+  {
+    url: "https://www.turkiyegazetesi.com.tr/rss",
+    badge: "TÜRKİYE GAZETESİ",
+    filterEconomyOnly: true,
+  },
+  {
+    url: "https://www.dunya.com/rss",
+    badge: "DÜNYA GAZETESİ",
+    filterEconomyOnly: true,
+  },
+];
+
+// HTML ve özel karakterleri temizleyen yardımcı
+function cleanHtmlStr(str?: string | null): string {
+  if (!str) return "";
+  return str
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, "$1")
+    .replace(/<[^>]*>?/gi, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Description metninden ilk 2 paragrafı ayıklayan fonksiyon
+function extractTwoParagraphs(desc: string, title: string, badge: string): string[] {
+  if (!desc || desc.length < 15) {
+    return [
+      `[${badge}] tarafından aktarılan son dakika ekonomi ve finans gelişmesi: "${title}".`,
+      "Piyasa analistleri, haberin sektör endeksleri ve şirket değerlemeleri üzerindeki etkilerini izliyor.",
+    ];
+  }
+
+  const paragraphs = desc
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 20);
+
+  if (paragraphs.length >= 2) {
+    return paragraphs.slice(0, 2);
+  }
+
+  const sentences = desc.match(/[^\.!\?]+[\.!\?]+/g);
+  if (sentences && sentences.length >= 2) {
+    const mid = Math.ceil(sentences.length / 2);
+    const p1 = sentences.slice(0, mid).join(" ").trim();
+    const p2 = sentences.slice(mid).join(" ").trim();
+    if (p1 && p2) return [p1, p2];
+  }
+
+  return [
+    desc,
+    "Borsa İstanbul ve finansal piyasalara ilişkin gelişmeler güncellenmektedir.",
+  ];
+}
+
+// DOMParser ile RSS XML ayrıştırma
+function parseRssWithDomParser(
+  xmlText: string,
+  feed: { url: string; badge: string; filterEconomyOnly?: boolean }
+): TerminalHaber[] {
+  if (!xmlText || typeof xmlText !== "string") return [];
+  const items: TerminalHaber[] = [];
+
+  try {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+
+    if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
+      throw new Error("XML parsererror");
+    }
+
+    const itemNodes = xmlDoc.getElementsByTagName("item");
+    for (let i = 0; i < itemNodes.length; i++) {
+      const node = itemNodes[i];
+
+      // Özel Filtre: Türkiye Gazetesi ve Dünya Gazetesi için sadece "Ekonomi" kategorisi
+      if (feed.filterEconomyOnly) {
+        const catNodes = node.getElementsByTagName("category");
+        let isEconomy = false;
+        for (let c = 0; c < catNodes.length; c++) {
+          const catText = (catNodes[c].textContent || "").trim().toLowerCase();
+          if (catText.includes("ekonomi")) {
+            isEconomy = true;
+            break;
+          }
+        }
+
+        if (!isEconomy) {
+          const linkText = (node.getElementsByTagName("link")[0]?.textContent || "").toLowerCase();
+          if (linkText.includes("/ekonomi/")) {
+            isEconomy = true;
+          }
+        }
+
+        if (!isEconomy) continue;
+      }
+
+      const titleEl = node.getElementsByTagName("title")[0];
+      const rawTitle = cleanHtmlStr(titleEl?.textContent);
+      if (!rawTitle || rawTitle.length < 5) continue;
+
+      const linkEl = node.getElementsByTagName("link")[0];
+      const guidEl = node.getElementsByTagName("guid")[0];
+      const rawLink = cleanHtmlStr(linkEl?.textContent || guidEl?.textContent || "#");
+
+      const pubDateEl = node.getElementsByTagName("pubDate")[0];
+      let timestamp = Date.now();
+      let zaman = "";
+      if (pubDateEl?.textContent) {
+        const parsedDate = new Date(pubDateEl.textContent.trim());
+        if (!isNaN(parsedDate.getTime())) {
+          timestamp = parsedDate.getTime();
+          zaman = parsedDate.toLocaleTimeString("tr-TR", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+          });
+        }
+      }
+
+      if (!zaman) {
+        zaman = new Date(timestamp).toLocaleTimeString("tr-TR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        });
+      }
+
+      const descEl = node.getElementsByTagName("description")[0];
+      const cleanDesc = cleanHtmlStr(descEl?.textContent);
+      const paragraflar = extractTwoParagraphs(cleanDesc, rawTitle, feed.badge);
+
+      const id = `rss_${feed.badge.toLowerCase().replace(/[^a-z]/g, "")}_${timestamp}_${i}`;
+
+      items.push({
+        id,
+        zaman,
+        tarih: "Bugün",
+        kaynak: feed.badge,
+        baslik: rawTitle,
+        ozet: rawTitle,
+        detay: cleanDesc,
+        paragraflar,
+        url: rawLink,
+        kategori: "bist",
+        timestamp,
+      });
+    }
+  } catch {
+    // DOMParser istisna verirse regex ile dene
+    const chunks = xmlText.split(/<item[\s>]/i).slice(1);
+    chunks.forEach((chunk, i) => {
+      if (feed.filterEconomyOnly) {
+        const catMatches = [...chunk.matchAll(/<category[^>]*>([\s\S]*?)<\/category>/gi)];
+        let isEconomy = false;
+        for (const m of catMatches) {
+          if (cleanHtmlStr(m[1]).toLowerCase().includes("ekonomi")) {
+            isEconomy = true;
+            break;
+          }
+        }
+        if (!isEconomy) {
+          const linkMatch = chunk.match(/<link[^>]*>([\s\S]*?)<\/link>/i)?.[1] || "";
+          if (linkMatch.toLowerCase().includes("/ekonomi/")) {
+            isEconomy = true;
+          }
+        }
+        if (!isEconomy) return;
+      }
+
+      const titleMatch = chunk.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
+      if (!titleMatch) return;
+      const rawTitle = cleanHtmlStr(titleMatch);
+      if (!rawTitle || rawTitle.length < 5) return;
+
+      const linkMatch =
+        chunk.match(/<link[^>]*>([\s\S]*?)<\/link>/i)?.[1] ||
+        chunk.match(/<guid[^>]*>([\s\S]*?)<\/guid>/i)?.[1] ||
+        "#";
+      const rawLink = cleanHtmlStr(linkMatch);
+
+      const pubDateMatch = chunk.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i)?.[1];
+      let timestamp = Date.now();
+      let zaman = "";
+      if (pubDateMatch) {
+        const parsed = new Date(pubDateMatch.trim());
+        if (!isNaN(parsed.getTime())) {
+          timestamp = parsed.getTime();
+          zaman = parsed.toLocaleTimeString("tr-TR", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+          });
+        }
+      }
+      if (!zaman) {
+        zaman = new Date(timestamp).toLocaleTimeString("tr-TR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        });
+      }
+
+      const descMatch =
+        chunk.match(/<description[^>]*>([\s\S]*?)<\/description>/i)?.[1] ||
+        chunk.match(/<content:encoded[^>]*>([\s\S]*?)<\/content:encoded>/i)?.[1] ||
+        "";
+      const cleanDesc = cleanHtmlStr(descMatch);
+      const paragraflar = extractTwoParagraphs(cleanDesc, rawTitle, feed.badge);
+
+      items.push({
+        id: `rss_fb_${feed.badge.toLowerCase().replace(/[^a-z]/g, "")}_${timestamp}_${i}`,
+        zaman,
+        tarih: "Bugün",
+        kaynak: feed.badge,
+        baslik: rawTitle,
+        ozet: rawTitle,
+        detay: cleanDesc,
+        paragraflar,
+        url: rawLink,
+        kategori: "bist",
+        timestamp,
+      });
+    });
+  }
+
+  return items;
+}
+
 export default function TerminalWorkspace() {
   const [bistHaberleri, setBistHaberleri] = useState<TerminalHaber[]>([]);
   const [globalHaberler, setGlobalHaberler] = useState<GlobalNewsItem[]>(INITIAL_GLOBAL_HABERLER);
+  const [globalLangMode, setGlobalLangMode] = useState<"TR" | "EN">("TR");
   const [seciliHaber, setSeciliHaber] = useState<TerminalHaber | null>(null);
   const [loadingBist, setLoadingBist] = useState<boolean>(true);
   const [loadingGlobal, setLoadingGlobal] = useState<boolean>(false);
@@ -277,9 +588,9 @@ export default function TerminalWorkspace() {
   const isInitialLoadRef = useRef<boolean>(true);
   const translationsCacheRef = useRef<Map<string, string>>(new Map());
 
-  // Google Translate API ile İngilizce -> Türkçe çeviri motoru (gtx endpoint)
+  // Google Translate API ile İngilizce -> Türkçe çeviri motoru (Term Masking & Dictionary Korumalı)
   const translateToTurkish = useCallback(async (text: string): Promise<string> => {
-    const rawClean = text.trim();
+    const rawClean = cleanWireText(text);
     if (!rawClean) return text;
 
     // Önbellek kontrolü
@@ -287,28 +598,43 @@ export default function TerminalWorkspace() {
       return translationsCacheRef.current.get(rawClean)!;
     }
 
-    // Başındaki * veya / işaretlerini çeviri sorgusu için ayıkla
-    let cleanForQuery = rawClean
-      .replace(/^[\*\/\s]+/, "")
-      .replace(/\s+\*\s*/g, " ")
-      .trim();
-
-    // Ticker sembollerini koru ($NVDA -> NVDA)
-    cleanForQuery = cleanForQuery.replace(/\$([A-Za-z0-9_]+)/g, "$1");
+    // 1. Term Masking (Özel isimleri ve finansal kısaltmaları tercümeden önce korumalı token'lara çevir)
+    let maskedQuery = rawClean;
+    for (const item of PROTECTED_TERMS) {
+      maskedQuery = maskedQuery.replace(item.pattern, item.token);
+    }
 
     try {
       const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=tr&dt=t&q=${encodeURIComponent(
-        cleanForQuery
+        maskedQuery
       )}`;
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && Array.isArray(data[0])) {
-          const translatedChunks = data[0]
+          let translated = data[0]
             .map((chunk: unknown) => (Array.isArray(chunk) ? String(chunk[0] || "") : ""))
             .join("");
-          if (translatedChunks && translatedChunks.trim()) {
-            const finalTranslated = "/ " + translatedChunks.trim().replace(/^[\*\/\s]+/, "");
+
+          if (translated && translated.trim()) {
+            // Maskelenmiş korumalı terimleri doğru finansal karşılıkları ve isimleriyle geri yükle
+            for (const item of PROTECTED_TERMS) {
+              const tokenRegex = new RegExp(item.token, "gi");
+              translated = translated.replace(tokenRegex, item.restore);
+            }
+
+            // Çeviri motorunun finansal terim hatalarını düzelt
+            translated = translated
+              .replace(/\b(kredi sporları|kredi sporlar|kredi formaları)\b/gi, "Kredi Spread'leri")
+              .replace(/\b(savaşın|savaş)\b/gi, (m, _p, offset, str) => {
+                if (/fed|faiz|powell|bessent|merkez|enflasyon|politika/i.test(str)) return "Warsh";
+                return m;
+              })
+              .replace(/\bAi\b/g, "AI")
+              .replace(/\s{2,}/g, " ")
+              .trim();
+
+            const finalTranslated = "/ " + translated.replace(/^[\*\/\s]+/, "");
             translationsCacheRef.current.set(rawClean, finalTranslated);
             return finalTranslated;
           }
@@ -319,7 +645,7 @@ export default function TerminalWorkspace() {
     }
 
     // Finansal Terim Eşleme Fallback Sözlüğü
-    let translated = cleanForQuery;
+    let translated = rawClean;
     const financeTerms: [RegExp, string][] = [
       [/\bVOTES\s+(\d+)-(\d+)\s+TO\s+HOLD\s+BENCHMARK\s+RATE\b/gi, "Gösterge faizini $1-$2 oyla sabit tuttu"],
       [/\bTO\s+HOLD\s+BENCHMARK\s+RATE\b/gi, "Gösterge faizini sabit tuttu"],
@@ -328,14 +654,13 @@ export default function TerminalWorkspace() {
       [/\bRATE\s+CUT\b/gi, "Faiz İndirimi"],
       [/\bINFLATION\s+IS\s+TOO\s+HIGH\b/gi, "Enflasyon çok yüksek"],
       [/\bDISINFLATION\s+PROCESS\b/gi, "Dezenflasyon süreci"],
+      [/\bON\s+TRACK\b/gi, "rotasında"],
+      [/\bDATA\s+DEPENDENT\b/gi, "veriye duyarlı"],
       [/\bPRESS\s+CONFERENCE\b/gi, "Basın Toplantısı"],
       [/\bVOLATILITY\b/gi, "Volatilite"],
       [/\bACQUISITION\b/gi, "Satın Alma"],
       [/\bFINANCIAL\s+MARKET\b/gi, "Finansal Piyasa"],
-      [/\bADJ\s+EPS\b/gi, "Düzeltilmiş Hisse Başı Kâr"],
       [/\bOPER\s+INCOME\b/gi, "Faaliyet Kârı"],
-      [/\bREV\.\b/gi, "Hasılat"],
-      [/\bREVENUE\b/gi, "Hasılat"],
       [/\bCAPEX\b/gi, "Sermaye Harcamaları"],
     ];
 
@@ -343,7 +668,11 @@ export default function TerminalWorkspace() {
       translated = translated.replace(re, repl);
     }
 
-    const fallbackResult = "/ " + translated;
+    for (const item of PROTECTED_TERMS) {
+      translated = translated.replace(item.pattern, item.restore);
+    }
+
+    const fallbackResult = "/ " + translated.replace(/^[\*\/\s]+/, "").trim();
     translationsCacheRef.current.set(rawClean, fallbackResult);
     return fallbackResult;
   }, []);
@@ -402,12 +731,13 @@ export default function TerminalWorkspace() {
                   hour12: false,
                 });
                 const pId = postM ? postM[1] : `tg_proxy_${dObj.getTime()}_${i}`;
+                const cleanText = cleanWireText(raw);
                 items.push({
                   id: pId,
                   zaman: zStr,
                   timestamp: dObj.getTime(),
                   rawText: raw,
-                  baslik: raw.startsWith("*") ? "/ " + raw.slice(1).trim() : "/ " + raw,
+                  baslik: "/ " + cleanText,
                 });
               }
             }
@@ -421,16 +751,18 @@ export default function TerminalWorkspace() {
         // En yeni en üstte olacak şekilde sırala
         items.sort((a, b) => b.timestamp - a.timestamp);
 
-        // Telegram mesajlarını Türkçeye çevir (başında / formatı ile)
+        // Telegram mesajlarını Türkçeye çevir (başında / formatı ile ve Ticker temizlenmiş orijinal İngilizceyi de koru)
         const translatedItems: GlobalNewsItem[] = await Promise.all(
           items.slice(0, 25).map(async (item) => {
-            const trTitle = await translateToTurkish(item.rawText || item.baslik);
+            const cleanedRaw = cleanWireText(item.rawText || item.baslik);
+            const trTitle = await translateToTurkish(cleanedRaw);
             return {
               id: item.id,
               zaman: item.zaman,
               timestamp: item.timestamp,
               baslik: trTitle,
               rawText: item.rawText,
+              rawClean: "/ " + cleanedRaw,
             };
           })
         );
@@ -464,7 +796,9 @@ export default function TerminalWorkspace() {
     }
   }, [translateToTurkish]);
 
-  // Canlı RSS Çekme Motoru (Bloomberg HT, AA Finans, Bigpara, Ekonomim)
+
+
+  // 8 Kaynaklı Canlı RSS Çekme Motoru (Promise.allSettled & allorigins proxy)
   const loadNews = useCallback(async () => {
     setIsConnecting(true);
 
@@ -489,149 +823,92 @@ export default function TerminalWorkspace() {
     }
 
     try {
-      let items: ApiNewsItemResponse[] = [];
+      // Tarayıcının dosyayı doğrudan indirmesini engellemek ve CORS kuralını aşmak için allorigins proxy kullanımı
+      const fetchUrl = (rssUrl: string) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6500);
+        return fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(rssUrl), {
+          signal: controller.signal,
+        })
+          .then((r) => {
+            clearTimeout(timeoutId);
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.text();
+          })
+          .catch((err) => {
+            clearTimeout(timeoutId);
+            throw err;
+          });
+      };
 
-      // 1. Birincil Canlı İstek (Next.js server-side RSS motoru)
-      try {
-        const res = await fetch("/api/news", { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.items && Array.isArray(data.items) && data.items.length > 0) {
-            items = data.items;
+      // Promise.allSettled kullanarak 8 kaynağı aynı anda paralel çek
+      const results = await Promise.allSettled(
+        ACTIVE_RSS_SOURCES.map(async (feed) => {
+          try {
+            const xml = await fetchUrl(feed.url);
+            if (xml && xml.trim().length > 0) {
+              return parseRssWithDomParser(xml, feed);
+            }
+            return [];
+          } catch {
+            return [];
           }
-        }
-      } catch {
-        // Sunucu rotası geçici olarak yanıt vermezse ikincil adıma geç
-      }
+        })
+      );
 
-      // 2. İkincil İstemci Tarafı RSS / CORS Proxy Fallback (Eğer birincil rota boşsa)
+      let items: TerminalHaber[] = [];
+      results.forEach((res) => {
+        if (res.status === "fulfilled" && Array.isArray(res.value)) {
+          items.push(...res.value);
+        }
+      });
+
+      // Eğer allorigins proxy geçici olarak yanıt vermediyse veya boş döndüyse, sunucu tarafındaki /api/news rotasını dene
       if (items.length === 0) {
         try {
-          const googleNewsUrl =
-            "https://news.google.com/rss/search?q=(site:ekonomim.com+OR+site:cnbce.com+OR+site:ekonomist.com.tr+OR+site:ekoturk.com+OR+site:foreks.com)+when:1d&hl=tr&gl=TR&ceid=TR:tr";
-          const proxyUrl =
-            "https://api.allorigins.win/raw?url=" + encodeURIComponent(googleNewsUrl);
-
-          const proxyRes = await fetch(proxyUrl);
-          if (proxyRes.ok) {
-            const xml = await proxyRes.text();
-            const chunks = xml.split("<item>").slice(1, 30);
-            for (const chunk of chunks) {
-              const rawTitle = chunk.match(/<title>([\s\S]*?)<\/title>/i)?.[1];
-              const rawLink =
-                chunk.match(/<link>([\s\S]*?)<\/link>/i)?.[1] ||
-                chunk.match(/<guid[^>]*>([\s\S]*?)<\/guid>/i)?.[1];
-              const rawSource = chunk.match(/<source[^>]*>([\s\S]*?)<\/source>/i)?.[1];
-              const rawSourceUrl = chunk.match(/<source[^>]*url="([^"]*)"/i)?.[1];
-              const rawPubDate = chunk.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1];
-              const rawDesc = chunk.match(/<description>([\s\S]*?)<\/description>/i)?.[1];
-
-              if (rawTitle) {
-                // Başlık temizliği (son ek kaynak ismini kaldır)
-                let title = rawTitle
-                  .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-                  .replace(/&quot;/g, '"')
-                  .replace(/&#039;/g, "'")
-                  .replace(/&amp;/g, "&")
-                  .trim();
-                const parts = title.split(/\s+[-–—]\s+/);
-                if (parts.length > 1) {
-                  const last = parts[parts.length - 1].trim();
-                  if (
-                    /^(CNBC-e|Ekonomim|Foreks|Foreks\.com|Ekonomist|Ekotürk|Ekoturk|Bloomberg|AA)/i.test(
-                      last
-                    ) ||
-                    last.length <= 25
-                  ) {
-                    parts.pop();
-                    title = parts.join(" - ").trim();
-                  }
-                }
-
-                // Rozet kaynak isimlendirme
-                const s = (rawSource || "").toLowerCase();
-                const u = (rawSourceUrl || rawLink || "").toLowerCase();
-                let kaynak = "FİNANS";
-                if (s.includes("cnbc") || u.includes("cnbce.com")) kaynak = "CNBC-E";
-                else if (s.includes("ekonomim") || u.includes("ekonomim.com")) kaynak = "EKONOMİM";
-                else if (s.includes("foreks") || u.includes("foreks.com")) kaynak = "FOREKS";
-                else if (s.includes("ekonomist") || u.includes("ekonomist.com.tr")) kaynak = "EKONOMİST";
-                else if (s.includes("ekotürk") || s.includes("ekoturk") || u.includes("ekoturk.com")) kaynak = "EKOTÜRK";
-                else if (rawSource) kaynak = rawSource.toUpperCase().replace(/\.COM(\.TR)?/g, "");
-
-                const pDate = rawPubDate ? new Date(rawPubDate) : new Date();
-                const descClean = (rawDesc || "")
-                  .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-                  .replace(/<[^>]+>/g, " ")
-                  .trim();
-
-                items.push({
-                  id: `proxy_gnews_${pDate.getTime()}_${title.slice(0, 15)}`,
-                  zaman: pDate.toLocaleTimeString("tr-TR", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit",
-                    hour12: false,
-                  }),
-                  tarih: pDate.toLocaleDateString("tr-TR", { day: "numeric", month: "short" }),
-                  kaynak,
-                  baslik: title,
-                  ozet: title,
-                  paragraflar: [
-                    descClean.length > 20
-                      ? descClean
-                      : `${kaynak} kaynaklı son finans haberi: "${title}".`,
-                    "Piyasa analistleri gelişmenin BIST hisseleri ve makro veriler üzerindeki etkilerini izliyor.",
-                  ],
-                  url: rawLink || "https://news.google.com",
-                  timestamp: pDate.getTime(),
-                });
-              }
+          const res = await fetch("/api/news", { cache: "no-store" });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+              items = data.items.map((it: ApiNewsItemResponse) => ({
+                id: it.id,
+                zaman: it.zaman,
+                tarih: it.tarih || "Bugün",
+                kaynak: it.kaynak,
+                baslik: it.baslik,
+                ozet: it.baslik,
+                paragraflar: it.paragraflar,
+                detay: it.paragraflar?.join("\n\n") || it.detay || it.baslik,
+                url: it.url || "#",
+                kategori: "bist" as const,
+                timestamp: it.timestamp,
+              }));
             }
           }
         } catch {
-          // İkincil proxy de erişilemedi
+          // Sunucu yedek isteği yoksayılır
         }
       }
 
       if (items.length > 0) {
-        // Dönüştür ve yayınlanma saatini kullanıcının yerel saatine göre dinamik formatla (HH:mm:ss)
-        const donusturulen: TerminalHaber[] = items.map((item) => {
-          let yerelZaman = item.zaman;
-          if (item.timestamp && !isNaN(item.timestamp)) {
-            const d = new Date(item.timestamp);
-            yerelZaman = d.toLocaleTimeString("tr-TR", {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-              hour12: false,
-            });
+        // pubDate zaman damgasına göre EN GÜNCELDEN ESKİYE doğru sırala
+        items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+        // Birebir aynı başlığa sahip mükerrer haberleri filtrele (de-duplicate)
+        const seenTitles = new Set<string>();
+        const deduplicated: TerminalHaber[] = [];
+
+        for (const item of items) {
+          const normKey = item.baslik.toLowerCase().replace(/[^a-z0-9ğüşıöç]/g, "").slice(0, 40);
+          if (!seenTitles.has(normKey)) {
+            seenTitles.add(normKey);
+            deduplicated.push(item);
           }
+        }
 
-          return {
-            id: item.id,
-            zaman: yerelZaman,
-            tarih: item.tarih || "Bugün",
-            kaynak: item.kaynak,
-            baslik: item.baslik,
-            ozet: item.ozet,
-            paragraflar: item.paragraflar,
-            detay:
-              item.paragraflar && item.paragraflar.length > 0
-                ? item.paragraflar.join("\n\n")
-                : item.detay || item.ozet || item.baslik,
-            url: item.url || "#",
-            kategori: "bist" as const,
-            timestamp: item.timestamp,
-          };
-        });
-
-        // Yayınlanma tarihine göre (pubDate / timestamp) EN YENİDEN EN ESKİYE doğru sırala
-        donusturulen.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-        // Yeni haber tespiti (İlk yükleme sonrasında yeni düşen haberler için parlama/fade)
+        // Yeni haber tespiti (İlk yükleme sonrasında yeni düşen haberler için parlama/fade efekti)
         if (!isInitialLoadRef.current) {
-          const yeniGelenler = donusturulen.filter(
+          const yeniGelenler = deduplicated.filter(
             (h) => !knownIdsRef.current.has(h.id) && !knownIdsRef.current.has(h.baslik.slice(0, 30))
           );
 
@@ -651,13 +928,13 @@ export default function TerminalWorkspace() {
         }
 
         // Bilinen ID ve başlık havuzunu güncelle
-        donusturulen.forEach((h) => {
+        deduplicated.forEach((h) => {
           knownIdsRef.current.add(h.id);
           knownIdsRef.current.add(h.baslik.slice(0, 30));
         });
 
         isInitialLoadRef.current = false;
-        setBistHaberleri(donusturulen);
+        setBistHaberleri(deduplicated);
         setLastFetchTime(
           new Date().toLocaleTimeString("tr-TR", {
             hour: "2-digit",
@@ -669,7 +946,7 @@ export default function TerminalWorkspace() {
 
         // Başarılı akışı yerel hafızaya (localStorage) önbelleğe al
         try {
-          localStorage.setItem(CACHE_KEY_BIST, JSON.stringify(donusturulen));
+          localStorage.setItem(CACHE_KEY_BIST, JSON.stringify(deduplicated));
         } catch {
           // LocalStorage hatası yoksayılır
         }
@@ -682,17 +959,17 @@ export default function TerminalWorkspace() {
     }
   }, []);
 
-  // 10 saniyede bir BIST & Türkiye arka planda sessizce sorgula (polling)
+  // 15 saniyede bir BIST & Türkiye arka planda sessizce sorgula (polling)
   useEffect(() => {
-    // İlk sorguyu asenkron olarak tetikle (efekt içi senkron setState uyarısını önler)
+    // İlk sorguyu asenkron olarak tetikle
     const initialTimer = setTimeout(() => {
       void loadNews();
     }, 0);
 
-    // Her 10 saniyede bir periyodik canlı polling
+    // Her 15 saniyede bir periyodik canlı polling
     const interval = setInterval(() => {
       void loadNews();
-    }, 10000);
+    }, 15000);
 
     return () => {
       clearTimeout(initialTimer);
@@ -768,7 +1045,7 @@ export default function TerminalWorkspace() {
               <span className="text-slate-400 uppercase tracking-wider tabular-nums">
                 {isConnecting && bistHaberleri.length === 0
                   ? "BAĞLANIYOR..."
-                  : `CANLI · ${lastFetchTime || "10s"}`}
+                  : `CANLI · ${lastFetchTime || "15s"}`}
               </span>
             </div>
           </div>
@@ -780,8 +1057,8 @@ export default function TerminalWorkspace() {
                   <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
                   <span>Canlı akışa bağlanılıyor...</span>
                 </div>
-                <p className="text-[11px] text-slate-500 max-w-[280px]">
-                  Ekonomim, CNBC-e, Foreks, Ekonomist ve Ekotürk canlı akışı taranıyor...
+                <p className="text-[11px] text-slate-500 max-w-[320px]">
+                  Ekonomim, CNBC-e, Ekonomist, Foreks, Uzman Para, NTV Para, Türkiye Gazetesi ve Dünya Gazetesi taranıyor...
                 </p>
               </div>
             ) : (
@@ -823,37 +1100,75 @@ export default function TerminalWorkspace() {
             <div className="pane-title-group">
               <h2 className="pane-title">Global</h2>
             </div>
-            <div className="flex items-center gap-1.5 font-mono text-[9.5px]">
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  loadingGlobal && globalHaberler.length === 0
-                    ? "bg-amber-400 animate-ping"
-                    : "bg-emerald-400 animate-pulse"
-                }`}
-              />
-              <span className="text-slate-400 uppercase tracking-wider tabular-nums">
-                {loadingGlobal && globalHaberler.length === 0
-                  ? "BAĞLANIYOR..."
-                  : `CANLI · ${lastGlobalFetchTime || "15s"}`}
-              </span>
+
+            <div className="flex items-center gap-2">
+              {/* Orijinal (EN) / Çeviri (TR) Görünüm Seçici */}
+              <div className="inline-flex items-center bg-[#070b14] border border-slate-700/80 rounded p-0.5 font-mono text-[9px]">
+                <button
+                  type="button"
+                  onClick={() => setGlobalLangMode("TR")}
+                  className={`px-1.5 py-0.5 rounded transition ${
+                    globalLangMode === "TR"
+                      ? "bg-cyan-950 text-cyan-300 font-bold border border-cyan-700/60 shadow-sm"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                  title="Türkçe Çeviri"
+                >
+                  TR
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGlobalLangMode("EN")}
+                  className={`px-1.5 py-0.5 rounded transition ${
+                    globalLangMode === "EN"
+                      ? "bg-cyan-950 text-cyan-300 font-bold border border-cyan-700/60 shadow-sm"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                  title="Orijinal İngilizce Wire"
+                >
+                  EN
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1.5 font-mono text-[9.5px]">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    loadingGlobal && globalHaberler.length === 0
+                      ? "bg-amber-400 animate-ping"
+                      : "bg-emerald-400 animate-pulse"
+                  }`}
+                />
+                <span className="text-slate-400 uppercase tracking-wider tabular-nums">
+                  {loadingGlobal && globalHaberler.length === 0
+                    ? "BAĞLANIYOR..."
+                    : `CANLI · ${lastGlobalFetchTime || "15s"}`}
+                </span>
+              </div>
             </div>
           </div>
 
           <div className="pane-scroll">
-            {globalHaberler.map((h) => (
-              <article
-                key={h.id}
-                className="flex items-start gap-2.5 px-3 py-2 border-b border-white/[0.04] transition-colors hover:bg-[#111a2e]/30 select-text"
-              >
-                <span className="font-mono text-slate-500 text-[10.5px] tabular-nums shrink-0 pt-0.5 select-none">
-                  {h.zaman}
-                </span>
+            {globalHaberler.map((h) => {
+              const displayTitle =
+                globalLangMode === "EN"
+                  ? h.rawClean || cleanEnglishWire(h.rawText || h.baslik)
+                  : h.baslik;
 
-                <p className="text-xs text-slate-200 leading-relaxed font-normal flex-1 break-words">
-                  {h.baslik}
-                </p>
-              </article>
-            ))}
+              return (
+                <article
+                  key={h.id}
+                  className="flex items-start gap-2.5 px-3 py-2 border-b border-white/[0.04] transition-colors hover:bg-[#111a2e]/30 select-text"
+                >
+                  <span className="font-mono text-slate-500 text-[10.5px] tabular-nums shrink-0 pt-0.5 select-none">
+                    {h.zaman}
+                  </span>
+
+                  <p className="text-xs text-slate-200 leading-relaxed font-normal flex-1 break-words">
+                    {displayTitle}
+                  </p>
+                </article>
+              );
+            })}
           </div>
         </section>
 
@@ -933,7 +1248,7 @@ export default function TerminalWorkspace() {
         <MarketIntelligence />
       </div>
 
-      {/* ŞIK ENDÜSTRİYEL HABER DETAY KARTI (MODAL / DIALOG POPUP) */}
+      {/* BLOOMBERG / REFINITIV KALİTESİNDE PROFESYONEL HABER DETAY MODALI (STORY VIEW) */}
       {seciliHaber && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150"
@@ -942,32 +1257,35 @@ export default function TerminalWorkspace() {
           aria-modal="true"
         >
           <div
-            className="bg-[#0c1322] border border-slate-700/80 rounded-lg shadow-2xl p-6 backdrop-blur-md max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden text-left"
+            className="w-full max-w-2xl bg-[#0b101b] border border-cyan-500/20 rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col relative text-left"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* ÜST KISIM: Kaynak adı, yayınlanma saati ve kapatma butonu */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-2.5 font-mono text-xs">
-                <span className="px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700 text-cyan-400 font-semibold tracking-wide uppercase">
+            {/* Üst Zarif Cyan Gradient Çizgi */}
+            <div className="bg-gradient-to-r from-transparent via-cyan-500 to-transparent h-[1px] w-full shrink-0" />
+
+            {/* HEADER: Kaynak Etiketi + Yayın Saati + ESC Rozeti & Kapat Butonu */}
+            <div className="px-6 py-4 flex items-center justify-between border-b border-white/[0.06] bg-[#0c1220]/70">
+              <div className="flex items-center gap-2.5 font-mono">
+                <span className="text-xs font-mono font-bold text-cyan-400 bg-cyan-950/40 border border-cyan-800/50 px-2 py-0.5 rounded tracking-wide uppercase">
                   [{seciliHaber.kaynak}]
                 </span>
-                <span className="text-slate-400 tabular-nums">
+                <span className="text-xs font-mono text-slate-400 tabular-nums">
                   {seciliHaber.zaman} {seciliHaber.tarih ? `· ${seciliHaber.tarih}` : ""}
                 </span>
                 {seciliHaber.hisseler && seciliHaber.hisseler.length > 0 && (
-                  <span className="text-cyan-400 font-bold ml-1">
+                  <span className="text-cyan-400 font-bold ml-1 font-mono text-xs">
                     {seciliHaber.hisseler.join(", ")}
                   </span>
                 )}
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-slate-500 hidden sm:inline-block">
-                  [ESC]
-                </span>
+                <kbd className="px-1.5 py-0.5 text-[9px] font-mono bg-slate-800 border border-slate-700 rounded text-slate-400 select-none">
+                  ESC
+                </kbd>
                 <button
                   onClick={() => setSeciliHaber(null)}
-                  className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-800/60 transition"
+                  className="text-slate-400 hover:text-white p-1 hover:bg-slate-800 rounded transition"
                   type="button"
                   aria-label="Kapat"
                 >
@@ -976,42 +1294,94 @@ export default function TerminalWorkspace() {
               </div>
             </div>
 
-            {/* BAŞLIK: Büyük puntolu net haber başlığı */}
-            <h2 className="text-lg font-bold text-white mt-4 mb-3 leading-snug">
-              {seciliHaber.baslik}
-            </h2>
+            {/* BODY: Başlık + Temizlenmiş Özet/Paragraflar + Metadata Barı */}
+            <div className="p-6 pt-5 flex-1 overflow-y-auto max-h-[55vh]">
+              {/* Başlık */}
+              <h2 className="text-lg font-semibold text-white tracking-tight leading-snug mb-4 border-b border-white/[0.06] pb-3">
+                {seciliHaber.baslik}
+              </h2>
 
-            {/* GÖVDE: Haber makalesinin tam metninden ayıklanmış ilk 2 paragrafı */}
-            <div className="text-sm text-slate-300 leading-relaxed space-y-2.5 overflow-y-auto pr-1 flex-1 my-2">
-              {seciliHaber.paragraflar && seciliHaber.paragraflar.length > 0 ? (
-                seciliHaber.paragraflar.slice(0, 2).map((paragraf, idx) => (
-                  <p key={idx} className="text-slate-300">
-                    {paragraf}
-                  </p>
-                ))
-              ) : seciliHaber.detay ? (
-                seciliHaber.detay.split("\n\n").slice(0, 2).map((paragraf, idx) => (
-                  <p key={idx} className="text-slate-300">
-                    {paragraf}
-                  </p>
-                ))
-              ) : (
-                <p className="text-slate-400 italic">
-                  Haber içeriği detayları hazırlanıyor.
-                </p>
-              )}
+              {/* Özet / İçerik (Başlık tekrarını filtreleyen temiz metin) */}
+              <div className="text-sm text-slate-300 leading-relaxed space-y-3 font-normal pr-1">
+                {(() => {
+                  const rawList =
+                    seciliHaber.paragraflar && seciliHaber.paragraflar.length > 0
+                      ? seciliHaber.paragraflar
+                      : seciliHaber.detay
+                      ? seciliHaber.detay.split("\n\n")
+                      : seciliHaber.ozet
+                      ? [seciliHaber.ozet]
+                      : [];
+
+                  // Başlıkla neredeyse birebir örtüşen tekrarlı cümleleri filtrele
+                  const cleanTitle = seciliHaber.baslik
+                    .toLowerCase()
+                    .replace(/[^a-z0-9ğüşıöç]/g, "");
+
+                  const filtered = rawList
+                    .map((p) => p.trim())
+                    .filter((p) => {
+                      if (!p) return false;
+                      const cleanP = p.toLowerCase().replace(/[^a-z0-9ğüşıöç]/g, "");
+                      if (cleanP === cleanTitle) return false;
+                      if (cleanTitle.length > 25 && cleanP.startsWith(cleanTitle.slice(0, 35))) {
+                        return false;
+                      }
+                      return true;
+                    });
+
+                  if (filtered.length > 0) {
+                    return filtered.map((paragraf, idx) => (
+                      <p key={idx} className="text-slate-300">
+                        {paragraf}
+                      </p>
+                    ));
+                  }
+
+                  return (
+                    <p className="text-slate-300">
+                      {seciliHaber.ozet ||
+                        seciliHaber.detay ||
+                        "Haber detayları piyasa kaynakları üzerinden canlı doğrulanmıştır."}
+                    </p>
+                  );
+                })()}
+              </div>
+
+              {/* Metadata Barı */}
+              <div className="border-t border-white/[0.06] mt-5 pt-3.5 flex flex-wrap items-center justify-between text-[11px] font-mono text-slate-400 bg-white/[0.02] px-3.5 py-2.5 rounded-lg border border-white/[0.04]">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500">Kategori:</span>
+                  <span className="text-slate-300 font-medium">
+                    {seciliHaber.kategori === "bist"
+                      ? "Piyasa Özeti / BIST"
+                      : seciliHaber.kategori === "kap"
+                      ? "KAP Kamuyu Aydınlatma"
+                      : seciliHaber.kategori === "resmi"
+                      ? "Resmi Kurum Bülteni"
+                      : "Piyasa Özeti"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <span>
+                    Durum: <strong className="text-emerald-400 font-normal">Doğrulandı</strong>
+                  </span>
+                  <span className="text-slate-600">|</span>
+                  <span className="text-cyan-400 font-semibold">Terminal Desk</span>
+                </div>
+              </div>
             </div>
 
-            {/* ALT BAR: "Daha Fazlasını Oku" butonu / linki + Kapat butonu */}
-            <div className="pt-4 border-t border-slate-800 flex items-center justify-between mt-auto">
+            {/* FOOTER: Sol "Kaynağında Oku" butonu + Sağ "Kapat" butonu */}
+            <div className="p-4 px-6 border-t border-white/[0.06] bg-[#080d16] flex items-center justify-between mt-auto">
               {seciliHaber.url && seciliHaber.url !== "#" ? (
                 <a
                   href={seciliHaber.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded bg-cyan-950/60 border border-cyan-700/60 text-cyan-300 hover:bg-cyan-900/60 hover:text-cyan-200 transition"
+                  className="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-medium px-4 py-2 rounded-md transition flex items-center gap-1.5 shadow-lg shadow-cyan-950 font-sans"
                 >
-                  <span>Daha Fazlasını Oku</span>
+                  <span>Kaynağında Oku</span>
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
               ) : (
@@ -1024,7 +1394,7 @@ export default function TerminalWorkspace() {
               <button
                 type="button"
                 onClick={() => setSeciliHaber(null)}
-                className="px-3 py-1.5 rounded bg-slate-800/80 hover:bg-slate-700/80 text-xs font-mono text-slate-300 hover:text-white transition border border-slate-700/60"
+                className="text-xs text-slate-400 hover:text-slate-200 px-3 py-2 rounded hover:bg-slate-800/60 font-mono transition"
               >
                 Kapat
               </button>

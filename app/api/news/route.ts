@@ -12,153 +12,172 @@ export type ApiNewsItem = {
   timestamp: number;
 };
 
-// HTML & Karakter Kodlama Temizleyici
-function cleanHtml(str?: string | null): string {
+interface FeedConfig {
+  url: string;
+  badge: string;
+  filterEconomyOnly?: boolean;
+}
+
+const ACTIVE_FEEDS: FeedConfig[] = [
+  { url: "https://www.ekonomim.com/rss", badge: "EKONOMİM" },
+  { url: "https://www.cnbce.com/rss", badge: "CNBC-E" },
+  { url: "https://www.ekonomist.com.tr/rss", badge: "EKONOMİST" },
+  { url: "https://www.foreks.com/rss", badge: "FOREKS" },
+  { url: "https://uzmanpara.milliyet.com.tr/haber_rss/", badge: "UZMAN PARA" },
+  { url: "https://www.ntv.com.tr/ntvpara.rss", badge: "NTV PARA" },
+  {
+    url: "https://www.turkiyegazetesi.com.tr/rss",
+    badge: "TÜRKİYE GAZETESİ",
+    filterEconomyOnly: true,
+  },
+  {
+    url: "https://www.dunya.com/rss",
+    badge: "DÜNYA GAZETESİ",
+    filterEconomyOnly: true,
+  },
+];
+
+function cleanHtmlText(str?: string | null): string {
   if (!str) return "";
-  const text = str
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
+  return str
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, "$1")
+    .replace(/<[^>]*>?/gi, " ")
     .replace(/&quot;/g, '"')
     .replace(/&#039;/g, "'")
     .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
     .replace(/&nbsp;/g, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&ouml;/g, "ö")
-    .replace(/&Ouml;/g, "Ö")
-    .replace(/&uuml;/g, "ü")
-    .replace(/&Uuml;/g, "Ü")
-    .replace(/&ccedil;/g, "ç")
-    .replace(/&Ccedil;/g, "Ç")
-    .replace(/&para;/g, "")
     .replace(/\s+/g, " ")
     .trim();
-  return text;
 }
 
-// Başlık sonundaki kaynak ismini temizle (Örn: "Borsa Güne Yükselişle Başladı - CNBC-e" -> "Borsa Güne Yükselişle Başladı")
-function cleanTitle(rawTitle: string): string {
-  const title = cleanHtml(rawTitle);
-
-  // Tire veya tire varyantlarına göre son kaynak ekini ayır
-  const parts = title.split(/\s+[-–—]\s+/);
-  if (parts.length > 1) {
-    const lastPart = parts[parts.length - 1].trim();
-    // Bilinen kaynak isimleri veya 25 karakterden kısa son ekler
-    if (
-      /^(CNBC-e|Ekonomim|Foreks|Foreks\.com|Ekonomist|Ekotürk|Ekoturk|Bloomberg|AA|Reuters|Investing)/i.test(
-        lastPart
-      ) ||
-      lastPart.length <= 25
-    ) {
-      parts.pop();
-      return parts.join(" - ").trim();
-    }
+function extractFirstTwoParagraphs(cleanDesc: string, title: string, badge: string): string[] {
+  if (!cleanDesc || cleanDesc.length < 15) {
+    return [
+      `[${badge}] tarafından aktarılan son dakika finans ve ekonomi haberi: "${title}".`,
+      "Piyasa analistleri, gelişmenin sektör endeksleri ve şirket değerlemeleri üzerindeki etkilerini izliyor.",
+    ];
   }
 
-  return title;
-}
+  const splitParagraphs = cleanDesc
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 20);
 
-// Kaynak ismini Google News metadata'sından ayıkla ve standartlaştır
-function formatSourceBadge(rawSource?: string | null, rawUrl?: string | null): string {
-  const s = (rawSource || "").toLowerCase();
-  const u = (rawUrl || "").toLowerCase();
-
-  if (s.includes("cnbc") || u.includes("cnbce.com")) return "CNBC-E";
-  if (s.includes("ekonomim") || u.includes("ekonomim.com")) return "EKONOMİM";
-  if (s.includes("foreks") || u.includes("foreks.com")) return "FOREKS";
-  if (s.includes("ekonomist") || u.includes("ekonomist.com.tr")) return "EKONOMİST";
-  if (s.includes("ekotürk") || s.includes("ekoturk") || u.includes("ekoturk.com")) return "EKOTÜRK";
-  if (s.includes("bloomberg") || u.includes("bloomberght.com")) return "BLOOMBERG HT";
-  if (s.includes("aa") || s.includes("anadolu") || u.includes("aa.com.tr")) return "AA FİNANS";
-
-  if (rawSource && rawSource.trim().length > 0) {
-    return rawSource
-      .toUpperCase()
-      .replace(/\.COM(\.TR)?/g, "")
-      .trim();
+  if (splitParagraphs.length >= 2) {
+    return splitParagraphs.slice(0, 2);
   }
 
-  return "FİNANS";
+  const sentences = cleanDesc.match(/[^\.!\?]+[\.!\?]+/g);
+  if (sentences && sentences.length >= 2) {
+    const mid = Math.ceil(sentences.length / 2);
+    const p1 = sentences.slice(0, mid).join(" ").trim();
+    const p2 = sentences.slice(mid).join(" ").trim();
+    if (p1 && p2) return [p1, p2];
+  }
+
+  return [
+    cleanDesc,
+    "Borsa İstanbul ve finansal piyasalara ilişkin gelişmeler güncellenmektedir.",
+  ];
 }
 
-// Google News XML çıktısını parse et
-function parseGoogleNewsXml(xml: string): ApiNewsItem[] {
+function parseFeedXml(xml: string, feed: FeedConfig): ApiNewsItem[] {
   const items: ApiNewsItem[] = [];
-  const itemChunks = xml.split("<item>").slice(1);
+  const itemChunks = xml.split(/<item[\s>]/i).slice(1);
 
-  for (const chunk of itemChunks) {
-    const rawTitle = chunk.match(/<title>([\s\S]*?)<\/title>/i)?.[1];
-    const rawLink =
-      chunk.match(/<link>([\s\S]*?)<\/link>/i)?.[1] ||
-      chunk.match(/<guid[^>]*>([\s\S]*?)<\/guid>/i)?.[1];
-    const rawSource = chunk.match(/<source[^>]*>([\s\S]*?)<\/source>/i)?.[1];
-    const rawSourceUrl = chunk.match(/<source[^>]*url="([^"]*)"/i)?.[1];
-    const rawPubDate = chunk.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1];
-    const rawDesc = chunk.match(/<description>([\s\S]*?)<\/description>/i)?.[1];
+  for (let i = 0; i < itemChunks.length; i++) {
+    const chunk = itemChunks[i];
 
-    if (!rawTitle) continue;
+    // Özel Filtre: Türkiye Gazetesi ve Dünya Gazetesi için sadece "Ekonomi" kategorisi
+    if (feed.filterEconomyOnly) {
+      const categoryMatches = [...chunk.matchAll(/<category[^>]*>([\s\S]*?)<\/category>/gi)];
+      let isEconomy = false;
+      for (const m of categoryMatches) {
+        const cat = cleanHtmlText(m[1]).toLowerCase();
+        if (cat.includes("ekonomi")) {
+          isEconomy = true;
+          break;
+        }
+      }
 
-    const baslik = cleanTitle(rawTitle);
+      if (!isEconomy) {
+        const linkMatch = chunk.match(/<link[^>]*>([\s\S]*?)<\/link>/i)?.[1] || "";
+        if (linkMatch.toLowerCase().includes("/ekonomi/")) {
+          isEconomy = true;
+        }
+      }
+
+      if (!isEconomy) continue;
+    }
+
+    const titleMatch = chunk.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
+    if (!titleMatch) continue;
+    const baslik = cleanHtmlText(titleMatch);
     if (!baslik || baslik.length < 5) continue;
 
-    const kaynak = formatSourceBadge(rawSource, rawSourceUrl || rawLink);
-    const link = cleanHtml(rawLink) || "https://news.google.com";
+    const linkMatch =
+      chunk.match(/<link[^>]*>([\s\S]*?)<\/link>/i)?.[1] ||
+      chunk.match(/<guid[^>]*>([\s\S]*?)<\/guid>/i)?.[1] ||
+      "#";
+    const url = cleanHtmlText(linkMatch);
 
-    let pubDateObj = new Date();
-    if (rawPubDate) {
-      const parsed = new Date(rawPubDate);
-      if (!isNaN(parsed.getTime())) {
-        pubDateObj = parsed;
+    const pubDateMatch = chunk.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i)?.[1];
+    let timestamp = Date.now();
+    let zaman = "";
+    if (pubDateMatch) {
+      const parsedDate = new Date(pubDateMatch.trim());
+      if (!isNaN(parsedDate.getTime())) {
+        timestamp = parsedDate.getTime();
+        zaman = parsedDate.toLocaleTimeString("tr-TR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        });
       }
     }
 
-    const zaman = pubDateObj.toLocaleTimeString("tr-TR", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    });
+    if (!zaman) {
+      zaman = new Date(timestamp).toLocaleTimeString("tr-TR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      });
+    }
 
-    const tarih = pubDateObj.toLocaleDateString("tr-TR", {
-      day: "numeric",
-      month: "short",
-    });
-
-    const aciklama = cleanHtml(rawDesc);
-    const ozet = baslik; // Kullanıcı kuralı: kutucukta özet metin yok, sadece başlık ve modal detayı
-
-    // Modal detay paragrafları (Temiz metin)
-    const p1 =
-      aciklama && aciklama.length > 25 && !aciklama.toLowerCase().startsWith("http")
-        ? aciklama
-        : `${kaynak} kaynaklı son dakika ekonomi ve finans gelişmesi: "${baslik}".`;
-    const p2 =
-      "Piyasa analistleri, haberin Borsa İstanbul şirket değerlemeleri, sektör endeksleri ve makro göstergeler üzerindeki olası etkilerini yakından izliyor.";
+    const descMatch =
+      chunk.match(/<description[^>]*>([\s\S]*?)<\/description>/i)?.[1] ||
+      chunk.match(/<content:encoded[^>]*>([\s\S]*?)<\/content:encoded>/i)?.[1] ||
+      "";
+    const cleanDesc = cleanHtmlText(descMatch);
+    const paragraflar = extractFirstTwoParagraphs(cleanDesc, baslik, feed.badge);
 
     const slug = baslik
       .toLowerCase()
       .replace(/[^a-z0-9]/g, "")
       .slice(0, 24);
-    const id = `gnews_${kaynak.toLowerCase().replace(/[^a-z]/g, "")}_${slug}_${pubDateObj.getTime()}`;
+    const id = `rss_${feed.badge.toLowerCase().replace(/[^a-z]/g, "")}_${slug}_${timestamp}_${i}`;
 
     items.push({
       id,
       zaman,
-      tarih,
-      kaynak,
+      tarih: "Bugün",
+      kaynak: feed.badge,
       baslik,
-      ozet,
-      paragraflar: [p1, p2],
-      url: link,
-      timestamp: pubDateObj.getTime(),
+      ozet: baslik,
+      paragraflar,
+      url,
+      timestamp,
     });
   }
 
   return items;
 }
 
-// Bellek içi önbellek (Memory Cache)
+// Memory Cache
 let memoryCache: { items: ApiNewsItem[]; timestamp: number } = {
   items: [],
   timestamp: 0,
@@ -167,8 +186,8 @@ let memoryCache: { items: ApiNewsItem[]; timestamp: number } = {
 export async function GET() {
   const simdi = Date.now();
 
-  // 5 saniyeden taze önbellek varsa doğrudan sun
-  if (memoryCache.items.length > 0 && simdi - memoryCache.timestamp < 5000) {
+  // 10 saniyeden taze önbellek varsa doğrudan döndür
+  if (memoryCache.items.length > 0 && simdi - memoryCache.timestamp < 10000) {
     return NextResponse.json({
       success: true,
       cached: true,
@@ -177,59 +196,75 @@ export async function GET() {
     });
   }
 
-  const googleNewsUrl =
-    "https://news.google.com/rss/search?q=(site:ekonomim.com+OR+site:cnbce.com+OR+site:ekonomist.com.tr+OR+site:ekoturk.com+OR+site:foreks.com)+when:1d&hl=tr&gl=TR&ceid=TR:tr";
-
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4500);
+    // 8 kaynağı aynı anda paralel çek (Promise.allSettled)
+    const results = await Promise.allSettled(
+      ACTIVE_FEEDS.map(async (feed) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4500);
 
-    const res = await fetch(googleNewsUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "application/rss+xml, application/xml, text/xml, */*",
-      },
-      signal: controller.signal,
-      next: { revalidate: 10 },
+        try {
+          const res = await fetch(feed.url, {
+            headers: {
+              "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+              Accept: "application/rss+xml, application/xml, text/xml, */*",
+            },
+            signal: controller.signal,
+            next: { revalidate: 15 },
+          });
+
+          clearTimeout(timeoutId);
+
+          if (!res.ok) {
+            return [];
+          }
+
+          const xml = await res.text();
+          return parseFeedXml(xml, feed);
+        } catch {
+          clearTimeout(timeoutId);
+          return [];
+        }
+      })
+    );
+
+    const allItems: ApiNewsItem[] = [];
+    results.forEach((r) => {
+      if (r.status === "fulfilled" && Array.isArray(r.value)) {
+        allItems.push(...r.value);
+      }
     });
 
-    clearTimeout(timeoutId);
+    if (allItems.length > 0) {
+      // Başlık bazlı tekilleştirme (de-duplicate)
+      const seen = new Set<string>();
+      const deduplicated: ApiNewsItem[] = [];
 
-    if (res.ok) {
-      const xml = await res.text();
-      const parsedItems = parseGoogleNewsXml(xml);
+      // Zaman damgasına göre en yeniden en eskiye sırala
+      allItems.sort((a, b) => b.timestamp - a.timestamp);
 
-      if (parsedItems.length > 0) {
-        // Başlık benzerliği ile tekilleştirme (deduplication)
-        const tekilMap = new Map<string, ApiNewsItem>();
-        parsedItems.forEach((item) => {
-          const key = item.baslik.slice(0, 35).toLowerCase();
-          if (!tekilMap.has(key)) {
-            tekilMap.set(key, item);
-          }
-        });
-
-        // En yeniden en eskiye sırala (timestamp descending)
-        const sortedItems = Array.from(tekilMap.values()).sort(
-          (a, b) => b.timestamp - a.timestamp
-        );
-
-        memoryCache = {
-          items: sortedItems,
-          timestamp: simdi,
-        };
-
-        return NextResponse.json({
-          success: true,
-          cached: false,
-          timestamp: simdi,
-          items: sortedItems,
-        });
+      for (const item of allItems) {
+        const normKey = item.baslik.toLowerCase().replace(/[^a-z0-9ğüşıöç]/g, "").slice(0, 40);
+        if (!seen.has(normKey)) {
+          seen.add(normKey);
+          deduplicated.push(item);
+        }
       }
+
+      memoryCache = {
+        items: deduplicated,
+        timestamp: simdi,
+      };
+
+      return NextResponse.json({
+        success: true,
+        cached: false,
+        timestamp: simdi,
+        items: deduplicated,
+      });
     }
 
-    // Google News yanıt vermediyse önceki hafızayı dön
     if (memoryCache.items.length > 0) {
       return NextResponse.json({
         success: true,
@@ -242,7 +277,7 @@ export async function GET() {
     return NextResponse.json({
       success: false,
       items: [],
-      error: "Haber akışına bağlanılıyor...",
+      error: "Haber akışı güncelleniyor...",
     });
   } catch (err: unknown) {
     if (memoryCache.items.length > 0) {
