@@ -1,0 +1,7 @@
+{
+  "name": "BPT Finans",
+  "description": "Borsa, döviz, emtia ve ekonomi haberleri.",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

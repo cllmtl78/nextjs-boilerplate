@@ -1,10 +1,23 @@
 import type { Metadata } from "next";
+import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 
+const sansFont = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const monoFont = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "BPT Finans | Finans Haberleri",
-  description: "Borsa, döviz, emtia ve ekonomi haberleri.",
+  title: "BPT Finans | Canlı Piyasa & Haber Terminali",
+  description: "Borsa İstanbul, KAP bildirimleri, TCMB duyuruları ve küresel finans haberleri anlık terminali.",
 };
 
 export default function RootLayout({
@@ -13,8 +26,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="tr">
-      <body>
+    <html lang="tr" className={`${sansFont.variable} ${monoFont.variable}`}>
+      <body className="antialiased">
         <Header />
         <main className="container main">{children}</main>
         <div className="footer-wrap">
