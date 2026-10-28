@@ -22,8 +22,6 @@ const SEHIRLER: Sehir[] = [
   { ad: "Ankara", lat: 39.93, lon: 32.86, varsayilanSicaklik: 17, varsayilanKod: 1 },
   { ad: "İstanbul", lat: 41.01, lon: 28.98, varsayilanSicaklik: 18, varsayilanKod: 2 },
   { ad: "İzmir", lat: 38.42, lon: 27.14, varsayilanSicaklik: 22, varsayilanKod: 0 },
-  { ad: "Bursa", lat: 40.18, lon: 29.06, varsayilanSicaklik: 19, varsayilanKod: 2 },
-  { ad: "Antalya", lat: 36.89, lon: 30.71, varsayilanSicaklik: 25, varsayilanKod: 0 },
 ];
 
 type SehirHavaVerisi = {
@@ -62,7 +60,7 @@ export default function Weather() {
   );
   const [sira, setSira] = useState(0);
 
-  // 1. Open-Meteo API'den 5 şehir için anlık hava durumunu çek
+  // Open-Meteo API'den 3 şehir için hava durumu
   useEffect(() => {
     async function havaGetir() {
       try {
@@ -91,16 +89,16 @@ export default function Weather() {
           }))
         );
       } catch {
-        // Hata durumunda varsayılan değerleri koru
+        // Hata durumunda mevcut/varsayılan değerleri koru
       }
     }
 
     havaGetir();
-    const yenileme = setInterval(havaGetir, 10 * 60 * 1000); // 10 dakikada bir güncelle
+    const yenileme = setInterval(havaGetir, 10 * 60 * 1000);
     return () => clearInterval(yenileme);
   }, []);
 
-  // 2. Her 5 saniyede bir sıradaki şehre geçiş
+  // Her 5 saniyede bir sıradaki şehre yumuşak fade geçişi
   useEffect(() => {
     const zamanlayici = setInterval(() => {
       setSira((prev) => (prev + 1) % SEHIRLER.length);
@@ -115,16 +113,16 @@ export default function Weather() {
   };
 
   return (
-    <div className="flex items-center gap-1.5 overflow-hidden min-w-[105px]">
+    <div className="flex items-center gap-1.5 overflow-hidden min-w-[95px]">
       <div
         key={aktifSehir.ad}
         className="flex items-center gap-1.5 weather-slide-item"
       >
         {renderWeatherIcon(aktifVeri.kod)}
-        <span className="font-semibold text-slate-200">
-          {aktifSehir.ad}:
+        <span className="font-semibold text-slate-300 text-xs">
+          {aktifSehir.ad}
         </span>
-        <span className="font-mono tabular-nums text-slate-300">
+        <span className="font-mono tabular-nums text-slate-400 text-xs">
           {aktifVeri.sicaklik}°C
         </span>
       </div>

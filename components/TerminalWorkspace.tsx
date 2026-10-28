@@ -7,6 +7,8 @@ import {
   Building2,
   Landmark,
   X,
+  ExternalLink,
+  Layers,
 } from "lucide-react";
 
 export type TerminalHaber = {
@@ -15,103 +17,156 @@ export type TerminalHaber = {
   tarih: string;
   kaynak: string;
   baslik: string;
-  spot?: string;
-  detay: string;
+  ozet?: string;
+  paragraflar?: string[];
+  detay?: string;
+  url?: string;
   kategori: "bist" | "global" | "kap" | "resmi";
-  onem?: "flas" | "onemli" | "normal";
   hisseler?: string[];
-  piyasaEtkisi?: "pozitif" | "negatif" | "notr";
   kapTuru?: "ÖDA" | "PGO" | "FR" | "GKK" | "SÖZ";
   resmiKurum?: "TCMB" | "SPK" | "BDDK" | "HMB" | "TÜİK" | "RESMİ GAZETE";
+  timestamp?: number;
 };
 
-const BASLANGIC_HABERLER: TerminalHaber[] = [
-  // BIST & TÜRKİYE
+// Başlangıç ve Fallback Veri Havuzu
+const BASLANGIC_BIST: TerminalHaber[] = [
   {
-    id: "b1",
-    zaman: "16:24:18",
+    id: "fb_1",
+    zaman: "17:15:22",
     tarih: "Bugün",
     kaynak: "FOREKS",
     kategori: "bist",
-    onem: "flas",
-    baslik: "Türk Hava Yolları, 2026 yılı 3. çeyrek yolcu doluluk oranlarında artış kaydetti",
-    spot: "Toplam yolcu sayısı yıllık bazda %12.4 artarak 24.8 milyona ulaştı. Dış hat transfer yolcu trafiğinde dengeli seyir sürüyor.",
-    detay: "Şirketten Kamuyu Aydınlatma Platformu'na ve analistlere yapılan sunumda, kargo birimi Turkish Cargo'nun küresel pazar payının %6.2'ye çıktığı ve filoya eklenecek yeni nesil uçaklarla kapasitenin güçlendirileceği ifade edildi.",
-    piyasaEtkisi: "pozitif",
+    baslik: "BIST 100 Endeksinde bankacılık hisseleri öncülüğünde 11.200 puan seviyesi test edildi",
+    ozet: "XBANK bankacılık endeksi günlük %2.1 yükselişle işlem hacminde ilk sırayı koruyor.",
+    paragraflar: [
+      "Borsa İstanbul'da BIST 100 endeksi, haftanın üçüncü işlem gününde bankacılık ve ulaştırma hisselerinde yoğunlaşan alımlarla 11.200 direnç bandına yöneldi. Günlük toplam işlem hacmi 96 milyar TL sınırını aşarken yabancı aracı kurumların para girişi dikkat çekti.",
+      "Piyasa analistleri, TCMB faiz patikasına ilişkin pozitif beklentiler ve kredi derecelendirme kuruluşlarının değerlendirmeleri öncesinde BIST endeksinde yukarı yönlü momentumun güç kazandığını belirtiyor."
+    ],
+    url: "https://foreks.com",
+    timestamp: Date.now() - 30000,
   },
   {
-    id: "b2",
-    zaman: "16:15:02",
+    id: "fb_2",
+    zaman: "17:08:40",
     tarih: "Bugün",
     kaynak: "BLOOMBERG HT",
     kategori: "bist",
-    onem: "onemli",
-    baslik: "Demir-çelik sektöründe yerli üretim kapasite kullanım oranı %78.6 seviyesine yükseldi",
-    spot: "Cevher ve enerji maliyetlerindeki dengelenme sonrası üreticilerin ihracat marjlarında toparlanma izleniyor.",
-    detay: "Çelik İhracatçıları Birliği değerlendirmesinde, modernizasyon yatırımlarının hızlanmasıyla katma değerli yassı çelik siparişlerinin arttığı kaydedildi.",
-    piyasaEtkisi: "pozitif",
+    baslik: "Merkez Bankası toplam rezervleri swap hariç net pozisyonda toparlanma eğilimini sürdürüyor",
+    ozet: "Rezerv dinamiklerinde TL mevduat payındaki artış ve portföy girişleri dengelenmeyi destekliyor.",
+    paragraflar: [
+      "Türkiye Cumhuriyet Merkez Bankası (TCMB) analitik bilanço öncü verilerine göre, brüt ve net rezervlerde istikrarlı artış devam ediyor. Swap hariç net rezerv göstergesi yılın en güçlü seviyelerine yakın seyrediyor.",
+      "İktisatçılar, cari dengedeki iyileşme ve dezenflasyon sürecinin güçlenmesiyle Türk lirası varlıklara yönelik risk priminin (CDS) 260 baz puanın altına gerilediğine işaret ediyor."
+    ],
+    url: "https://www.bloomberght.com",
+    timestamp: Date.now() - 90000,
   },
   {
-    id: "b3",
-    zaman: "15:58:45",
+    id: "fb_3",
+    zaman: "16:55:12",
     tarih: "Bugün",
     kaynak: "AA FİNANS",
     kategori: "bist",
-    onem: "normal",
-    baslik: "Aselsan, yurt dışı savunma konsorsiyumu ile 84.5 milyon dolarlık radar teslimat anlaşması imzaladı",
-    spot: "Teslimatların 2026 son çeyreği ile 2027 ilk yarısı arasında tamamlanması planlanıyor.",
-    detay: "Sözleşme kapsamında yerli AESA radar platformlarının entegrasyonu ve bakım-onarım paketi yer alıyor. Bakiye sipariş toplamı 13.1 milyar dolar düzeyine çıktı.",
-    piyasaEtkisi: "pozitif",
+    baslik: "Aselsan, yurt dışı savunma konsorsiyumu ile 84.5 milyon dolarlık radar ihracat sözleşmesi imzaladı",
+    ozet: "Yerli AESA radar sistemlerinin entegrasyonu ve lojistik destek paketini içeren kontrat yürürlüğe girdi.",
+    paragraflar: [
+      "Aselsan Elektronik Sanayi ve Ticaret A.Ş., uluslararası bir müşterisiyle gelişmiş radar ve aviyonik sistem tedarikine yönelik 84.5 milyon dolar tutarında ihracat sözleşmesi imzaladı.",
+      "Açıklamada, teslimatların 2026-2028 yılları arasında tamamlanacağı ve şirketin bakiye sipariş toplamının 13.2 milyar dolar seviyesine ulaştığı bilgisi paylaşıldı."
+    ],
+    url: "https://www.aa.com.tr/tr/ekonomi",
+    timestamp: Date.now() - 150000,
   },
   {
-    id: "b4",
-    zaman: "15:42:10",
+    id: "fb_4",
+    zaman: "16:42:05",
     tarih: "Bugün",
-    kaynak: "BIST DESK",
+    kaynak: "CNBC-E",
     kategori: "bist",
-    onem: "normal",
-    baslik: "Bankacılık endeksinde net faiz marjı toparlanmasıyla hacim artışı izleniyor",
-    spot: "XBANK günlük kazanımı %1.85 seviyesinde seyrederken işlem hacminde bankalar ilk sıralarda kalmaya devam ediyor.",
-    detay: "Aracı kurum raporlarında bankacılık sektörünün özkaynak karlılığı görünümünün dengeli olduğu ve TL mevduat payının istikrarlı seyrettiği vurgulanıyor.",
-    piyasaEtkisi: "pozitif",
+    baslik: "Türk Hava Yolları, kargo taşımacılığında küresel pazar payını %6.2 seviyesine taşıdı",
+    ozet: "Turkish Cargo, filo genişleme stratejisi ve yeni hava koridorlarıyla gelir katkısını artırdı.",
+    paragraflar: [
+      "Türk Hava Yolları (THY), 2026 üçüncü çeyrek operasyonel verilerine göre kargo hacminde yıllık bazda çift haneli büyüme elde etti. Şirket, e-ticaret lojistiğindeki genişleme ile küresel pazar payını %6.2'ye ulaştırdı.",
+      "Yönetim kurulu sunumunda, filoya dahil edilecek yeni kargo uçakları ve İstanbul Havalimanı mega aktarma merkezinin sağladığı transit avantajının karlılığı desteklediği belirtildi."
+    ],
+    url: "https://www.cnbce.com",
+    timestamp: Date.now() - 240000,
   },
   {
-    id: "b5",
-    zaman: "15:30:19",
+    id: "fb_5",
+    zaman: "16:30:19",
     tarih: "Bugün",
-    kaynak: "REUTERS TR",
+    kaynak: "EKONOMİM",
     kategori: "bist",
-    onem: "normal",
-    baslik: "Perakende gıda zincirlerinde lojistik optimizasyonu operasyonel karlılığı destekliyor",
-    spot: "Organize perakende sektöründe yeni mağaza açılışları ve dağıtım merkezi yatırımları devam ediyor.",
-    detay: "Tüketici sepet harcamalarında temel gıda talebinin dirençli kalması, marjlardaki dönemsel baskıyı sınırlıyor.",
-    piyasaEtkisi: "notr",
+    baslik: "Sanayi sektörü kapasite kullanım oranı imalat sanayinde %77.8 seviyesine yükseldi",
+    ozet: "Yatırım malları ve ara malı üretiminde ihracat odaklı sipariş toparlanması sürüyor.",
+    paragraflar: [
+      "Merkez Bankası tarafından açıklanan imalat sanayi kapasite kullanım oranı (KKO), bir önceki aya göre 0.4 puan artarak yüzde 77.8 oldu. Otomotiv, kimya ve makine teçhizat sektörleri artışa öncülük etti.",
+      "Sektör temsilcileri, Avrupa pazarında toparlanan talep ve iç piyasada finansman koşullarındaki öngörülebilirliğin kapasite artırımlarını hızlandırdığını bildirdi."
+    ],
+    url: "https://www.ekonomim.com",
+    timestamp: Date.now() - 360000,
   },
   {
-    id: "b6",
-    zaman: "15:18:33",
+    id: "fb_6",
+    zaman: "16:18:44",
     tarih: "Bugün",
-    kaynak: "MATRİKS",
+    kaynak: "EKONOMİST",
     kategori: "bist",
-    onem: "normal",
-    baslik: "Telekomünikasyon sektöründe abone başı gelir büyümesi istikrarlı seyrini koruyor",
-    spot: "Fiber internet altyapı yatırımları ve şebeke modernizasyonu sürüyor.",
-    detay: "Faturalı abone oranının artmasıyla birlikte telekom şirketlerinin nakit akışı yaratma kapasitesi destekleniyor.",
-    piyasaEtkisi: "pozitif",
+    baslik: "Girişim sermayesi yatırım ortaklıkları 2026 ilk yarısında 420 milyon dolar fon sağladı",
+    ozet: "Fintek, yapay zeka ve yenilenebilir enerji teknolojilerine sermaye akışı ivme kazandı.",
+    paragraflar: [
+      "Türkiye'de faaliyet gösteren girişim sermayesi fonları, 2026 yılı ilk yarısında toplam 420 milyon dolarlık yatırım turu kapattı. Kurumsal yatırımcıların teknoloji fonlarına ilgisi yüksek seyretti.",
+      "Uzmanlar, SPK'nın fon mevzuatındaki kolaylaştırıcı düzenlemelerinin ve vergi avantajlarının sermaye piyasalarını derinleştirdiğini kaydetti."
+    ],
+    url: "https://www.ekonomist.com.tr",
+    timestamp: Date.now() - 480000,
   },
+  {
+    id: "fb_7",
+    zaman: "16:05:30",
+    tarih: "Bugün",
+    kaynak: "BİGPARA",
+    kategori: "bist",
+    baslik: "Gram altın Kapalıçarşı serbest piyasasında rekor tazelerken işlem hacmi yükseldi",
+    ozet: "Ons altın yükselişi ve döviz sepeti fiyatlamasıyla gram altın yeni zirveyi gördü.",
+    paragraflar: [
+      "Serbest piyasada fiziki altın talebi sürerken Kapalıçarşı'da gram altın fiyatı yeni zirveye ulaştı. Küresel piyasalarda ons altının 2.760 dolar bandını test etmesi iç piyasaya yansıdı.",
+      "Altın ve para piyasaları uzmanları, küresel merkez bankası alımları ve jeopolitik risk fiyatlamasının emtia piyasalarında trendi desteklediğini aktardı."
+    ],
+    url: "https://bigpara.hurriyet.com.tr",
+    timestamp: Date.now() - 600000,
+  },
+  {
+    id: "fb_8",
+    zaman: "15:52:10",
+    tarih: "Bugün",
+    kaynak: "EKOTÜRK",
+    kategori: "bist",
+    baslik: "Enerji sektöründe hibrit santral yatırımları ve YEKA ihaleleriyle kurulu güç arttı",
+    ozet: "Güneş ve rüzgar enerjisinde şebeke entegrasyon kapasitesi 35 bin megavata yaklaştı.",
+    paragraflar: [
+      "Enerji ve Tabii Kaynaklar Bakanlığı verilerine göre yenilenebilir enerjinin toplam elektrik üretimindeki payı %46 sınırını aştı. Lisanslı ve lisanssız güneş santrallerinde yatırım temposu sürüyor.",
+      "Sektör raporlarında, yerli türbin ve panel bileşenlerinin ihracat potansiyelinin cari açığı azaltıcı yönde katkı vereceği değerlendirildi."
+    ],
+    url: "https://www.ekoturk.com",
+    timestamp: Date.now() - 720000,
+  },
+];
 
-  // GLOBAL
+// Statik Global Haberler (Sadece Başlık)
+const GLOBAL_HABERLER: TerminalHaber[] = [
   {
     id: "g1",
     zaman: "16:20:11",
     tarih: "Bugün",
     kaynak: "BLOOMBERG",
     kategori: "global",
-    onem: "flas",
-    baslik: "Fed Yönetim Kurulu: Enflasyonda düşüş eğilimi faiz adımlarının planlandığı şekilde sürmesine imkan tanıyor",
-    spot: "İşgücü piyasasında soğumanın kontrol altında olduğu ve para politikasının nötr seviyeye doğru kademeli ayarlanacağı belirtildi.",
+    baslik: "Fed Yönetim Kurulu: Enflasyonda düşüş eğilimi faiz adımlarının sürmesine imkan tanıyor",
     detay: "Piyasa fiyatlamalarında 25 baz puanlık faiz indirim olasılığı %86'ya yükseldi. ABD 10 yıllık tahvil getirisi %4.18 seviyesine gevşedi.",
-    piyasaEtkisi: "pozitif",
+    paragraflar: [
+      "Federal Rezerv yetkilileri, dezenflasyon sürecinin beklentilerle uyumlu ilerlediğini ve iş gücü piyasasındaki dengelenmenin sürdüğünü ifade etti.",
+      "ABD 10 yıllık Hazine tahvil faizleri açıklamaların ardından 4 baz puan gerileyerek %4.18 seviyesine çekildi."
+    ],
+    url: "https://www.bloomberg.com",
   },
   {
     id: "g2",
@@ -119,11 +174,13 @@ const BASLANGIC_HABERLER: TerminalHaber[] = [
     tarih: "Bugün",
     kaynak: "REUTERS",
     kategori: "global",
-    onem: "onemli",
     baslik: "ECB: Hizmet sektörü enflasyonunda yavaşlama sinyalleri güçleniyor",
-    spot: "Euro Bölgesi'nde kredi talebinde toparlanma sinyalleri izlenirken sanayi üretimi toparlanma eğiliminde.",
-    detay: "Ücret baskılarının hedeflenen patikaya yakınsayacağı ve para politikasındaki dengelenmenin iktisadi aktiviteyi destekleyeceği belirtildi.",
-    piyasaEtkisi: "notr",
+    detay: "Euro Bölgesi'nde kredi talebinde toparlanma sinyalleri izlenirken sanayi üretimi toparlanma eğiliminde.",
+    paragraflar: [
+      "Avrupa Merkez Bankası (ECB) son bülteninde, Euro Bölgesi çekirdek enflasyonunun hedef patikaya doğru gerilediği vurgulandı.",
+      "Para piyasaları analistleri, ECB'nin önümüzdeki toplantılarda faiz indirim döngüsünü sürdürmesine kesin gözüyle bakıyor."
+    ],
+    url: "https://www.reuters.com",
   },
   {
     id: "g3",
@@ -131,11 +188,13 @@ const BASLANGIC_HABERLER: TerminalHaber[] = [
     tarih: "Bugün",
     kaynak: "FINANCIAL TIMES",
     kategori: "global",
-    onem: "normal",
     baslik: "OPEC+ toplantısı öncesi Brent petrol 74.80 dolar bandında yatay seyrediyor",
-    spot: "Küresel talep projeksiyonları ve ABD stok verileri öncesinde enerji emtialarında dalgalanma sınırlı kaldı.",
-    detay: "Uluslararası Enerji Ajansı haftalık bülteninde rafineri işletme oranlarındaki toparlanmanın altı çizildi.",
-    piyasaEtkisi: "notr",
+    detay: "Küresel talep projeksiyonları ve ABD stok verileri öncesinde enerji emtialarında dalgalanma sınırlı kaldı.",
+    paragraflar: [
+      "Petrol İhraç Eden Ülkeler Örgütü ve müttefiklerinin (OPEC+) üretim kotalarına ilişkin çevrim içi toplantısı öncesinde ham petrol fiyatları dar bantta işlem görüyor.",
+      "Uluslararası Enerji Ajansı raporunda, Çin talebindeki toparlanma hızının fiyat dengesi üzerinde kritik rol oynamaya devam ettiği aktarıldı."
+    ],
+    url: "https://www.ft.com",
   },
   {
     id: "g4",
@@ -143,11 +202,13 @@ const BASLANGIC_HABERLER: TerminalHaber[] = [
     tarih: "Bugün",
     kaynak: "CNBC",
     kategori: "global",
-    onem: "normal",
     baslik: "Wall Street vadeli kontratlarında teknoloji şirketleri öncülüğünde pozitif seyir",
-    spot: "Nasdaq 100 vadelileri %+0.65, S&P 500 vadelileri %+0.42 artıda işlem görüyor.",
     detay: "Yarı iletken sektörü öncülüğünde kurumsal yatırım harcamalarına dair şirket açıklamaları risk iştahını destekliyor.",
-    piyasaEtkisi: "pozitif",
+    paragraflar: [
+      "S&P 500 ve Nasdaq 100 vadeli endeksleri, yarı iletken ve veri merkezi altyapı sağlayıcılarının güçlü ciro projeksiyonları sonrası primlendi.",
+      "Yatırım bankaları, yapay zeka harcamalarının kurumsal bilançolara reel katkısının geniş tabana yayıldığına dikkat çekiyor."
+    ],
+    url: "https://www.cnbc.com",
   },
   {
     id: "g5",
@@ -155,27 +216,47 @@ const BASLANGIC_HABERLER: TerminalHaber[] = [
     tarih: "Bugün",
     kaynak: "NIKKEI",
     kategori: "global",
-    onem: "normal",
     baslik: "Asya piyasalarında Japon Yeni güçlenirken Nikkei endeksi günü %+0.35 ile tamamladı",
-    spot: "Japonya Merkez Bankası faiz kararı beklentileri Asya para birimlerinde fiyatlamaları etkiledi.",
     detay: "Bölgesel teknoloji tedarikçileri güçlü sipariş akışıyla endekste pozitif ayrışmayı sürdürdü.",
-    piyasaEtkisi: "notr",
+    paragraflar: [
+      "Tokyo Borsası'nda Nikkei 225 endeksi ihracatçı hisselerdeki dirençle günü artıda kapattı. Japonya Merkez Bankası'nın (BOJ) faiz artırım sinyalleri izleniyor.",
+      "Yen karşısında dolar 151.20 seviyesine gevşeyerek değer kaybetti."
+    ],
+    url: "https://asia.nikkei.com",
   },
+  {
+    id: "g6",
+    zaman: "14:48:19",
+    tarih: "Bugün",
+    kaynak: "BLOOMBERG",
+    kategori: "global",
+    baslik: "Almanya 10 yıllık tahvil getirisi büyüme beklentileriyle 4 baz puan geriledi",
+    detay: "Avrupa Merkez Bankası politika faizi patikasına ilişkin beklentiler sabit getirili menkul kıymetleri destekliyor.",
+    paragraflar: [
+      "Alman Bundesbank tahvilleri, imalat PMI verilerinin ardından güvenli liman talebiyle alıcılı seyretti.",
+      "Avrupa genelinde tahvil faizlerindeki geri çekilme hisse senedi değerlemelerine destek sundu."
+    ],
+    url: "https://www.bloomberg.com",
+  },
+];
 
-  // KAP BİLDİRİMLERİ (Hisse kodları korundu)
+// Statik KAP Bildirimleri (Belirgin Cyan Hisse Kodu + İnce Bildirim Türü)
+const KAP_BILDIRIMLERI: TerminalHaber[] = [
   {
     id: "k1",
     zaman: "16:27:04",
     tarih: "Bugün",
     kaynak: "KAP",
     kategori: "kap",
-    onem: "onemli",
     hisseler: ["KCHOL"],
     kapTuru: "PGO",
     baslik: "Koç Holding A.Ş. — Pay Geri Alım İşlemlerine İlişkin Bildirim",
-    spot: "Yönetim Kurulu kararı uyarınca 150.000 adet pay 214.50 - 216.00 TL fiyat aralığından geri alındı.",
     detay: "Şirketin sahip olduğu KCHOL payları sermayenin %0.84'üne ulaşmıştır. Program çerçevesinde fon kaynağı şirket iç kaynaklarından karşılanmaktadır.",
-    piyasaEtkisi: "pozitif",
+    paragraflar: [
+      "Koç Holding A.Ş. Yönetim Kurulu kararıyla başlatılan hisse geri alım programı çerçevesinde, Borsa İstanbul pay piyasasında 184.50 TL ortalama fiyattan 250.000 adet pay geri alınmıştır.",
+      "İşlem sonucunda şirketin sahip olduğu kendi paylarının nominal tutarı 21.3 milyon TL'ye ve şirket sermayesine oranı %0.84 seviyesine ulaşmıştır."
+    ],
+    url: "https://www.kap.org.tr",
   },
   {
     id: "k2",
@@ -183,13 +264,15 @@ const BASLANGIC_HABERLER: TerminalHaber[] = [
     tarih: "Bugün",
     kaynak: "KAP",
     kategori: "kap",
-    onem: "flas",
     hisseler: ["SISE"],
     kapTuru: "ÖDA",
     baslik: "Türkiye Şişe ve Cam Fabrikaları A.Ş. — Kapasite Artışı ve Modernizasyon Kararı",
-    spot: "Mimari camlar üretim hattına yönelik 185 milyon euroluk hat modernizasyonu onaylandı.",
     detay: "Yatırımın 2027 ilk çeyreğinde tamamlanmasıyla enerji tüketiminde verimlilik ve katma değerli kaplamalı cam üretiminde kapasite artışı hedeflenmektedir.",
-    piyasaEtkisi: "pozitif",
+    paragraflar: [
+      "Şirketimiz Yönetim Kurulu, Mersin ve Yenişehir üretim tesislerindeki düzcam hatlarının fırın soğuk tamiri ve yeni teknoloji kaplama hattı entegrasyonu için 115 milyon euro bütçeli yatırım planını onaylamıştır.",
+      "Yatırımın 2027 ilk çeyreğinde devreye girmesiyle birlikte birim enerji tüketiminde %14 verimlilik ve yüksek katma değerli mimari cam üretim kapasitesinde yıllık 180 bin ton artış öngörülmektedir."
+    ],
+    url: "https://www.kap.org.tr",
   },
   {
     id: "k3",
@@ -197,13 +280,15 @@ const BASLANGIC_HABERLER: TerminalHaber[] = [
     tarih: "Bugün",
     kaynak: "KAP",
     kategori: "kap",
-    onem: "normal",
     hisseler: ["SASA"],
     kapTuru: "FR",
     baslik: "SASA Polyester Sanayi A.Ş. — Dönemsel Faaliyet ve Yatırım Raporu",
-    spot: "Üretim tesisinde deneme üretim süreçlerine ilişkin teknik revizyonlar kamuoyuna açıklandı.",
     detay: "Tesisin ticari üretim takvimi ve ham madde tedarik sözleşmelerinin finansal tablolara yansıması paylaşıldı.",
-    piyasaEtkisi: "notr",
+    paragraflar: [
+      "Adana Yumurtalık Özel Endüstri Bölgesi'nde sürdürülen PTA ve polimerizasyon tesisi inşaatında mekanik tamamlama oranı %94 seviyesine ulaşmıştır.",
+      "Deneme üretimlerinin planlandığı şekilde devam ettiği ve tesisin tam kapasite devreye alınmasıyla yıllık yaklaşık 1.2 milyar dolarlık ithal ikamesi sağlanacağı kamuoyuyla paylaşılmıştır."
+    ],
+    url: "https://www.kap.org.tr",
   },
   {
     id: "k4",
@@ -211,13 +296,15 @@ const BASLANGIC_HABERLER: TerminalHaber[] = [
     tarih: "Bugün",
     kaynak: "KAP",
     kategori: "kap",
-    onem: "normal",
     hisseler: ["FROTO"],
     kapTuru: "SÖZ",
     baslik: "Ford Otomotiv Sanayi A.Ş. — Yeni Model Batarya Montaj Tedarik Sözleşmesi",
-    spot: "İhraç edilecek ticari araç serisi için batarya paketleme anlaşması imzalandı.",
     detay: "Sözleşmenin şirketin ihracat hacmine yıllık yaklaşık 320 milyon euro katkı sağlaması öngörülmektedir.",
-    piyasaEtkisi: "pozitif",
+    paragraflar: [
+      "Ford Otosan, Avrupa pazarına yönelik tam elektrikli ticari araç serisi için batarya paketleme ve modül montajına ilişkin çok yıllı tedarik anlaşmasını imzalamıştır.",
+      "Kocaeli fabrikalarında üretilecek yeni nesil batarya paketlerinin yıllık ciroya yaklaşık 320 milyon euro ilave ihracat geliri oluşturması beklenmektedir."
+    ],
+    url: "https://www.kap.org.tr",
   },
   {
     id: "k5",
@@ -225,16 +312,20 @@ const BASLANGIC_HABERLER: TerminalHaber[] = [
     tarih: "Bugün",
     kaynak: "KAP",
     kategori: "kap",
-    onem: "normal",
     hisseler: ["TUPRS"],
     kapTuru: "ÖDA",
     baslik: "Tüpraş — Rafineri Bakım Planı Güncellemesi Bildirildi",
-    spot: "İzmit Rafinerisi ünitesinde planlı bakım çalışması 18 gün içinde tamamlanacak.",
     detay: "Planlı duruş süresince nihai ürün satışları mevcut stoklardan karşılanacak olup satış hacminde kesinti öngörülmemektedir.",
-    piyasaEtkisi: "notr",
+    paragraflar: [
+      "İzmit Rafinerisi Ham Petrol Ünitesi'nde planlı periyodik bakım çalışmalarının 3 hafta süreyle yürütüleceği, bakım süresince ürün satışlarının mevcut stok depolarından kesintisiz karşılanacağı bildirilmiştir.",
+      "Şirketin yıllık toplam üretim ve satış hedeflerinde herhangi bir revizyona ihtiyaç duyulmadığı belirtilmiştir."
+    ],
+    url: "https://www.kap.org.tr",
   },
+];
 
-  // RESMİ KURUMLAR
+// Statik Resmi Kurumlar
+const RESMI_HABERLER: TerminalHaber[] = [
   {
     id: "r1",
     zaman: "16:22:00",
@@ -242,11 +333,13 @@ const BASLANGIC_HABERLER: TerminalHaber[] = [
     kaynak: "TCMB",
     kategori: "resmi",
     resmiKurum: "TCMB",
-    onem: "flas",
     baslik: "TCMB: Para Politikası Kurulu Toplantı Özeti yayımlandı",
-    spot: "Enflasyonun ana eğiliminde kalıcı düşüş sağlanana kadar sıkı para politikası duruşunun sürdürüleceği belirtildi.",
     detay: "Kurul, yurt içi talepteki dengelenmenin sürdüğünü ve TL likidite sterilizasyon araçlarının etkin kullanılacağını ifade etti.",
-    piyasaEtkisi: "pozitif",
+    paragraflar: [
+      "Türkiye Cumhuriyet Merkez Bankası Para Politikası Kurulu Toplantı Özeti'nde, aylık enflasyonun ana eğiliminde belirgin ve kalıcı bir düşüş sağlanana kadar sıkı para politikası duruşunun sürdürüleceği teyit edildi.",
+      "Likidite fazlasının sterilizasyonunda zorunlu karşılıklar ve depo ihaleleri gibi araçların çeşitlendirilerek kararlılıkla kullanılacağı bildirildi."
+    ],
+    url: "https://www.tcmb.gov.tr",
   },
   {
     id: "r2",
@@ -255,11 +348,13 @@ const BASLANGIC_HABERLER: TerminalHaber[] = [
     kaynak: "SPK",
     kategori: "resmi",
     resmiKurum: "SPK",
-    onem: "onemli",
     baslik: "SPK Haftalık Bülteni: 2 şirketin sermaye piyasası ihracına onay verildi",
-    spot: "Sermaye piyasalarının derinleşmesi kapsamında 2 sanayi şirketinin pay ihracı onaylandı.",
     detay: "Halka arz gelirlerinin büyük kısmının işletme sermayesi ve kapasite artırım yatırımlarında kullanılacağı bildirildi.",
-    piyasaEtkisi: "pozitif",
+    paragraflar: [
+      "Sermaye Piyasası Kurulu haftalık bülteninde iki sanayi kuruluşunun pay ihracı ve bedelsiz sermaye artırımı başvurularının onaylandığı duyuruldu.",
+      "Ayrıca borçlanma aracı ihraç limitlerine ilişkin değerlendirmeler neticesinde kurumsal tahvil ve finansman bonosu ihraç izinleri onaylandı."
+    ],
+    url: "https://spk.gov.tr",
   },
   {
     id: "r3",
@@ -268,11 +363,13 @@ const BASLANGIC_HABERLER: TerminalHaber[] = [
     kaynak: "BDDK",
     kategori: "resmi",
     resmiKurum: "BDDK",
-    onem: "normal",
     baslik: "BDDK Haftalık Bankacılık Verileri: TL mevduat payı artışını koruyor",
-    spot: "Kur Korumalı Mevduat toplam bakiyesinde haftalık düşüş devam etti.",
     detay: "TL mevduatın toplam mevduat içindeki payı %56.4'e yükselirken bankacılık sektörünün sermaye yeterlilik rasyosu %17.2 seviyesinde gerçekleşti.",
-    piyasaEtkisi: "pozitif",
+    paragraflar: [
+      "Bankacılık Düzenleme ve Denetleme Kurumu (BDDK) haftalık bülteninde, sektörün toplam kredi hacminin dengeli büyüdüğü ve takipteki alacaklar rasyosunun %1.68 seviyesinde stabil kaldığı belirtildi.",
+      "Kur korumalı mevduat bakiyesindeki düşüş eğiliminin kesintisiz sürdüğü, standart TL vadeli mevduat hesaplarına geçişin hızlandığı kaydedildi."
+    ],
+    url: "https://www.bddk.org.tr",
   },
   {
     id: "r4",
@@ -281,11 +378,13 @@ const BASLANGIC_HABERLER: TerminalHaber[] = [
     kaynak: "HMB",
     kategori: "resmi",
     resmiKurum: "HMB",
-    onem: "normal",
-    baslik: "Hazine ve Maliye Bakanlığı: Merkezi Yönetim Bütçe Dengesi ilk 9 ayda hedeflerle uyumlu gerçekleşti",
-    spot: "Mali disiplin tedbirlerinin bütçe dengesi üzerindeki olumlu etkisi sürüyor.",
+    baslik: "Hazine ve Maliye Bakanlığı: Merkezi Yönetim Bütçe Dengesi hedeflerle uyumlu",
     detay: "Açıklamada, Hazine nakit rezervlerinin güçlü seviyesini koruduğu kaydedildi.",
-    piyasaEtkisi: "pozitif",
+    paragraflar: [
+      "Hazine ve Maliye Bakanlığı bütçe gerçekleşmeleri raporunda, kamu harcamalarında tasarruf tedbirlerinin ve gelir artırıcı mali disiplin uygulamalarının sonuç verdiği belirtildi.",
+      "Hazine nakit rezervlerinin güçlü yapısı sayesinde borçlanma vadelerinin uzatıldığı ve borçlanma maliyetlerinde düşüş kaydedildiği bildirildi."
+    ],
+    url: "https://www.hmb.gov.tr",
   },
   {
     id: "r5",
@@ -294,191 +393,269 @@ const BASLANGIC_HABERLER: TerminalHaber[] = [
     kaynak: "TÜİK",
     kategori: "resmi",
     resmiKurum: "TÜİK",
-    onem: "flas",
     baslik: "TÜİK: Yıllık Tüketici Fiyat Endeksi gerilemesini sürdürdü",
-    spot: "TÜFE aylık bazda %+1.88 artarken yıllık enflasyon %44.20 seviyesine indi.",
     detay: "Çekirdek enflasyon göstergelerinde genele yayılan yavaşlama izlendi.",
-    piyasaEtkisi: "pozitif",
+    paragraflar: [
+      "Türkiye İstatistik Kurumu verilerine göre tüketici fiyat endeksi yıllık bazda gerileme eğilimini sürdürdü. Temel mallar ve ulaştırma kalemleri düşüşe en yüksek katkıyı verdi.",
+      "Yurt içi üretici fiyat endeksi de (Yİ-ÜFE) aylık bazda sınırlı artış kaydederek maliyet yönlü baskıların azaldığını ortaya koydu."
+    ],
+    url: "https://www.tuik.gov.tr",
   },
 ];
 
 export default function TerminalWorkspace() {
-  const [haberler, setHaberler] = useState<TerminalHaber[]>(BASLANGIC_HABERLER);
+  const [bistHaberleri, setBistHaberleri] = useState<TerminalHaber[]>(BASLANGIC_BIST);
   const [seciliHaber, setSeciliHaber] = useState<TerminalHaber | null>(null);
+  const [loadingBist, setLoadingBist] = useState<boolean>(false);
 
-  // Periyodik hafif canlı güncelleme
+  // Çok kaynaklı dinamik haber çekme mekanizması (5s periyodik yenileme + fallback koruma)
   useEffect(() => {
+    let isCancelled = false;
+
+    async function loadNews() {
+      try {
+        const res = await fetch("/api/news");
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (isCancelled) return;
+
+        if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+          interface ApiItem {
+            id: string;
+            zaman: string;
+            tarih?: string;
+            kaynak: string;
+            baslik: string;
+            ozet?: string;
+            paragraflar?: string[];
+            detay?: string;
+            url?: string;
+            timestamp?: number;
+          }
+
+          const donusturulen: TerminalHaber[] = data.items.map((item: ApiItem) => ({
+            id: item.id,
+            zaman: item.zaman,
+            tarih: item.tarih || "Bugün",
+            kaynak: item.kaynak,
+            baslik: item.baslik,
+            ozet: item.ozet,
+            paragraflar: item.paragraflar,
+            detay:
+              item.paragraflar && item.paragraflar.length > 0
+                ? item.paragraflar.join("\n\n")
+                : item.detay || item.ozet || item.baslik,
+            url: item.url || "#",
+            kategori: "bist" as const,
+            timestamp: item.timestamp,
+          }));
+
+          setBistHaberleri(donusturulen);
+        }
+      } catch {
+        // Ağ hatasında mevcut önbellek korunur (Fallback)
+      } finally {
+        if (!isCancelled) {
+          setLoadingBist(false);
+        }
+      }
+    }
+
+    void loadNews();
     const interval = setInterval(() => {
-      const now = new Date();
-      const zamanStr = now.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      void loadNews();
+    }, 5000);
 
-      const havuz: Partial<TerminalHaber>[] = [
-        {
-          kaynak: "KAP",
-          kategori: "kap",
-          onem: "normal",
-          hisseler: ["BIMAS"],
-          kapTuru: "PGO",
-          baslik: "BİM Birleşik Mağazalar A.Ş. — Pay Geri Alım İşlemi Gerçekleştirildi",
-          spot: "Geri alım işlemi ortalama 488.50 TL fiyattan tamamlandı.",
-          detay: "Şirketin sermayedeki payı %0.42 seviyesine ulaşmıştır.",
-          piyasaEtkisi: "notr",
-        },
-        {
-          kaynak: "FOREKS",
-          kategori: "bist",
-          onem: "normal",
-          baslik: "THY, yurt dışı hatlarda ilave sefer düzenleme kararı aldı",
-          spot: "Asya-Pasifik rotalarında frekans artışı tamamlandı.",
-          detay: "Uzak Doğu transfer yolcu trafiğinde büyüme planı çerçevesinde uçuş izinleri onaylandı.",
-          piyasaEtkisi: "pozitif",
-        },
-      ];
-
-      const rastgele = havuz[Math.floor(Math.random() * havuz.length)];
-      const yeni: TerminalHaber = {
-        id: "live_" + Date.now(),
-        zaman: zamanStr,
-        tarih: "Bugün",
-        kaynak: rastgele.kaynak || "TERMINAL",
-        kategori: rastgele.kategori || "bist",
-        onem: rastgele.onem || "normal",
-        hisseler: rastgele.hisseler || [],
-        kapTuru: rastgele.kapTuru,
-        baslik: rastgele.baslik || "Piyasada yeni işlem hacmi gerçekleşti",
-        spot: rastgele.spot || "Haber akışı terminale işlendi.",
-        detay: rastgele.detay || "Piyasa analistleri gelişmeyi takip ediyor.",
-        piyasaEtkisi: rastgele.piyasaEtkisi || "notr",
-      };
-
-      setHaberler((prev) => [yeni, ...prev.slice(0, 35)]);
-    }, 25000);
-
-    return () => clearInterval(interval);
+    return () => {
+      isCancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
-  const bistHaberleri = haberler.filter((h) => h.kategori === "bist");
-  const globalHaberleri = haberler.filter((h) => h.kategori === "global");
-  const kapBildirimleri = haberler.filter((h) => h.kategori === "kap");
-  const resmiHaberleri = haberler.filter((h) => h.kategori === "resmi");
+  // Modal için ESC klavye tuşu dinleyicisi
+  useEffect(() => {
+    if (!seciliHaber) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSeciliHaber(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [seciliHaber]);
 
   return (
     <div className="terminal-workspace">
-      {/* 3-SÜTUNLU ANA TERMİNAL GRİDİ */}
+      {/* 3-SÜTUNLU KOMPAKT ENDÜSTRİYEL TERMİNAL DÜZENİ */}
       <div className="terminal-grid">
-        {/* SÜTUN 1: BIST & Türkiye */}
+        {/* SÜTUN 1: BIST & Türkiye (Dinamik Çok Kaynaklı Akış) */}
         <section className="terminal-pane">
           <div className="pane-header">
             <div className="pane-title-group">
               <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
               <h2 className="pane-title">BIST & Türkiye</h2>
             </div>
+            <div className="flex items-center gap-1.5 font-mono text-[10px] text-slate-500">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
+              <span className="tabular-nums">{bistHaberleri.length}</span>
+            </div>
           </div>
 
           <div className="pane-scroll">
-            {bistHaberleri.map((h) => (
-              <article
-                key={h.id}
-                onClick={() => setSeciliHaber(h)}
-                className="terminal-row"
-              >
-                <div className="row-meta font-mono">
-                  <span className="row-time tabular-nums">{h.zaman}</span>
-                  <span className="row-source">{h.kaynak}</span>
-                  {h.onem === "flas" && <span className="marker-flas">FLAŞ</span>}
-                </div>
+            {loadingBist && bistHaberleri.length === 0 ? (
+              // Skeleton Loader
+              <div className="p-3 space-y-3">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="animate-pulse space-y-1.5">
+                    <div className="flex gap-2">
+                      <div className="h-3 w-12 bg-slate-800 rounded" />
+                      <div className="h-3 w-20 bg-slate-800 rounded" />
+                    </div>
+                    <div className="h-4 bg-slate-800/80 rounded w-full" />
+                    <div className="h-3 bg-slate-800/40 rounded w-3/4" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              bistHaberleri.map((h) => (
+                <article
+                  key={h.id}
+                  onClick={() => setSeciliHaber(h)}
+                  className="terminal-row group"
+                >
+                  <div className="flex items-center gap-2 font-mono text-[10.5px]">
+                    <span className="row-time tabular-nums text-slate-500">{h.zaman}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-[#0a1120] border border-slate-700/60 text-slate-300 font-mono text-[9.5px] uppercase tracking-wide">
+                      [{h.kaynak}]
+                    </span>
+                  </div>
 
-                <h3 className="row-headline">{h.baslik}</h3>
-              </article>
-            ))}
+                  <h3 className="row-headline font-medium text-slate-200 group-hover:text-cyan-400 cursor-pointer transition text-xs line-clamp-2 leading-snug">
+                    {h.baslik}
+                  </h3>
+
+                  {h.ozet && (
+                    <p className="text-slate-400 text-[11px] truncate leading-normal">
+                      {h.ozet}
+                    </p>
+                  )}
+                </article>
+              ))
+            )}
           </div>
         </section>
 
-        {/* SÜTUN 2: Global */}
+        {/* SÜTUN 2: Global (Sadece Başlık) */}
         <section className="terminal-pane">
           <div className="pane-header">
             <div className="pane-title-group">
               <Globe className="w-3.5 h-3.5 text-slate-400" />
               <h2 className="pane-title">Global</h2>
             </div>
+            <div className="font-mono text-[10px] text-slate-500">
+              <span className="tabular-nums">{GLOBAL_HABERLER.length}</span>
+            </div>
           </div>
 
           <div className="pane-scroll">
-            {globalHaberleri.map((h) => (
+            {GLOBAL_HABERLER.map((h) => (
               <article
                 key={h.id}
                 onClick={() => setSeciliHaber(h)}
-                className="terminal-row"
+                className="terminal-row group"
               >
                 <div className="row-meta font-mono">
-                  <span className="row-time tabular-nums">{h.zaman}</span>
-                  <span className="row-source">{h.kaynak}</span>
-                  {h.onem === "flas" && <span className="marker-flas">FLAŞ</span>}
+                  <span className="row-time tabular-nums text-slate-500">{h.zaman}</span>
+                  <span className="px-1.5 py-0.5 rounded bg-[#0a1120] border border-slate-700/60 text-slate-300 font-mono text-[9.5px] uppercase">
+                    [{h.kaynak}]
+                  </span>
                 </div>
 
-                <h3 className="row-headline">{h.baslik}</h3>
-                {h.spot && <p className="row-excerpt">{h.spot}</p>}
+                <h3 className="row-headline font-medium text-slate-200 group-hover:text-cyan-400 cursor-pointer transition text-xs leading-snug">
+                  {h.baslik}
+                </h3>
               </article>
             ))}
           </div>
         </section>
 
-        {/* SÜTUN 3: KAP Bildirimleri + Resmi Kurumlar (İKİLİ STACK) */}
+        {/* SÜTUN 3: KAP Bildirimleri + Resmi Kurumlar */}
         <div className="terminal-stack">
-          {/* Üst Kutu: KAP Bildirimleri */}
+          {/* Üst: KAP Bildirimleri */}
           <section className="terminal-pane pane-kap">
             <div className="pane-header">
               <div className="pane-title-group">
                 <Building2 className="w-3.5 h-3.5 text-slate-400" />
                 <h2 className="pane-title">KAP Bildirimleri</h2>
               </div>
+              <div className="font-mono text-[10px] text-slate-500">
+                <span className="tabular-nums">{KAP_BILDIRIMLERI.length}</span>
+              </div>
             </div>
 
             <div className="pane-scroll">
-              {kapBildirimleri.map((h) => (
+              {KAP_BILDIRIMLERI.map((h) => (
                 <article
                   key={h.id}
                   onClick={() => setSeciliHaber(h)}
-                  className="terminal-row kap-row"
+                  className="terminal-row kap-row group"
                 >
-                  <div className="kap-row-top font-mono">
-                    <div className="kap-ticker-wrap">
+                  <div className="kap-row-top">
+                    <div className="flex items-center gap-2">
                       {h.hisseler?.map((s) => (
-                        <span key={s} className="kap-code">{s}</span>
+                        <span key={s} className="kap-code-prominent font-mono">
+                          {s}
+                        </span>
                       ))}
-                      {h.kapTuru && <span className="kap-type">{h.kapTuru}</span>}
+                      {h.kapTuru && (
+                        <span className="kap-type-subtle font-mono">
+                          {h.kapTuru}
+                        </span>
+                      )}
                     </div>
-                    <span className="row-time tabular-nums">{h.zaman}</span>
+                    <span className="row-time font-mono tabular-nums text-slate-500 text-[11px]">
+                      {h.zaman}
+                    </span>
                   </div>
 
-                  <h3 className="row-headline kap-headline">{h.baslik}</h3>
+                  <h3 className="row-headline kap-headline group-hover:text-cyan-400 transition">
+                    {h.baslik}
+                  </h3>
                 </article>
               ))}
             </div>
           </section>
 
-          {/* Alt Kutu: Resmi Kurumlar */}
+          {/* Alt: Resmi Kurumlar */}
           <section className="terminal-pane pane-resmi">
             <div className="pane-header">
               <div className="pane-title-group">
                 <Landmark className="w-3.5 h-3.5 text-slate-400" />
                 <h2 className="pane-title">Resmi Kurumlar</h2>
               </div>
+              <div className="font-mono text-[10px] text-slate-500">
+                <span className="tabular-nums">{RESMI_HABERLER.length}</span>
+              </div>
             </div>
 
             <div className="pane-scroll">
-              {resmiHaberleri.map((h) => (
+              {RESMI_HABERLER.map((h) => (
                 <article
                   key={h.id}
                   onClick={() => setSeciliHaber(h)}
-                  className="terminal-row resmi-row"
+                  className="terminal-row resmi-row group"
                 >
                   <div className="row-meta font-mono">
-                    <span className="row-time tabular-nums">{h.zaman}</span>
+                    <span className="row-time tabular-nums text-slate-500">{h.zaman}</span>
                     <span className="resmi-badge">@{h.resmiKurum || h.kaynak}</span>
                   </div>
 
-                  <h3 className="row-headline">{h.baslik}</h3>
+                  <h3 className="row-headline font-medium text-slate-200 group-hover:text-cyan-400 transition text-xs leading-snug">
+                    {h.baslik}
+                  </h3>
                 </article>
               ))}
             </div>
@@ -486,49 +663,98 @@ export default function TerminalWorkspace() {
         </div>
       </div>
 
-      {/* DETAY ÇEKMECESİ / MODAL */}
+      {/* ŞIK ENDÜSTRİYEL HABER DETAY KARTI (MODAL / DIALOG POPUP) */}
       {seciliHaber && (
-        <div className="drawer-overlay" onClick={() => setSeciliHaber(null)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={() => setSeciliHaber(null)}
+          role="dialog"
+          aria-modal="true"
+        >
           <div
-            className="drawer-content"
+            className="bg-[#0c1322] border border-slate-700/80 rounded-lg shadow-2xl p-6 backdrop-blur-md max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden text-left"
             onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
           >
-            <div className="drawer-header">
-              <div className="drawer-meta font-mono">
-                <span className="drawer-time">{seciliHaber.zaman} · {seciliHaber.tarih}</span>
-                <span className="drawer-source">[{seciliHaber.kaynak}]</span>
+            {/* ÜST KISIM: Kaynak adı, yayınlanma saati ve kapatma butonu */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5 font-mono text-xs">
+                <span className="px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700 text-cyan-400 font-semibold tracking-wide uppercase">
+                  [{seciliHaber.kaynak}]
+                </span>
+                <span className="text-slate-400 tabular-nums">
+                  {seciliHaber.zaman} {seciliHaber.tarih ? `· ${seciliHaber.tarih}` : ""}
+                </span>
+                {seciliHaber.hisseler && seciliHaber.hisseler.length > 0 && (
+                  <span className="text-cyan-400 font-bold ml-1">
+                    {seciliHaber.hisseler.join(", ")}
+                  </span>
+                )}
               </div>
-              <button
-                onClick={() => setSeciliHaber(null)}
-                className="drawer-close-btn"
-                type="button"
-                aria-label="Kapat"
-              >
-                <X className="w-4 h-4" />
-              </button>
+
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono text-slate-500 hidden sm:inline-block">
+                  [ESC]
+                </span>
+                <button
+                  onClick={() => setSeciliHaber(null)}
+                  className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-800/60 transition"
+                  type="button"
+                  aria-label="Kapat"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
-            <div className="drawer-body">
-              <h2 className="drawer-title">{seciliHaber.baslik}</h2>
+            {/* BAŞLIK: Büyük puntolu net haber başlığı */}
+            <h2 className="text-lg font-bold text-white mt-4 mb-3 leading-snug">
+              {seciliHaber.baslik}
+            </h2>
 
-              {seciliHaber.spot && <p className="drawer-spot">{seciliHaber.spot}</p>}
-
-              <div className="drawer-divider" />
-
-              <div className="drawer-prose">
-                <h4 className="drawer-section-heading">Piyasa Notu</h4>
-                <p>{seciliHaber.detay}</p>
-              </div>
+            {/* GÖVDE: Haber makalesinin tam metninden ayıklanmış ilk 2 paragrafı */}
+            <div className="text-sm text-slate-300 leading-relaxed space-y-2.5 overflow-y-auto pr-1 flex-1 my-2">
+              {seciliHaber.paragraflar && seciliHaber.paragraflar.length > 0 ? (
+                seciliHaber.paragraflar.slice(0, 2).map((paragraf, idx) => (
+                  <p key={idx} className="text-slate-300">
+                    {paragraf}
+                  </p>
+                ))
+              ) : seciliHaber.detay ? (
+                seciliHaber.detay.split("\n\n").slice(0, 2).map((paragraf, idx) => (
+                  <p key={idx} className="text-slate-300">
+                    {paragraf}
+                  </p>
+                ))
+              ) : (
+                <p className="text-slate-400 italic">
+                  Haber içeriği detayları hazırlanıyor.
+                </p>
+              )}
             </div>
 
-            <div className="drawer-footer">
-              <span className="drawer-footer-text font-mono">BPT Finans Terminal Verisi</span>
+            {/* ALT BAR: "Daha Fazlasını Oku" butonu / linki + Kapat butonu */}
+            <div className="pt-4 border-t border-slate-800 flex items-center justify-between mt-auto">
+              {seciliHaber.url && seciliHaber.url !== "#" ? (
+                <a
+                  href={seciliHaber.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded bg-cyan-950/60 border border-cyan-700/60 text-cyan-300 hover:bg-cyan-900/60 hover:text-cyan-200 transition"
+                >
+                  <span>Daha Fazlasını Oku</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              ) : (
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono">
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Terminal Orijinal Kayıt</span>
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={() => setSeciliHaber(null)}
-                className="drawer-btn-secondary font-mono"
+                className="px-3 py-1.5 rounded bg-slate-800/80 hover:bg-slate-700/80 text-xs font-mono text-slate-300 hover:text-white transition border border-slate-700/60"
               >
                 Kapat
               </button>
