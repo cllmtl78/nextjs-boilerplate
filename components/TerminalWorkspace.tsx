@@ -64,9 +64,60 @@ export function cleanWireText(text: string): string {
     .trim();
 }
 
+export function formatNaturalCase(text: string): string {
+  if (!text) return "";
+  let prefix = "";
+  let clean = text.trim();
+  if (clean.startsWith("/ ")) {
+    prefix = "/ ";
+    clean = clean.slice(2).trim();
+  } else if (clean.startsWith("/")) {
+    prefix = "/ ";
+    clean = clean.slice(1).trim();
+  }
+
+  const letters = clean.replace(/[^a-zA-ZğüşıöçĞÜŞİÖÇ]/g, "");
+  const upperCount = (letters.match(/[A-ZĞÜŞİÖÇ]/g) || []).length;
+  const isAllOrMostlyCaps = letters.length > 4 && upperCount / letters.length > 0.55;
+
+  if (!isAllOrMostlyCaps) {
+    return prefix + clean;
+  }
+
+  const hasTrChars = /[ğüşıöçĞÜŞİÖÇ]/i.test(clean);
+  let lowered = hasTrChars ? clean.toLocaleLowerCase("tr-TR") : clean.toLowerCase();
+
+  lowered = lowered.replace(/(^\s*|[.:!?·\n-]\s+)([a-zğüşıöç])/gi, (m, p1, p2) => {
+    return p1 + p2.toUpperCase();
+  });
+
+  const ACRONYMS = [
+    "FED", "ECB", "TCMB", "SPK", "BDDK", "TÜİK", "FOMC", "AI", "EPS", "REV", "EST", "ADJ",
+    "Q1", "Q2", "Q3", "Q4", "1Ç", "2Ç", "3Ç", "4Ç", "USD", "EUR", "TL", "BIST",
+    "CPI", "PPI", "PMI", "PCE", "GDP", "DOJ", "SEC", "NFP", "OPEC", "IMF", "NATO", "AB", "ABD"
+  ];
+  for (const ac of ACRONYMS) {
+    const re = new RegExp("\\b" + ac + "\\b", "gi");
+    lowered = lowered.replace(re, ac);
+  }
+
+  const PROPER_NAMES = [
+    "Warsh", "Powell", "Yellen", "Bessent", "Trump", "Biden", "Lagarde", "Bailey",
+    "Microsoft", "Google", "Alphabet", "Nvidia", "Apple", "Amazon", "Tesla", "Meta",
+    "OpenAI", "Hugging Face"
+  ];
+  for (const name of PROPER_NAMES) {
+    const re = new RegExp("\\b" + name + "\\b", "gi");
+    lowered = lowered.replace(re, name);
+  }
+
+  const firstLetter = lowered.charAt(0).toUpperCase();
+  return prefix + firstLetter + lowered.slice(1);
+}
+
 export function cleanEnglishWire(text: string): string {
   const cleaned = cleanWireText(text);
-  return cleaned ? "/ " + cleaned : "/ Wire";
+  return cleaned ? formatNaturalCase("/ " + cleaned) : "/ Wire";
 }
 
 // Özel İsim ve Finansal Terim Koruma Sözlüğü (Google Translate öncesi maskeleme)
@@ -162,6 +213,99 @@ const INITIAL_GLOBAL_HABERLER: GlobalNewsItem[] = [
   },
 ];
 
+// Başlangıç Fallback BIST Haberleri (Sayfa yenilendiğinde anında görünen zengin akış)
+const INITIAL_BIST_HABERLER: TerminalHaber[] = [
+  {
+    id: "bist_init_1",
+    zaman: "20:04:48",
+    tarih: "Bugün",
+    kaynak: "FOREKS",
+    baslik: "Microsoft bilançosu açıklandı, Azure yüzde 48 büyüdü",
+    detay: "Yazılım devi Microsoft mali ilk çeyrek finansal sonuçlarını duyurdu. Bulut bilişim segmenti Azure gelirlerinde beklentilerin üzerinde yüzde 48 oranında güçlü artış kaydedildi.",
+    paragraflar: [
+      "Yazılım devi Microsoft mali ilk çeyrek finansal sonuçlarını duyurdu. Bulut bilişim segmenti Azure gelirlerinde beklentilerin üzerinde yüzde 48 oranında güçlü artış kaydedildi.",
+      "Yapay zeka altyapısına yönelik sermaye harcamaları çeyreklik bazda artarken kurumsal talep güçlü seyrini sürdürüyor."
+    ],
+    url: "https://www.foreks.com",
+    kategori: "bist",
+    timestamp: Date.now() - 30000,
+  },
+  {
+    id: "bist_init_2",
+    zaman: "19:42:15",
+    tarih: "Bugün",
+    kaynak: "AA FİNANS",
+    baslik: "Hazine ve Maliye Bakanlığı 2026 finansman programını paylaştı",
+    detay: "Hazine ve Maliye Bakanlığı, borçlanma maliyetlerini düşürmeyi ve iç borç çevirme oranını makul seviyelerde tutmayı amaçlayan finansman programını kamuoyuyla paylaştı.",
+    paragraflar: [
+      "Hazine ve Maliye Bakanlığı, borçlanma maliyetlerini düşürmeyi ve iç borç çevirme oranını makul seviyelerde tutmayı amaçlayan finansman programını kamuoyuyla paylaştı.",
+      "Piyasa yapıcı bankalarla gerçekleştirilen istişareler neticesinde tahvil ihraç takvimi ve likidite adımları belirlendi."
+    ],
+    url: "https://www.aa.com.tr",
+    kategori: "bist",
+    timestamp: Date.now() - 120000,
+  },
+  {
+    id: "bist_init_3",
+    zaman: "19:20:05",
+    tarih: "Bugün",
+    kaynak: "EKONOMİM",
+    baslik: "Borsa İstanbul kapanışta bankacılık endeksi öncülüğünde prim yaptı",
+    detay: "BIST 100 endeksi günü yüzde 1.85 yükselişle tamamlarken XBANK bankacılık endeksinde günlük getiri yüzde 2.42 seviyesine ulaştı.",
+    paragraflar: [
+      "Borsa İstanbul günü alıcılı seyirle tamamlarken sanayi ve ulaştırma hisselerinde para girişi dikkat çekti.",
+      "İşlem hacmi 110 milyar TL barajını aşarak son iki haftanın en yüksek günlük seviyesine yerleşti."
+    ],
+    url: "https://www.ekonomim.com",
+    kategori: "bist",
+    timestamp: Date.now() - 240000,
+  },
+  {
+    id: "bist_init_4",
+    zaman: "18:55:40",
+    tarih: "Bugün",
+    kaynak: "CNBC-E",
+    baslik: "Uluslararası kredi derecelendirme kuruluşlarından Türkiye değerlendirmesi",
+    detay: "Kredi derecelendirme kuruluşları yayımladıkları ara raporda Türkiye'nin rezerv birikimi ve cari açık daralmasına dikkat çekti.",
+    paragraflar: [
+      "Analistler, dezenflasyon sürecinin kararlılıkla devam etmesi halinde not görünümüne ilişkin pozitif adımların süreceğini belirtti.",
+      "Dış finansman koşullarındaki iyileşme CDS primlerinde 250 baz puanın altındaki kalıcılığı destekliyor."
+    ],
+    url: "https://www.cnbce.com",
+    kategori: "bist",
+    timestamp: Date.now() - 360000,
+  },
+  {
+    id: "bist_init_5",
+    zaman: "18:30:12",
+    tarih: "Bugün",
+    kaynak: "NTV PARA",
+    baslik: "TCMB brüt rezervlerinde 1.4 milyar dolarlık haftalık artış kaydedildi",
+    detay: "Türkiye Cumhuriyet Merkez Bankası toplam rezervleri swap hariç net pozisyondaki toparlanmayla yükseliş trendini korudu.",
+    paragraflar: [
+      "Bankacılık kaynaklarından edinilen haftalık bülten verilerine göre rezerv dinamikleri güçlü seyrini sürdürüyor.",
+      "Kur korumalı mevduattan çıkışlar hız kesmeden devam ederken standart TL mevduat payı artıyor."
+    ],
+    url: "https://www.ntv.com.tr",
+    kategori: "bist",
+    timestamp: Date.now() - 480000,
+  },
+  {
+    id: "bist_init_6",
+    zaman: "18:05:50",
+    tarih: "Bugün",
+    kaynak: "UZMAN PARA",
+    baslik: "Şirket bilançolarında son çeyrek operasyonel marjlar beklentileri aştı",
+    detay: "BIST 30 şirketlerinin konsolide FAVÖK ve net kâr büyüme performansı analist tahminlerinin üzerinde gerçekleşti.",
+    paragraflar: [
+      "Özellikle havacılık, perakende ve teknoloji sektörlerinde faaliyet marjlarında güçlü iyileşme kaydedildi.",
+      "Yatırımcıların temettü beklentileriyle birlikte temettü verimi yüksek hisselerde işlem hacmi arttı."
+    ],
+    url: "https://uzmanpara.milliyet.com.tr",
+    kategori: "bist",
+    timestamp: Date.now() - 600000,
+  },
+];
 
 // Statik KAP Bildirimleri (Belirgin Cyan Hisse Kodu + İnce Bildirim Türü)
 const KAP_BILDIRIMLERI: TerminalHaber[] = [
@@ -326,8 +470,9 @@ const RESMI_HABERLER: TerminalHaber[] = [
   },
 ];
 
-// 8 Aktif Doğrudan RSS Kaynak Konfigürasyonu
+// Aktif Doğrudan RSS Kaynak Konfigürasyonu (AA Finans dahil)
 const ACTIVE_RSS_SOURCES: { url: string; badge: string; filterEconomyOnly?: boolean }[] = [
+  { url: "https://www.aa.com.tr/tr/rss/default?cat=ekonomi", badge: "AA FİNANS" },
   { url: "https://www.ekonomim.com/rss", badge: "EKONOMİM" },
   { url: "https://www.cnbce.com/rss", badge: "CNBC-E" },
   { url: "https://www.ekonomist.com.tr/rss", badge: "EKONOMİST" },
@@ -573,20 +718,16 @@ function parseRssWithDomParser(
 }
 
 export default function TerminalWorkspace() {
-  const [bistHaberleri, setBistHaberleri] = useState<TerminalHaber[]>([]);
+  const [bistHaberleri, setBistHaberleri] = useState<TerminalHaber[]>(INITIAL_BIST_HABERLER);
   const [globalHaberler, setGlobalHaberler] = useState<GlobalNewsItem[]>(INITIAL_GLOBAL_HABERLER);
-  const [globalLangMode, setGlobalLangMode] = useState<"TR" | "EN">("TR");
   const [seciliHaber, setSeciliHaber] = useState<TerminalHaber | null>(null);
-  const [loadingBist, setLoadingBist] = useState<boolean>(true);
-  const [loadingGlobal, setLoadingGlobal] = useState<boolean>(false);
-  const [isConnecting, setIsConnecting] = useState<boolean>(true);
-  const [lastFetchTime, setLastFetchTime] = useState<string>("");
-  const [lastGlobalFetchTime, setLastGlobalFetchTime] = useState<string>("");
   const [newlyArrivedIds, setNewlyArrivedIds] = useState<Set<string>>(new Set());
 
   const knownIdsRef = useRef<Set<string>>(new Set());
   const isInitialLoadRef = useRef<boolean>(true);
   const translationsCacheRef = useRef<Map<string, string>>(new Map());
+
+
 
   // Google Translate API ile İngilizce -> Türkçe çeviri motoru (Term Masking & Dictionary Korumalı)
   const translateToTurkish = useCallback(async (text: string): Promise<string> => {
@@ -677,9 +818,7 @@ export default function TerminalWorkspace() {
     return fallbackResult;
   }, []);
 
-  // Telegram @trad_fin canlı akışını çekme ve Türkçeleştirme motoru (15s polling)
   const loadGlobalNews = useCallback(async () => {
-    setLoadingGlobal(true);
 
     try {
       let items: { id: string; zaman: string; timestamp: number; rawText: string; baslik: string }[] = [];
@@ -768,14 +907,6 @@ export default function TerminalWorkspace() {
         );
 
         setGlobalHaberler(translatedItems);
-        setLastGlobalFetchTime(
-          new Date().toLocaleTimeString("tr-TR", {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hour12: false,
-          })
-        );
 
         // Başarılı akışı ve çevirileri yerel hafızaya kaydet
         try {
@@ -792,7 +923,7 @@ export default function TerminalWorkspace() {
     } catch {
       // Hata durumunda mevcut liste ekranda korunur
     } finally {
-      setLoadingGlobal(false);
+      // Tamamlandı
     }
   }, [translateToTurkish]);
 
@@ -800,7 +931,6 @@ export default function TerminalWorkspace() {
 
   // 8 Kaynaklı Canlı RSS Çekme Motoru (Promise.allSettled & allorigins proxy)
   const loadNews = useCallback(async () => {
-    setIsConnecting(true);
 
     // İlk açılışta yerel önbellek varsa boş ekranı önlemek için hemen yükle
     if (knownIdsRef.current.size === 0) {
@@ -814,7 +944,6 @@ export default function TerminalWorkspace() {
               knownIdsRef.current.add(h.id);
               knownIdsRef.current.add(h.baslik.slice(0, 30));
             });
-            setLoadingBist(false);
           }
         }
       } catch {
@@ -935,14 +1064,6 @@ export default function TerminalWorkspace() {
 
         isInitialLoadRef.current = false;
         setBistHaberleri(deduplicated);
-        setLastFetchTime(
-          new Date().toLocaleTimeString("tr-TR", {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hour12: false,
-          })
-        );
 
         // Başarılı akışı yerel hafızaya (localStorage) önbelleğe al
         try {
@@ -953,9 +1074,6 @@ export default function TerminalWorkspace() {
       }
     } catch {
       // Ağ veya proxy hatasında ekran asla boş kalmaz; mevcut önbellek ekranda tutulur
-    } finally {
-      setLoadingBist(false);
-      setIsConnecting(false);
     }
   }, []);
 
@@ -1034,63 +1152,37 @@ export default function TerminalWorkspace() {
             <div className="pane-title-group">
               <h2 className="pane-title">BIST & Türkiye</h2>
             </div>
-            <div className="flex items-center gap-1.5 font-mono text-[9.5px]">
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  isConnecting && bistHaberleri.length === 0
-                    ? "bg-amber-400 animate-ping"
-                    : "bg-emerald-400 animate-pulse"
-                }`}
-              />
-              <span className="text-slate-400 uppercase tracking-wider tabular-nums">
-                {isConnecting && bistHaberleri.length === 0
-                  ? "BAĞLANIYOR..."
-                  : `CANLI · ${lastFetchTime || "15s"}`}
-              </span>
-            </div>
           </div>
 
           <div className="pane-scroll">
-            {loadingBist && bistHaberleri.length === 0 ? (
-              <div className="p-4 flex flex-col items-center justify-center h-48 text-center gap-2.5 font-mono">
-                <div className="flex items-center gap-2 text-cyan-400 text-xs font-semibold">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-                  <span>Canlı akışa bağlanılıyor...</span>
-                </div>
-                <p className="text-[11px] text-slate-500 max-w-[320px]">
-                  Ekonomim, CNBC-e, Ekonomist, Foreks, Uzman Para, NTV Para, Türkiye Gazetesi ve Dünya Gazetesi taranıyor...
-                </p>
-              </div>
-            ) : (
-              bistHaberleri.map((h) => {
-                const isNew = newlyArrivedIds.has(h.id);
-                return (
-                  <article
-                    key={h.id}
-                    onClick={() => setSeciliHaber(h)}
-                    className={`terminal-row group transition-all duration-300 ${
-                      isNew ? "terminal-row-new" : ""
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 font-mono text-[10.5px]">
-                      <span className="row-time tabular-nums text-slate-500">{h.zaman}</span>
-                      <span className="px-1.5 py-0.5 rounded bg-[#0a1120] border border-slate-700/60 text-slate-300 font-mono text-[9.5px] uppercase tracking-wide">
-                        [{h.kaynak}]
+            {bistHaberleri.map((h) => {
+              const isNew = newlyArrivedIds.has(h.id);
+              return (
+                <article
+                  key={h.id}
+                  onClick={() => setSeciliHaber(h)}
+                  className={`terminal-row group transition-all duration-300 ${
+                    isNew ? "terminal-row-new" : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-2 font-mono text-[10.5px]">
+                    <span className="row-time tabular-nums text-slate-500">{h.zaman}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-[#0a1120] border border-slate-700/60 text-slate-300 font-mono text-[9.5px] uppercase tracking-wide">
+                      [{h.kaynak}]
+                    </span>
+                    {isNew && (
+                      <span className="px-1 py-0.2 rounded bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 text-[8.5px] font-bold animate-pulse">
+                        YENİ
                       </span>
-                      {isNew && (
-                        <span className="px-1 py-0.2 rounded bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 text-[8.5px] font-bold animate-pulse">
-                          YENİ
-                        </span>
-                      )}
-                    </div>
+                    )}
+                  </div>
 
-                    <h3 className="row-headline font-medium text-slate-200 group-hover:text-cyan-400 cursor-pointer transition text-xs leading-snug">
-                      {h.baslik}
-                    </h3>
-                  </article>
-                );
-              })
-            )}
+                  <h3 className="row-headline font-medium text-slate-200 group-hover:text-cyan-400 cursor-pointer transition text-xs leading-snug">
+                    {h.baslik}
+                  </h3>
+                </article>
+              );
+            })}
           </div>
         </section>
 
@@ -1100,64 +1192,16 @@ export default function TerminalWorkspace() {
             <div className="pane-title-group">
               <h2 className="pane-title">Global</h2>
             </div>
-
-            <div className="flex items-center gap-2">
-              {/* Orijinal (EN) / Çeviri (TR) Görünüm Seçici */}
-              <div className="inline-flex items-center bg-[#070b14] border border-slate-700/80 rounded p-0.5 font-mono text-[9px]">
-                <button
-                  type="button"
-                  onClick={() => setGlobalLangMode("TR")}
-                  className={`px-1.5 py-0.5 rounded transition ${
-                    globalLangMode === "TR"
-                      ? "bg-cyan-950 text-cyan-300 font-bold border border-cyan-700/60 shadow-sm"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                  title="Türkçe Çeviri"
-                >
-                  TR
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGlobalLangMode("EN")}
-                  className={`px-1.5 py-0.5 rounded transition ${
-                    globalLangMode === "EN"
-                      ? "bg-cyan-950 text-cyan-300 font-bold border border-cyan-700/60 shadow-sm"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                  title="Orijinal İngilizce Wire"
-                >
-                  EN
-                </button>
-              </div>
-
-              <div className="flex items-center gap-1.5 font-mono text-[9.5px]">
-                <span
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    loadingGlobal && globalHaberler.length === 0
-                      ? "bg-amber-400 animate-ping"
-                      : "bg-emerald-400 animate-pulse"
-                  }`}
-                />
-                <span className="text-slate-400 uppercase tracking-wider tabular-nums">
-                  {loadingGlobal && globalHaberler.length === 0
-                    ? "BAĞLANIYOR..."
-                    : `CANLI · ${lastGlobalFetchTime || "15s"}`}
-                </span>
-              </div>
-            </div>
           </div>
 
-          <div className="pane-scroll">
+          <div className="pane-scroll space-y-1.5 p-1">
             {globalHaberler.map((h) => {
-              const displayTitle =
-                globalLangMode === "EN"
-                  ? h.rawClean || cleanEnglishWire(h.rawText || h.baslik)
-                  : h.baslik;
+              const displayTitle = formatNaturalCase(h.baslik);
 
               return (
                 <article
                   key={h.id}
-                  className="flex items-start gap-2.5 px-3 py-2 border-b border-white/[0.04] transition-colors hover:bg-[#111a2e]/30 select-text"
+                  className="flex items-start gap-4 px-4 py-4 rounded bg-[#0a101d]/40 border border-white/[0.05] transition-all hover:bg-[#111a2e]/60 select-text"
                 >
                   <span className="font-mono text-slate-500 text-[10.5px] tabular-nums shrink-0 pt-0.5 select-none">
                     {h.zaman}

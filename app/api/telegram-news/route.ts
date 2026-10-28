@@ -22,6 +22,54 @@ function cleanHtml(html: string): string {
     .trim();
 }
 
+function formatNaturalCase(text: string): string {
+  if (!text) return "";
+  let prefix = "";
+  let clean = text.trim();
+  if (clean.startsWith("/ ")) {
+    prefix = "/ ";
+    clean = clean.slice(2).trim();
+  }
+
+  const letters = clean.replace(/[^a-zA-ZğüşıöçĞÜŞİÖÇ]/g, "");
+  const upperCount = (letters.match(/[A-ZĞÜŞİÖÇ]/g) || []).length;
+  const isAllOrMostlyCaps = letters.length > 4 && (upperCount / letters.length) > 0.55;
+
+  if (!isAllOrMostlyCaps) {
+    return prefix + clean;
+  }
+
+  const hasTrChars = /[ğüşıöçĞÜŞİÖÇ]/i.test(clean);
+  let lowered = hasTrChars ? clean.toLocaleLowerCase("tr-TR") : clean.toLowerCase();
+
+  lowered = lowered.replace(/(^\s*|[.:!?·\n-]\s+)([a-zğüşıöç])/gi, (m, p1, p2) => {
+    return p1 + p2.toUpperCase();
+  });
+
+  const ACRONYMS = [
+    "FED", "ECB", "TCMB", "SPK", "BDDK", "TÜİK", "FOMC", "AI", "EPS", "REV", "EST", "ADJ",
+    "Q1", "Q2", "Q3", "Q4", "1Ç", "2Ç", "3Ç", "4Ç", "USD", "EUR", "TL", "BIST",
+    "CPI", "PPI", "PMI", "PCE", "GDP", "DOJ", "SEC", "NFP", "OPEC", "IMF", "NATO", "AB", "ABD"
+  ];
+  for (const ac of ACRONYMS) {
+    const re = new RegExp("\\b" + ac + "\\b", "gi");
+    lowered = lowered.replace(re, ac);
+  }
+
+  const PROPER_NAMES = [
+    "Warsh", "Powell", "Yellen", "Bessent", "Trump", "Biden", "Lagarde", "Bailey",
+    "Microsoft", "Google", "Alphabet", "Nvidia", "Apple", "Amazon", "Tesla", "Meta",
+    "OpenAI", "Hugging Face"
+  ];
+  for (const name of PROPER_NAMES) {
+    const re = new RegExp("\\b" + name + "\\b", "gi");
+    lowered = lowered.replace(re, name);
+  }
+
+  const firstLetter = lowered.charAt(0).toUpperCase();
+  return prefix + firstLetter + lowered.slice(1);
+}
+
 function formatHeadline(text: string): string {
   let cleaned = text.trim();
   // Borsa Ticker Temizliği ($MSFT, $GOOGL, $NVDA vb.)
@@ -36,7 +84,8 @@ function formatHeadline(text: string): string {
   cleaned = cleaned.replace(/\s+\*\s*/g, " · ");
   // Birden fazla boşlukları teke indir
   cleaned = cleaned.replace(/\s{2,}/g, " ").trim();
-  return cleaned;
+  // Tamamen büyük harf metinleri normal harflere dönüştür
+  return formatNaturalCase(cleaned);
 }
 
 export async function GET() {

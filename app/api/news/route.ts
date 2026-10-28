@@ -19,6 +19,7 @@ interface FeedConfig {
 }
 
 const ACTIVE_FEEDS: FeedConfig[] = [
+  { url: "https://www.aa.com.tr/tr/rss/default?cat=ekonomi", badge: "AA FİNANS" },
   { url: "https://www.ekonomim.com/rss", badge: "EKONOMİM" },
   { url: "https://www.cnbce.com/rss", badge: "CNBC-E" },
   { url: "https://www.ekonomist.com.tr/rss", badge: "EKONOMİST" },
