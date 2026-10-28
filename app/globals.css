@@ -265,40 +265,41 @@ button {
 
 /* ================= 3. TERMINAL WORKSPACE (YÜKSEK BİLGİ YOĞUNLUĞU) ================= */
 .terminal-workspace {
-  margin-bottom: 16px;
+  margin-bottom: 24px;
 }
 
 /* 3-Sütunlu Grid */
 .terminal-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 10px;
   align-items: stretch;
 }
 
 .terminal-stack {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  height: 540px;
+  gap: 10px;
+  height: 520px;
 }
 
 .terminal-pane {
   background: var(--bg-surface-0);
-  border: 1px solid var(--border-subtle);
-  border-radius: 3px;
-  height: 540px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  height: 520px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 
 .terminal-stack .pane-kap {
-  height: 266px;
+  height: 255px;
 }
 
 .terminal-stack .pane-resmi {
-  height: 266px;
+  height: 255px;
 }
 
 .pane-header {
@@ -307,7 +308,7 @@ button {
   justify-content: space-between;
   padding: 7px 10px;
   background: var(--bg-surface-1);
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
 }
 
@@ -328,6 +329,7 @@ button {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
+  padding-bottom: 8px;
 }
 
 .pane-scroll::-webkit-scrollbar {
@@ -341,6 +343,13 @@ button {
 .pane-scroll::-webkit-scrollbar-thumb {
   background: #1e293b;
   border-radius: 2px;
+}
+
+/* Alt Market Intelligence Tabanı (Ayrılmış Blok) */
+.market-intelligence-wrapper {
+  margin-top: 28px;
+  display: block;
+  clear: both;
 }
 
 /* Satır Düzeni (%30 daraltılmış dikey padding) */
@@ -572,6 +581,9 @@ button {
   .terminal-stack .pane-resmi {
     height: 100%;
   }
+  .terminal-card-takvim {
+    grid-column: span 2;
+  }
 }
 
 @media (max-width: 768px) {
@@ -600,4 +612,24 @@ button {
   .topbar-inner {
     flex-wrap: wrap;
   }
+}
+
+/* ================= 7. LIVE NEWS GLOW ANIMATION ================= */
+@keyframes newsGlowFade {
+  0% {
+    background-color: rgba(6, 182, 212, 0.26);
+    box-shadow: inset 0 0 14px rgba(6, 182, 212, 0.38);
+  }
+  50% {
+    background-color: rgba(6, 182, 212, 0.12);
+    box-shadow: inset 0 0 6px rgba(6, 182, 212, 0.18);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+.terminal-row-new {
+  animation: newsGlowFade 3.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }

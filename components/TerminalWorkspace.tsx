@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   X,
   ExternalLink,
@@ -25,217 +25,79 @@ export type TerminalHaber = {
   timestamp?: number;
 };
 
-// Başlangıç ve Fallback Veri Havuzu
-const BASLANGIC_BIST: TerminalHaber[] = [
+const CACHE_KEY_BIST = "bist_turkiye_live_news_v2";
+
+interface ApiNewsItemResponse {
+  id: string;
+  zaman: string;
+  tarih?: string;
+  kaynak: string;
+  baslik: string;
+  ozet?: string;
+  paragraflar?: string[];
+  detay?: string;
+  url?: string;
+  timestamp?: number;
+}
+
+
+export interface GlobalNewsItem {
+  id: string;
+  zaman: string;
+  timestamp: number;
+  baslik: string;
+  rawText?: string;
+}
+
+const CACHE_KEY_GLOBAL = "global_tradfin_news_v1";
+const CACHE_KEY_TRANSLATIONS = "global_translations_cache_v1";
+
+// Başlangıç Fallback Global Haberleri (/ ile başlayan gerçekçi Türkçe finans akışı)
+const INITIAL_GLOBAL_HABERLER: GlobalNewsItem[] = [
   {
-    id: "fb_1",
-    zaman: "17:15:22",
-    tarih: "Bugün",
-    kaynak: "FOREKS",
-    kategori: "bist",
-    baslik: "BIST 100 Endeksinde bankacılık hisseleri öncülüğünde 11.200 puan seviyesi test edildi",
-    ozet: "XBANK bankacılık endeksi günlük %2.1 yükselişle işlem hacminde ilk sırayı koruyor.",
-    paragraflar: [
-      "Borsa İstanbul'da BIST 100 endeksi, haftanın üçüncü işlem gününde bankacılık ve ulaştırma hisselerinde yoğunlaşan alımlarla 11.200 direnç bandına yöneldi. Günlük toplam işlem hacmi 96 milyar TL sınırını aşarken yabancı aracı kurumların para girişi dikkat çekti.",
-      "Piyasa analistleri, TCMB faiz patikasına ilişkin pozitif beklentiler ve kredi derecelendirme kuruluşlarının değerlendirmeleri öncesinde BIST endeksinde yukarı yönlü momentumun güç kazandığını belirtiyor."
-    ],
-    url: "https://foreks.com",
-    timestamp: Date.now() - 30000,
+    id: "tg_init_1",
+    zaman: "20:18:33",
+    timestamp: Date.now() - 60000,
+    baslik: "/ Bessent: Yapay zeka yatırımları ve şirket borçlanmaları piyasa için risk teşkil etmiyor",
+    rawText: "*BESSENT: DON'T THINK AI BORROWING PROBLEMATIC AT ALL",
   },
   {
-    id: "fb_2",
-    zaman: "17:08:40",
-    tarih: "Bugün",
-    kaynak: "BLOOMBERG HT",
-    kategori: "bist",
-    baslik: "Merkez Bankası toplam rezervleri swap hariç net pozisyonda toparlanma eğilimini sürdürüyor",
-    ozet: "Rezerv dinamiklerinde TL mevduat payındaki artış ve portföy girişleri dengelenmeyi destekliyor.",
-    paragraflar: [
-      "Türkiye Cumhuriyet Merkez Bankası (TCMB) analitik bilanço öncü verilerine göre, brüt ve net rezervlerde istikrarlı artış devam ediyor. Swap hariç net rezerv göstergesi yılın en güçlü seviyelerine yakın seyrediyor.",
-      "İktisatçılar, cari dengedeki iyileşme ve dezenflasyon sürecinin güçlenmesiyle Türk lirası varlıklara yönelik risk priminin (CDS) 260 baz puanın altına gerilediğine işaret ediyor."
-    ],
-    url: "https://www.bloomberght.com",
-    timestamp: Date.now() - 90000,
+    id: "tg_init_2",
+    zaman: "20:02:23",
+    timestamp: Date.now() - 120000,
+    baslik: "/ Alphabet 3. çeyrek bilançosunu açıkladı: Hasılat 127.58 milyar dolar, faaliyet kârı 40.58 milyar dolar",
+    rawText: "*ALPHABET 3Q REV. $127.58B, EST. $127.93B *ALPHABET 3Q OPER INCOME $40.58B, EST. $43.16B $GOOGL",
   },
   {
-    id: "fb_3",
-    zaman: "16:55:12",
-    tarih: "Bugün",
-    kaynak: "AA FİNANS",
-    kategori: "bist",
-    baslik: "Aselsan, yurt dışı savunma konsorsiyumu ile 84.5 milyon dolarlık radar ihracat sözleşmesi imzaladı",
-    ozet: "Yerli AESA radar sistemlerinin entegrasyonu ve lojistik destek paketini içeren kontrat yürürlüğe girdi.",
-    paragraflar: [
-      "Aselsan Elektronik Sanayi ve Ticaret A.Ş., uluslararası bir müşterisiyle gelişmiş radar ve aviyonik sistem tedarikine yönelik 84.5 milyon dolar tutarında ihracat sözleşmesi imzaladı.",
-      "Açıklamada, teslimatların 2026-2028 yılları arasında tamamlanacağı ve şirketin bakiye sipariş toplamının 13.2 milyar dolar seviyesine ulaştığı bilgisi paylaşıldı."
-    ],
-    url: "https://www.aa.com.tr/tr/ekonomi",
-    timestamp: Date.now() - 150000,
+    id: "tg_init_3",
+    zaman: "20:01:22",
+    timestamp: Date.now() - 180000,
+    baslik: "/ Microsoft 1. çeyrek düzeltilmiş hisse başı kârı 4.89 dolar (Beklenti: 4.73 dolar), gelir 92.28 milyar dolar",
+    rawText: "*MICROSOFT 1Q ADJ EPS $4.89, EST. $4.73 *MICROSOFT 1Q REV. $92.28B, EST. $90.63B $MSFT",
   },
   {
-    id: "fb_4",
-    zaman: "16:42:05",
-    tarih: "Bugün",
-    kaynak: "CNBC-E",
-    kategori: "bist",
-    baslik: "Türk Hava Yolları, kargo taşımacılığında küresel pazar payını %6.2 seviyesine taşıdı",
-    ozet: "Turkish Cargo, filo genişleme stratejisi ve yeni hava koridorlarıyla gelir katkısını artırdı.",
-    paragraflar: [
-      "Türk Hava Yolları (THY), 2026 üçüncü çeyrek operasyonel verilerine göre kargo hacminde yıllık bazda çift haneli büyüme elde etti. Şirket, e-ticaret lojistiğindeki genişleme ile küresel pazar payını %6.2'ye ulaştırdı.",
-      "Yönetim kurulu sunumunda, filoya dahil edilecek yeni kargo uçakları ve İstanbul Havalimanı mega aktarma merkezinin sağladığı transit avantajının karlılığı desteklediği belirtildi."
-    ],
-    url: "https://www.cnbce.com",
-    timestamp: Date.now() - 240000,
+    id: "tg_init_4",
+    zaman: "18:35:57",
+    timestamp: Date.now() - 300000,
+    baslik: "/ Fed FOMC toplantısında gösterge faiz oranını 10'a karşı 2 oyla %3.75-%4 aralığında sabit tuttu",
+    rawText: "*FED VOTES 10-2 TO HOLD BENCHMARK RATE IN 3.75%-4% RANGE",
   },
   {
-    id: "fb_5",
-    zaman: "16:30:19",
-    tarih: "Bugün",
-    kaynak: "EKONOMİM",
-    kategori: "bist",
-    baslik: "Sanayi sektörü kapasite kullanım oranı imalat sanayinde %77.8 seviyesine yükseldi",
-    ozet: "Yatırım malları ve ara malı üretiminde ihracat odaklı sipariş toparlanması sürüyor.",
-    paragraflar: [
-      "Merkez Bankası tarafından açıklanan imalat sanayi kapasite kullanım oranı (KKO), bir önceki aya göre 0.4 puan artarak yüzde 77.8 oldu. Otomotiv, kimya ve makine teçhizat sektörleri artışa öncülük etti.",
-      "Sektör temsilcileri, Avrupa pazarında toparlanan talep ve iç piyasada finansman koşullarındaki öngörülebilirliğin kapasite artırımlarını hızlandırdığını bildirdi."
-    ],
-    url: "https://www.ekonomim.com",
-    timestamp: Date.now() - 360000,
+    id: "tg_init_5",
+    zaman: "18:24:02",
+    timestamp: Date.now() - 400000,
+    baslik: "/ ABD Adalet Bakanlığı (DOJ), Nvidia'nın yapay zeka platformu Hugging Face satın alımını incelemeye aldı",
+    rawText: "*US DOJ EXAMINING NVIDIA ACQUISITION OF AI PLATFORM HUGGING FACE, TWO PEOPLE SAY $NVDA",
   },
   {
-    id: "fb_6",
-    zaman: "16:18:44",
-    tarih: "Bugün",
-    kaynak: "EKONOMİST",
-    kategori: "bist",
-    baslik: "Girişim sermayesi yatırım ortaklıkları 2026 ilk yarısında 420 milyon dolar fon sağladı",
-    ozet: "Fintek, yapay zeka ve yenilenebilir enerji teknolojilerine sermaye akışı ivme kazandı.",
-    paragraflar: [
-      "Türkiye'de faaliyet gösteren girişim sermayesi fonları, 2026 yılı ilk yarısında toplam 420 milyon dolarlık yatırım turu kapattı. Kurumsal yatırımcıların teknoloji fonlarına ilgisi yüksek seyretti.",
-      "Uzmanlar, SPK'nın fon mevzuatındaki kolaylaştırıcı düzenlemelerinin ve vergi avantajlarının sermaye piyasalarını derinleştirdiğini kaydetti."
-    ],
-    url: "https://www.ekonomist.com.tr",
-    timestamp: Date.now() - 480000,
-  },
-  {
-    id: "fb_7",
-    zaman: "16:05:30",
-    tarih: "Bugün",
-    kaynak: "BİGPARA",
-    kategori: "bist",
-    baslik: "Gram altın Kapalıçarşı serbest piyasasında rekor tazelerken işlem hacmi yükseldi",
-    ozet: "Ons altın yükselişi ve döviz sepeti fiyatlamasıyla gram altın yeni zirveyi gördü.",
-    paragraflar: [
-      "Serbest piyasada fiziki altın talebi sürerken Kapalıçarşı'da gram altın fiyatı yeni zirveye ulaştı. Küresel piyasalarda ons altının 2.760 dolar bandını test etmesi iç piyasaya yansıdı.",
-      "Altın ve para piyasaları uzmanları, küresel merkez bankası alımları ve jeopolitik risk fiyatlamasının emtia piyasalarında trendi desteklediğini aktardı."
-    ],
-    url: "https://bigpara.hurriyet.com.tr",
-    timestamp: Date.now() - 600000,
-  },
-  {
-    id: "fb_8",
-    zaman: "15:52:10",
-    tarih: "Bugün",
-    kaynak: "EKOTÜRK",
-    kategori: "bist",
-    baslik: "Enerji sektöründe hibrit santral yatırımları ve YEKA ihaleleriyle kurulu güç arttı",
-    ozet: "Güneş ve rüzgar enerjisinde şebeke entegrasyon kapasitesi 35 bin megavata yaklaştı.",
-    paragraflar: [
-      "Enerji ve Tabii Kaynaklar Bakanlığı verilerine göre yenilenebilir enerjinin toplam elektrik üretimindeki payı %46 sınırını aştı. Lisanslı ve lisanssız güneş santrallerinde yatırım temposu sürüyor.",
-      "Sektör raporlarında, yerli türbin ve panel bileşenlerinin ihracat potansiyelinin cari açığı azaltıcı yönde katkı vereceği değerlendirildi."
-    ],
-    url: "https://www.ekoturk.com",
-    timestamp: Date.now() - 720000,
+    id: "tg_init_6",
+    zaman: "18:05:02",
+    timestamp: Date.now() - 500000,
+    baslik: "/ ECB: Hizmet sektörü enflasyonunda yavaşlama eğilimi belirginleşirken faiz patikasında temkinli duruş sürecek",
+    rawText: "*ECB: DISINFLATION PROCESS ON TRACK, RATE PATH REMAINS DATA DEPENDENT",
   },
 ];
 
-// Statik Global Haberler (Sadece Başlık)
-const GLOBAL_HABERLER: TerminalHaber[] = [
-  {
-    id: "g1",
-    zaman: "16:20:11",
-    tarih: "Bugün",
-    kaynak: "BLOOMBERG",
-    kategori: "global",
-    baslik: "Fed Yönetim Kurulu: Enflasyonda düşüş eğilimi faiz adımlarının sürmesine imkan tanıyor",
-    detay: "Piyasa fiyatlamalarında 25 baz puanlık faiz indirim olasılığı %86'ya yükseldi. ABD 10 yıllık tahvil getirisi %4.18 seviyesine gevşedi.",
-    paragraflar: [
-      "Federal Rezerv yetkilileri, dezenflasyon sürecinin beklentilerle uyumlu ilerlediğini ve iş gücü piyasasındaki dengelenmenin sürdüğünü ifade etti.",
-      "ABD 10 yıllık Hazine tahvil faizleri açıklamaların ardından 4 baz puan gerileyerek %4.18 seviyesine çekildi."
-    ],
-    url: "https://www.bloomberg.com",
-  },
-  {
-    id: "g2",
-    zaman: "16:04:40",
-    tarih: "Bugün",
-    kaynak: "REUTERS",
-    kategori: "global",
-    baslik: "ECB: Hizmet sektörü enflasyonunda yavaşlama sinyalleri güçleniyor",
-    detay: "Euro Bölgesi'nde kredi talebinde toparlanma sinyalleri izlenirken sanayi üretimi toparlanma eğiliminde.",
-    paragraflar: [
-      "Avrupa Merkez Bankası (ECB) son bülteninde, Euro Bölgesi çekirdek enflasyonunun hedef patikaya doğru gerilediği vurgulandı.",
-      "Para piyasaları analistleri, ECB'nin önümüzdeki toplantılarda faiz indirim döngüsünü sürdürmesine kesin gözüyle bakıyor."
-    ],
-    url: "https://www.reuters.com",
-  },
-  {
-    id: "g3",
-    zaman: "15:47:22",
-    tarih: "Bugün",
-    kaynak: "FINANCIAL TIMES",
-    kategori: "global",
-    baslik: "OPEC+ toplantısı öncesi Brent petrol 74.80 dolar bandında yatay seyrediyor",
-    detay: "Küresel talep projeksiyonları ve ABD stok verileri öncesinde enerji emtialarında dalgalanma sınırlı kaldı.",
-    paragraflar: [
-      "Petrol İhraç Eden Ülkeler Örgütü ve müttefiklerinin (OPEC+) üretim kotalarına ilişkin çevrim içi toplantısı öncesinde ham petrol fiyatları dar bantta işlem görüyor.",
-      "Uluslararası Enerji Ajansı raporunda, Çin talebindeki toparlanma hızının fiyat dengesi üzerinde kritik rol oynamaya devam ettiği aktarıldı."
-    ],
-    url: "https://www.ft.com",
-  },
-  {
-    id: "g4",
-    zaman: "15:26:05",
-    tarih: "Bugün",
-    kaynak: "CNBC",
-    kategori: "global",
-    baslik: "Wall Street vadeli kontratlarında teknoloji şirketleri öncülüğünde pozitif seyir",
-    detay: "Yarı iletken sektörü öncülüğünde kurumsal yatırım harcamalarına dair şirket açıklamaları risk iştahını destekliyor.",
-    paragraflar: [
-      "S&P 500 ve Nasdaq 100 vadeli endeksleri, yarı iletken ve veri merkezi altyapı sağlayıcılarının güçlü ciro projeksiyonları sonrası primlendi.",
-      "Yatırım bankaları, yapay zeka harcamalarının kurumsal bilançolara reel katkısının geniş tabana yayıldığına dikkat çekiyor."
-    ],
-    url: "https://www.cnbc.com",
-  },
-  {
-    id: "g5",
-    zaman: "15:05:51",
-    tarih: "Bugün",
-    kaynak: "NIKKEI",
-    kategori: "global",
-    baslik: "Asya piyasalarında Japon Yeni güçlenirken Nikkei endeksi günü %+0.35 ile tamamladı",
-    detay: "Bölgesel teknoloji tedarikçileri güçlü sipariş akışıyla endekste pozitif ayrışmayı sürdürdü.",
-    paragraflar: [
-      "Tokyo Borsası'nda Nikkei 225 endeksi ihracatçı hisselerdeki dirençle günü artıda kapattı. Japonya Merkez Bankası'nın (BOJ) faiz artırım sinyalleri izleniyor.",
-      "Yen karşısında dolar 151.20 seviyesine gevşeyerek değer kaybetti."
-    ],
-    url: "https://asia.nikkei.com",
-  },
-  {
-    id: "g6",
-    zaman: "14:48:19",
-    tarih: "Bugün",
-    kaynak: "BLOOMBERG",
-    kategori: "global",
-    baslik: "Almanya 10 yıllık tahvil getirisi büyüme beklentileriyle 4 baz puan geriledi",
-    detay: "Avrupa Merkez Bankası politika faizi patikasına ilişkin beklentiler sabit getirili menkul kıymetleri destekliyor.",
-    paragraflar: [
-      "Alman Bundesbank tahvilleri, imalat PMI verilerinin ardından güvenli liman talebiyle alıcılı seyretti.",
-      "Avrupa genelinde tahvil faizlerindeki geri çekilme hisse senedi değerlemelerine destek sundu."
-    ],
-    url: "https://www.bloomberg.com",
-  },
-];
 
 // Statik KAP Bildirimleri (Belirgin Cyan Hisse Kodu + İnce Bildirim Türü)
 const KAP_BILDIRIMLERI: TerminalHaber[] = [
@@ -401,39 +263,354 @@ const RESMI_HABERLER: TerminalHaber[] = [
 ];
 
 export default function TerminalWorkspace() {
-  const [bistHaberleri, setBistHaberleri] = useState<TerminalHaber[]>(BASLANGIC_BIST);
+  const [bistHaberleri, setBistHaberleri] = useState<TerminalHaber[]>([]);
+  const [globalHaberler, setGlobalHaberler] = useState<GlobalNewsItem[]>(INITIAL_GLOBAL_HABERLER);
   const [seciliHaber, setSeciliHaber] = useState<TerminalHaber | null>(null);
-  const [loadingBist, setLoadingBist] = useState<boolean>(false);
+  const [loadingBist, setLoadingBist] = useState<boolean>(true);
+  const [loadingGlobal, setLoadingGlobal] = useState<boolean>(false);
+  const [isConnecting, setIsConnecting] = useState<boolean>(true);
+  const [lastFetchTime, setLastFetchTime] = useState<string>("");
+  const [lastGlobalFetchTime, setLastGlobalFetchTime] = useState<string>("");
+  const [newlyArrivedIds, setNewlyArrivedIds] = useState<Set<string>>(new Set());
 
-  // Çok kaynaklı dinamik haber çekme mekanizması (5s periyodik yenileme + fallback koruma)
-  useEffect(() => {
-    let isCancelled = false;
+  const knownIdsRef = useRef<Set<string>>(new Set());
+  const isInitialLoadRef = useRef<boolean>(true);
+  const translationsCacheRef = useRef<Map<string, string>>(new Map());
 
-    async function loadNews() {
-      try {
-        const res = await fetch("/api/news");
-        if (!res.ok) return;
+  // Google Translate API ile İngilizce -> Türkçe çeviri motoru (gtx endpoint)
+  const translateToTurkish = useCallback(async (text: string): Promise<string> => {
+    const rawClean = text.trim();
+    if (!rawClean) return text;
+
+    // Önbellek kontrolü
+    if (translationsCacheRef.current.has(rawClean)) {
+      return translationsCacheRef.current.get(rawClean)!;
+    }
+
+    // Başındaki * veya / işaretlerini çeviri sorgusu için ayıkla
+    let cleanForQuery = rawClean
+      .replace(/^[\*\/\s]+/, "")
+      .replace(/\s+\*\s*/g, " ")
+      .trim();
+
+    // Ticker sembollerini koru ($NVDA -> NVDA)
+    cleanForQuery = cleanForQuery.replace(/\$([A-Za-z0-9_]+)/g, "$1");
+
+    try {
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=tr&dt=t&q=${encodeURIComponent(
+        cleanForQuery
+      )}`;
+      const res = await fetch(url);
+      if (res.ok) {
         const data = await res.json();
+        if (Array.isArray(data) && Array.isArray(data[0])) {
+          const translatedChunks = data[0]
+            .map((chunk: unknown) => (Array.isArray(chunk) ? String(chunk[0] || "") : ""))
+            .join("");
+          if (translatedChunks && translatedChunks.trim()) {
+            const finalTranslated = "/ " + translatedChunks.trim().replace(/^[\*\/\s]+/, "");
+            translationsCacheRef.current.set(rawClean, finalTranslated);
+            return finalTranslated;
+          }
+        }
+      }
+    } catch {
+      // Çeviri servisi yanıt vermezse sözlük fallback'ine geç
+    }
 
-        if (isCancelled) return;
+    // Finansal Terim Eşleme Fallback Sözlüğü
+    let translated = cleanForQuery;
+    const financeTerms: [RegExp, string][] = [
+      [/\bVOTES\s+(\d+)-(\d+)\s+TO\s+HOLD\s+BENCHMARK\s+RATE\b/gi, "Gösterge faizini $1-$2 oyla sabit tuttu"],
+      [/\bTO\s+HOLD\s+BENCHMARK\s+RATE\b/gi, "Gösterge faizini sabit tuttu"],
+      [/\bDISSENT\s+IN\s+FAVOR\s+OF\s+RATE\s+HIKE\b/gi, "Faiz artışı lehine karşı oy kullandı"],
+      [/\bRATE\s+HIKE\b/gi, "Faiz Artışı"],
+      [/\bRATE\s+CUT\b/gi, "Faiz İndirimi"],
+      [/\bINFLATION\s+IS\s+TOO\s+HIGH\b/gi, "Enflasyon çok yüksek"],
+      [/\bDISINFLATION\s+PROCESS\b/gi, "Dezenflasyon süreci"],
+      [/\bPRESS\s+CONFERENCE\b/gi, "Basın Toplantısı"],
+      [/\bVOLATILITY\b/gi, "Volatilite"],
+      [/\bACQUISITION\b/gi, "Satın Alma"],
+      [/\bFINANCIAL\s+MARKET\b/gi, "Finansal Piyasa"],
+      [/\bADJ\s+EPS\b/gi, "Düzeltilmiş Hisse Başı Kâr"],
+      [/\bOPER\s+INCOME\b/gi, "Faaliyet Kârı"],
+      [/\bREV\.\b/gi, "Hasılat"],
+      [/\bREVENUE\b/gi, "Hasılat"],
+      [/\bCAPEX\b/gi, "Sermaye Harcamaları"],
+    ];
 
-        if (data.items && Array.isArray(data.items) && data.items.length > 0) {
-          interface ApiItem {
-            id: string;
-            zaman: string;
-            tarih?: string;
-            kaynak: string;
-            baslik: string;
-            ozet?: string;
-            paragraflar?: string[];
-            detay?: string;
-            url?: string;
-            timestamp?: number;
+    for (const [re, repl] of financeTerms) {
+      translated = translated.replace(re, repl);
+    }
+
+    const fallbackResult = "/ " + translated;
+    translationsCacheRef.current.set(rawClean, fallbackResult);
+    return fallbackResult;
+  }, []);
+
+  // Telegram @trad_fin canlı akışını çekme ve Türkçeleştirme motoru (15s polling)
+  const loadGlobalNews = useCallback(async () => {
+    setLoadingGlobal(true);
+
+    try {
+      let items: { id: string; zaman: string; timestamp: number; rawText: string; baslik: string }[] = [];
+
+      // 1. Birincil Canlı İstek (Next.js server-side telegram rotası)
+      try {
+        const res = await fetch("/api/telegram-news", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+            items = data.items;
+          }
+        }
+      } catch {
+        // Sunucu rotası geçici hata verirse ikincil adıma geç
+      }
+
+      // 2. İkincil İstemci Tarafı Fallback (allorigins proxy)
+      if (items.length === 0) {
+        try {
+          const proxyUrl =
+            "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://t.me/s/trad_fin");
+          const proxyRes = await fetch(proxyUrl);
+          if (proxyRes.ok) {
+            const html = await proxyRes.text();
+            const blocks = html.split('<div class="tgme_widget_message_wrap');
+            for (let i = 1; i < blocks.length; i++) {
+              const blk = blocks[i];
+              const textM = blk.match(/<div class="tgme_widget_message_text[^>]*>([\s\S]*?)<\/div>/i);
+              const timeM = blk.match(/<time[^>]*datetime="([^"]*)"[^>]*>([\s\S]*?)<\/time>/i);
+              const postM = blk.match(/data-post="([^"]*)"/i);
+
+              if (textM && textM[1]) {
+                const raw = textM[1]
+                  .replace(/<br\s*[\/]?>/gi, " ")
+                  .replace(/<[^>]+>/g, " ")
+                  .replace(/&#036;/g, "$")
+                  .replace(/&#39;/g, "'")
+                  .replace(/&quot;/g, '"')
+                  .replace(/&amp;/g, "&")
+                  .trim();
+
+                if (!raw) continue;
+                const dObj = timeM?.[1] ? new Date(timeM[1]) : new Date();
+                const zStr = dObj.toLocaleTimeString("tr-TR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                  hour12: false,
+                });
+                const pId = postM ? postM[1] : `tg_proxy_${dObj.getTime()}_${i}`;
+                items.push({
+                  id: pId,
+                  zaman: zStr,
+                  timestamp: dObj.getTime(),
+                  rawText: raw,
+                  baslik: raw.startsWith("*") ? "/ " + raw.slice(1).trim() : "/ " + raw,
+                });
+              }
+            }
+          }
+        } catch {
+          // İkincil proxy hatası yoksayılır
+        }
+      }
+
+      if (items.length > 0) {
+        // En yeni en üstte olacak şekilde sırala
+        items.sort((a, b) => b.timestamp - a.timestamp);
+
+        // Telegram mesajlarını Türkçeye çevir (başında / formatı ile)
+        const translatedItems: GlobalNewsItem[] = await Promise.all(
+          items.slice(0, 25).map(async (item) => {
+            const trTitle = await translateToTurkish(item.rawText || item.baslik);
+            return {
+              id: item.id,
+              zaman: item.zaman,
+              timestamp: item.timestamp,
+              baslik: trTitle,
+              rawText: item.rawText,
+            };
+          })
+        );
+
+        setGlobalHaberler(translatedItems);
+        setLastGlobalFetchTime(
+          new Date().toLocaleTimeString("tr-TR", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+          })
+        );
+
+        // Başarılı akışı ve çevirileri yerel hafızaya kaydet
+        try {
+          localStorage.setItem(CACHE_KEY_GLOBAL, JSON.stringify(translatedItems));
+          const cacheObj: Record<string, string> = {};
+          translationsCacheRef.current.forEach((val, key) => {
+            cacheObj[key] = val;
+          });
+          localStorage.setItem(CACHE_KEY_TRANSLATIONS, JSON.stringify(cacheObj));
+        } catch {
+          // Önbellek yazma hatası yoksayılır
+        }
+      }
+    } catch {
+      // Hata durumunda mevcut liste ekranda korunur
+    } finally {
+      setLoadingGlobal(false);
+    }
+  }, [translateToTurkish]);
+
+  // Canlı RSS Çekme Motoru (Bloomberg HT, AA Finans, Bigpara, Ekonomim)
+  const loadNews = useCallback(async () => {
+    setIsConnecting(true);
+
+    // İlk açılışta yerel önbellek varsa boş ekranı önlemek için hemen yükle
+    if (knownIdsRef.current.size === 0) {
+      try {
+        const cached = localStorage.getItem(CACHE_KEY_BIST);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setBistHaberleri(parsed);
+            parsed.forEach((h: TerminalHaber) => {
+              knownIdsRef.current.add(h.id);
+              knownIdsRef.current.add(h.baslik.slice(0, 30));
+            });
+            setLoadingBist(false);
+          }
+        }
+      } catch {
+        // Önbellek okuma hatası yoksayılır
+      }
+    }
+
+    try {
+      let items: ApiNewsItemResponse[] = [];
+
+      // 1. Birincil Canlı İstek (Next.js server-side RSS motoru)
+      try {
+        const res = await fetch("/api/news", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+            items = data.items;
+          }
+        }
+      } catch {
+        // Sunucu rotası geçici olarak yanıt vermezse ikincil adıma geç
+      }
+
+      // 2. İkincil İstemci Tarafı RSS / CORS Proxy Fallback (Eğer birincil rota boşsa)
+      if (items.length === 0) {
+        try {
+          const googleNewsUrl =
+            "https://news.google.com/rss/search?q=(site:ekonomim.com+OR+site:cnbce.com+OR+site:ekonomist.com.tr+OR+site:ekoturk.com+OR+site:foreks.com)+when:1d&hl=tr&gl=TR&ceid=TR:tr";
+          const proxyUrl =
+            "https://api.allorigins.win/raw?url=" + encodeURIComponent(googleNewsUrl);
+
+          const proxyRes = await fetch(proxyUrl);
+          if (proxyRes.ok) {
+            const xml = await proxyRes.text();
+            const chunks = xml.split("<item>").slice(1, 30);
+            for (const chunk of chunks) {
+              const rawTitle = chunk.match(/<title>([\s\S]*?)<\/title>/i)?.[1];
+              const rawLink =
+                chunk.match(/<link>([\s\S]*?)<\/link>/i)?.[1] ||
+                chunk.match(/<guid[^>]*>([\s\S]*?)<\/guid>/i)?.[1];
+              const rawSource = chunk.match(/<source[^>]*>([\s\S]*?)<\/source>/i)?.[1];
+              const rawSourceUrl = chunk.match(/<source[^>]*url="([^"]*)"/i)?.[1];
+              const rawPubDate = chunk.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1];
+              const rawDesc = chunk.match(/<description>([\s\S]*?)<\/description>/i)?.[1];
+
+              if (rawTitle) {
+                // Başlık temizliği (son ek kaynak ismini kaldır)
+                let title = rawTitle
+                  .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+                  .replace(/&quot;/g, '"')
+                  .replace(/&#039;/g, "'")
+                  .replace(/&amp;/g, "&")
+                  .trim();
+                const parts = title.split(/\s+[-–—]\s+/);
+                if (parts.length > 1) {
+                  const last = parts[parts.length - 1].trim();
+                  if (
+                    /^(CNBC-e|Ekonomim|Foreks|Foreks\.com|Ekonomist|Ekotürk|Ekoturk|Bloomberg|AA)/i.test(
+                      last
+                    ) ||
+                    last.length <= 25
+                  ) {
+                    parts.pop();
+                    title = parts.join(" - ").trim();
+                  }
+                }
+
+                // Rozet kaynak isimlendirme
+                const s = (rawSource || "").toLowerCase();
+                const u = (rawSourceUrl || rawLink || "").toLowerCase();
+                let kaynak = "FİNANS";
+                if (s.includes("cnbc") || u.includes("cnbce.com")) kaynak = "CNBC-E";
+                else if (s.includes("ekonomim") || u.includes("ekonomim.com")) kaynak = "EKONOMİM";
+                else if (s.includes("foreks") || u.includes("foreks.com")) kaynak = "FOREKS";
+                else if (s.includes("ekonomist") || u.includes("ekonomist.com.tr")) kaynak = "EKONOMİST";
+                else if (s.includes("ekotürk") || s.includes("ekoturk") || u.includes("ekoturk.com")) kaynak = "EKOTÜRK";
+                else if (rawSource) kaynak = rawSource.toUpperCase().replace(/\.COM(\.TR)?/g, "");
+
+                const pDate = rawPubDate ? new Date(rawPubDate) : new Date();
+                const descClean = (rawDesc || "")
+                  .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+                  .replace(/<[^>]+>/g, " ")
+                  .trim();
+
+                items.push({
+                  id: `proxy_gnews_${pDate.getTime()}_${title.slice(0, 15)}`,
+                  zaman: pDate.toLocaleTimeString("tr-TR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                    hour12: false,
+                  }),
+                  tarih: pDate.toLocaleDateString("tr-TR", { day: "numeric", month: "short" }),
+                  kaynak,
+                  baslik: title,
+                  ozet: title,
+                  paragraflar: [
+                    descClean.length > 20
+                      ? descClean
+                      : `${kaynak} kaynaklı son finans haberi: "${title}".`,
+                    "Piyasa analistleri gelişmenin BIST hisseleri ve makro veriler üzerindeki etkilerini izliyor.",
+                  ],
+                  url: rawLink || "https://news.google.com",
+                  timestamp: pDate.getTime(),
+                });
+              }
+            }
+          }
+        } catch {
+          // İkincil proxy de erişilemedi
+        }
+      }
+
+      if (items.length > 0) {
+        // Dönüştür ve yayınlanma saatini kullanıcının yerel saatine göre dinamik formatla (HH:mm:ss)
+        const donusturulen: TerminalHaber[] = items.map((item) => {
+          let yerelZaman = item.zaman;
+          if (item.timestamp && !isNaN(item.timestamp)) {
+            const d = new Date(item.timestamp);
+            yerelZaman = d.toLocaleTimeString("tr-TR", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: false,
+            });
           }
 
-          const donusturulen: TerminalHaber[] = data.items.map((item: ApiItem) => ({
+          return {
             id: item.id,
-            zaman: item.zaman,
+            zaman: yerelZaman,
             tarih: item.tarih || "Bugün",
             kaynak: item.kaynak,
             baslik: item.baslik,
@@ -446,29 +623,115 @@ export default function TerminalWorkspace() {
             url: item.url || "#",
             kategori: "bist" as const,
             timestamp: item.timestamp,
-          }));
+          };
+        });
 
-          setBistHaberleri(donusturulen);
+        // Yayınlanma tarihine göre (pubDate / timestamp) EN YENİDEN EN ESKİYE doğru sırala
+        donusturulen.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+        // Yeni haber tespiti (İlk yükleme sonrasında yeni düşen haberler için parlama/fade)
+        if (!isInitialLoadRef.current) {
+          const yeniGelenler = donusturulen.filter(
+            (h) => !knownIdsRef.current.has(h.id) && !knownIdsRef.current.has(h.baslik.slice(0, 30))
+          );
+
+          if (yeniGelenler.length > 0) {
+            const yeniIdler = new Set(yeniGelenler.map((h) => h.id));
+            setNewlyArrivedIds((prev) => new Set([...prev, ...yeniIdler]));
+
+            // 4 saniye sonra yeni efektini kaldır
+            setTimeout(() => {
+              setNewlyArrivedIds((prev) => {
+                const kopya = new Set(prev);
+                yeniIdler.forEach((id) => kopya.delete(id));
+                return kopya;
+              });
+            }, 4000);
+          }
         }
-      } catch {
-        // Ağ hatasında mevcut önbellek korunur (Fallback)
-      } finally {
-        if (!isCancelled) {
-          setLoadingBist(false);
+
+        // Bilinen ID ve başlık havuzunu güncelle
+        donusturulen.forEach((h) => {
+          knownIdsRef.current.add(h.id);
+          knownIdsRef.current.add(h.baslik.slice(0, 30));
+        });
+
+        isInitialLoadRef.current = false;
+        setBistHaberleri(donusturulen);
+        setLastFetchTime(
+          new Date().toLocaleTimeString("tr-TR", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+          })
+        );
+
+        // Başarılı akışı yerel hafızaya (localStorage) önbelleğe al
+        try {
+          localStorage.setItem(CACHE_KEY_BIST, JSON.stringify(donusturulen));
+        } catch {
+          // LocalStorage hatası yoksayılır
         }
       }
+    } catch {
+      // Ağ veya proxy hatasında ekran asla boş kalmaz; mevcut önbellek ekranda tutulur
+    } finally {
+      setLoadingBist(false);
+      setIsConnecting(false);
     }
+  }, []);
 
-    void loadNews();
+  // 10 saniyede bir BIST & Türkiye arka planda sessizce sorgula (polling)
+  useEffect(() => {
+    // İlk sorguyu asenkron olarak tetikle (efekt içi senkron setState uyarısını önler)
+    const initialTimer = setTimeout(() => {
+      void loadNews();
+    }, 0);
+
+    // Her 10 saniyede bir periyodik canlı polling
     const interval = setInterval(() => {
       void loadNews();
-    }, 5000);
+    }, 10000);
 
     return () => {
-      isCancelled = true;
+      clearTimeout(initialTimer);
       clearInterval(interval);
     };
-  }, []);
+  }, [loadNews]);
+
+  // 15 saniyede bir Telegram @trad_fin Global haber akışını arka planda sorgula (polling)
+  useEffect(() => {
+    // Önbellekten kaydedilmiş çevirileri yükle
+    try {
+      const savedTrans = localStorage.getItem(CACHE_KEY_TRANSLATIONS);
+      if (savedTrans) {
+        const parsed = JSON.parse(savedTrans);
+        if (parsed && typeof parsed === "object") {
+          Object.entries(parsed).forEach(([k, v]) => {
+            if (typeof v === "string") translationsCacheRef.current.set(k, v);
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // İlk sorgu
+    const timer = setTimeout(() => {
+      void loadGlobalNews();
+    }, 50);
+
+    // Her 15 saniyede bir canlı polling
+    const interval = setInterval(() => {
+      void loadGlobalNews();
+    }, 15000);
+
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
+  }, [loadGlobalNews]);
 
   // Modal için ESC klavye tuşu dinleyicisi
   useEffect(() => {
@@ -488,84 +751,107 @@ export default function TerminalWorkspace() {
     <div className="terminal-workspace">
       {/* 3-SÜTUNLU KOMPAKT ENDÜSTRİYEL TERMİNAL DÜZENİ */}
       <div className="terminal-grid">
-        {/* SÜTUN 1: BIST & Türkiye (Dinamik Çok Kaynaklı Akış) */}
+        {/* SÜTUN 1: BIST & Türkiye (Canlı Çok Kaynaklı Akış) */}
         <section className="terminal-pane">
           <div className="pane-header">
             <div className="pane-title-group">
               <h2 className="pane-title">BIST & Türkiye</h2>
             </div>
-            <div className="flex items-center gap-1.5 font-mono text-[10px] text-slate-500">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
-              <span className="tabular-nums">{bistHaberleri.length}</span>
+            <div className="flex items-center gap-1.5 font-mono text-[9.5px]">
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  isConnecting && bistHaberleri.length === 0
+                    ? "bg-amber-400 animate-ping"
+                    : "bg-emerald-400 animate-pulse"
+                }`}
+              />
+              <span className="text-slate-400 uppercase tracking-wider tabular-nums">
+                {isConnecting && bistHaberleri.length === 0
+                  ? "BAĞLANIYOR..."
+                  : `CANLI · ${lastFetchTime || "10s"}`}
+              </span>
             </div>
           </div>
 
           <div className="pane-scroll">
             {loadingBist && bistHaberleri.length === 0 ? (
-              // Skeleton Loader
-              <div className="p-3 space-y-3">
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div key={i} className="animate-pulse space-y-1.5">
-                    <div className="flex gap-2">
-                      <div className="h-3 w-12 bg-slate-800 rounded" />
-                      <div className="h-3 w-20 bg-slate-800 rounded" />
-                    </div>
-                    <div className="h-4 bg-slate-800/80 rounded w-full" />
-                    <div className="h-3 bg-slate-800/40 rounded w-3/4" />
-                  </div>
-                ))}
+              <div className="p-4 flex flex-col items-center justify-center h-48 text-center gap-2.5 font-mono">
+                <div className="flex items-center gap-2 text-cyan-400 text-xs font-semibold">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                  <span>Canlı akışa bağlanılıyor...</span>
+                </div>
+                <p className="text-[11px] text-slate-500 max-w-[280px]">
+                  Ekonomim, CNBC-e, Foreks, Ekonomist ve Ekotürk canlı akışı taranıyor...
+                </p>
               </div>
             ) : (
-              bistHaberleri.map((h) => (
-                <article
-                  key={h.id}
-                  onClick={() => setSeciliHaber(h)}
-                  className="terminal-row group"
-                >
-                  <div className="flex items-center gap-2 font-mono text-[10.5px]">
-                    <span className="row-time tabular-nums text-slate-500">{h.zaman}</span>
-                    <span className="px-1.5 py-0.5 rounded bg-[#0a1120] border border-slate-700/60 text-slate-300 font-mono text-[9.5px] uppercase tracking-wide">
-                      [{h.kaynak}]
-                    </span>
-                  </div>
+              bistHaberleri.map((h) => {
+                const isNew = newlyArrivedIds.has(h.id);
+                return (
+                  <article
+                    key={h.id}
+                    onClick={() => setSeciliHaber(h)}
+                    className={`terminal-row group transition-all duration-300 ${
+                      isNew ? "terminal-row-new" : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-mono text-[10.5px]">
+                      <span className="row-time tabular-nums text-slate-500">{h.zaman}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-[#0a1120] border border-slate-700/60 text-slate-300 font-mono text-[9.5px] uppercase tracking-wide">
+                        [{h.kaynak}]
+                      </span>
+                      {isNew && (
+                        <span className="px-1 py-0.2 rounded bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 text-[8.5px] font-bold animate-pulse">
+                          YENİ
+                        </span>
+                      )}
+                    </div>
 
-                  <h3 className="row-headline font-medium text-slate-200 group-hover:text-cyan-400 cursor-pointer transition text-xs leading-snug">
-                    {h.baslik}
-                  </h3>
-                </article>
-              ))
+                    <h3 className="row-headline font-medium text-slate-200 group-hover:text-cyan-400 cursor-pointer transition text-xs leading-snug">
+                      {h.baslik}
+                    </h3>
+                  </article>
+                );
+              })
             )}
           </div>
         </section>
 
-        {/* SÜTUN 2: Global (Sadece Başlık) */}
+        {/* SÜTUN 2: Global (Telegram @trad_fin Canlı Otomatik Çevrilen Akış - Tıklanamaz, Rozetsiz) */}
         <section className="terminal-pane">
           <div className="pane-header">
             <div className="pane-title-group">
               <h2 className="pane-title">Global</h2>
             </div>
-            <div className="font-mono text-[10px] text-slate-500">
-              <span className="tabular-nums">{GLOBAL_HABERLER.length}</span>
+            <div className="flex items-center gap-1.5 font-mono text-[9.5px]">
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  loadingGlobal && globalHaberler.length === 0
+                    ? "bg-amber-400 animate-ping"
+                    : "bg-emerald-400 animate-pulse"
+                }`}
+              />
+              <span className="text-slate-400 uppercase tracking-wider tabular-nums">
+                {loadingGlobal && globalHaberler.length === 0
+                  ? "BAĞLANIYOR..."
+                  : `CANLI · ${lastGlobalFetchTime || "15s"}`}
+              </span>
             </div>
           </div>
 
           <div className="pane-scroll">
-            {GLOBAL_HABERLER.map((h) => (
+            {globalHaberler.map((h) => (
               <article
                 key={h.id}
-                onClick={() => setSeciliHaber(h)}
-                className="terminal-row group"
+                className="flex items-start gap-2.5 px-3 py-2 border-b border-white/[0.04] transition-colors hover:bg-[#111a2e]/30 select-text"
               >
-                <div className="row-meta font-mono">
-                  <span className="row-time tabular-nums text-slate-500">{h.zaman}</span>
-                  <span className="px-1.5 py-0.5 rounded bg-[#0a1120] border border-slate-700/60 text-slate-300 font-mono text-[9.5px] uppercase">
-                    [{h.kaynak}]
-                  </span>
-                </div>
+                <span className="font-mono text-slate-500 text-[10.5px] tabular-nums shrink-0 pt-0.5 select-none">
+                  {h.zaman}
+                </span>
 
-                <h3 className="row-headline font-medium text-slate-200 group-hover:text-cyan-400 cursor-pointer transition text-xs leading-snug">
+                <p className="text-xs text-slate-200 leading-relaxed font-normal flex-1 break-words">
                   {h.baslik}
-                </h3>
+                </p>
               </article>
             ))}
           </div>
@@ -578,9 +864,6 @@ export default function TerminalWorkspace() {
             <div className="pane-header">
               <div className="pane-title-group">
                 <h2 className="pane-title">KAP Bildirimleri</h2>
-              </div>
-              <div className="font-mono text-[10px] text-slate-500">
-                <span className="tabular-nums">{KAP_BILDIRIMLERI.length}</span>
               </div>
             </div>
 
@@ -623,9 +906,6 @@ export default function TerminalWorkspace() {
               <div className="pane-title-group">
                 <h2 className="pane-title">Resmi Kurumlar</h2>
               </div>
-              <div className="font-mono text-[10px] text-slate-500">
-                <span className="tabular-nums">{RESMI_HABERLER.length}</span>
-              </div>
             </div>
 
             <div className="pane-scroll">
@@ -648,10 +928,10 @@ export default function TerminalWorkspace() {
             </div>
           </section>
         </div>
-      </div>
 
-      {/* 3-KOLONLU MARKET INTELLIGENCE TABANI (BIST MOVERS, SECTOR FLOW, CALENDAR) */}
-      <MarketIntelligence />
+        {/* ALT SATIR: MARKET INTELLIGENCE (BIST HAREKETLER, SEKTÖR AKIŞI, TAKVİM) */}
+        <MarketIntelligence />
+      </div>
 
       {/* ŞIK ENDÜSTRİYEL HABER DETAY KARTI (MODAL / DIALOG POPUP) */}
       {seciliHaber && (

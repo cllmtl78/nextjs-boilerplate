@@ -203,27 +203,26 @@ export default function MarketIntelligence() {
   const maxAbsChange = 3.2;
 
   return (
-    <div className="market-intelligence mt-6 sm:mt-7">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
-        {/* ================= 1. SOL KOLON: GÜNÜN HAREKETLİLERİ (/ BIST Hareketler) ================= */}
-        <div className="bg-[#0d1322] border border-white/[0.06] rounded-[3px] flex flex-col h-[286px] overflow-hidden">
+    <>
+      {/* ================= 1. SOL KOLON: GÜNÜN HAREKETLİLERİ (/ BIST Hareketler) ================= */}
+      <div className="bg-[#0d1322] border border-white/[0.08] rounded-[4px] shadow-sm flex flex-col h-[286px] overflow-hidden">
           {/* Header */}
-          <div className="px-2.5 py-1.5 bg-[#111a2e] border-b border-white/[0.06] flex items-center justify-between flex-shrink-0">
+          <div className="px-2.5 py-1.5 bg-[#111a2e] border-b border-white/[0.08] flex items-center justify-between flex-shrink-0">
             <div className="flex items-center">
               <span className="font-mono text-[11px] font-semibold tracking-wider text-slate-300">
                 {"/ BIST Hareketler"}
               </span>
             </div>
 
-            {/* Kompakt Sekmeler */}
-            <div className="flex items-center p-0.5 bg-[#090d16] border border-white/[0.06] rounded text-[10px] font-mono">
+            {/* Kompakt Sekmeler - Geniş Aralıklı ve Ayrık Butonlar */}
+            <div className="flex items-center gap-1.5 p-0.5 bg-[#090d16] border border-white/[0.1] rounded flex-shrink-0">
               <button
                 type="button"
                 onClick={() => setActiveTab("gainers")}
-                className={`px-2 py-0.5 rounded transition ${
+                className={`px-2.5 py-0.5 rounded text-[10px] font-mono font-medium transition whitespace-nowrap ${
                   activeTab === "gainers"
-                    ? "bg-[#16223b] text-emerald-400 font-semibold shadow-sm"
-                    : "text-slate-400 hover:text-slate-200"
+                    ? "bg-[#16223b] text-emerald-400 font-semibold shadow-sm border border-emerald-500/30"
+                    : "text-slate-400 hover:text-slate-200 border border-transparent"
                 }`}
               >
                 Artanlar
@@ -231,10 +230,10 @@ export default function MarketIntelligence() {
               <button
                 type="button"
                 onClick={() => setActiveTab("losers")}
-                className={`px-2 py-0.5 rounded transition ${
+                className={`px-2.5 py-0.5 rounded text-[10px] font-mono font-medium transition whitespace-nowrap ${
                   activeTab === "losers"
-                    ? "bg-[#16223b] text-rose-400 font-semibold shadow-sm"
-                    : "text-slate-400 hover:text-slate-200"
+                    ? "bg-[#16223b] text-rose-400 font-semibold shadow-sm border border-rose-500/30"
+                    : "text-slate-400 hover:text-slate-200 border border-transparent"
                 }`}
               >
                 Düşenler
@@ -242,10 +241,10 @@ export default function MarketIntelligence() {
               <button
                 type="button"
                 onClick={() => setActiveTab("volume")}
-                className={`px-2 py-0.5 rounded transition ${
+                className={`px-2.5 py-0.5 rounded text-[10px] font-mono font-medium transition whitespace-nowrap ${
                   activeTab === "volume"
-                    ? "bg-[#16223b] text-cyan-300 font-semibold shadow-sm"
-                    : "text-slate-400 hover:text-slate-200"
+                    ? "bg-[#16223b] text-cyan-300 font-semibold shadow-sm border border-cyan-500/30"
+                    : "text-slate-400 hover:text-slate-200 border border-transparent"
                 }`}
               >
                 Hacim
@@ -327,9 +326,9 @@ export default function MarketIntelligence() {
         </div>
 
         {/* ================= 2. ORTA KOLON: SEKTÖR PERFORMANSLARI (/ SEKTÖR AKIŞI) ================= */}
-        <div className="bg-[#0d1322] border border-white/[0.06] rounded-[3px] flex flex-col h-[286px] overflow-hidden">
+        <div className="bg-[#0d1322] border border-white/[0.08] rounded-[4px] shadow-sm flex flex-col h-[286px] overflow-hidden">
           {/* Header */}
-          <div className="px-2.5 py-1.5 bg-[#111a2e] border-b border-white/[0.06] flex items-center justify-between flex-shrink-0">
+          <div className="px-2.5 py-1.5 bg-[#111a2e] border-b border-white/[0.08] flex items-center justify-between flex-shrink-0">
             <div className="flex items-center">
               <span className="font-mono text-[11px] font-semibold tracking-wider text-slate-300">
                 {"/ SEKTÖR AKIŞI"}
@@ -403,9 +402,9 @@ export default function MarketIntelligence() {
         </div>
 
         {/* ================= 3. SAĞ KOLON: EKONOMİK TAKVİM (/ TAKVİM) ================= */}
-        <div className="bg-[#0d1322] border border-white/[0.06] rounded-[3px] flex flex-col h-[286px] overflow-hidden">
+        <div className="terminal-card-takvim bg-[#0d1322] border border-white/[0.08] rounded-[4px] shadow-sm flex flex-col h-[286px] overflow-hidden">
           {/* Header */}
-          <div className="px-2.5 py-1.5 bg-[#111a2e] border-b border-white/[0.06] flex items-center justify-between flex-shrink-0">
+          <div className="px-2.5 py-1.5 bg-[#111a2e] border-b border-white/[0.08] flex items-center justify-between flex-shrink-0">
             <div className="flex items-center">
               <span className="font-mono text-[11px] font-semibold tracking-wider text-slate-300">
                 {"/ TAKVİM"}
@@ -487,7 +486,6 @@ export default function MarketIntelligence() {
             ))}
           </div>
         </div>
-      </div>
-    </div>
+    </>
   );
 }

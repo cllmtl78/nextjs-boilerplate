@@ -12,38 +12,98 @@ export type ApiNewsItem = {
   timestamp: number;
 };
 
+// HTML & Karakter Kodlama Temizleyici
 function cleanHtml(str?: string | null): string {
   if (!str) return "";
-  return str
+  const text = str
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&#039;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&amp;/g, "&")
     .replace(/&nbsp;/g, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&ouml;/g, "ö")
+    .replace(/&Ouml;/g, "Ö")
+    .replace(/&uuml;/g, "ü")
+    .replace(/&Uuml;/g, "Ü")
+    .replace(/&ccedil;/g, "ç")
+    .replace(/&Ccedil;/g, "Ç")
+    .replace(/&para;/g, "")
     .replace(/\s+/g, " ")
     .trim();
+  return text;
 }
 
-function parseXmlItems(xml: string, kaynakAdi: string, varsayilanUrl: string): ApiNewsItem[] {
-  const sonuclar: ApiNewsItem[] = [];
+// Başlık sonundaki kaynak ismini temizle (Örn: "Borsa Güne Yükselişle Başladı - CNBC-e" -> "Borsa Güne Yükselişle Başladı")
+function cleanTitle(rawTitle: string): string {
+  const title = cleanHtml(rawTitle);
+
+  // Tire veya tire varyantlarına göre son kaynak ekini ayır
+  const parts = title.split(/\s+[-–—]\s+/);
+  if (parts.length > 1) {
+    const lastPart = parts[parts.length - 1].trim();
+    // Bilinen kaynak isimleri veya 25 karakterden kısa son ekler
+    if (
+      /^(CNBC-e|Ekonomim|Foreks|Foreks\.com|Ekonomist|Ekotürk|Ekoturk|Bloomberg|AA|Reuters|Investing)/i.test(
+        lastPart
+      ) ||
+      lastPart.length <= 25
+    ) {
+      parts.pop();
+      return parts.join(" - ").trim();
+    }
+  }
+
+  return title;
+}
+
+// Kaynak ismini Google News metadata'sından ayıkla ve standartlaştır
+function formatSourceBadge(rawSource?: string | null, rawUrl?: string | null): string {
+  const s = (rawSource || "").toLowerCase();
+  const u = (rawUrl || "").toLowerCase();
+
+  if (s.includes("cnbc") || u.includes("cnbce.com")) return "CNBC-E";
+  if (s.includes("ekonomim") || u.includes("ekonomim.com")) return "EKONOMİM";
+  if (s.includes("foreks") || u.includes("foreks.com")) return "FOREKS";
+  if (s.includes("ekonomist") || u.includes("ekonomist.com.tr")) return "EKONOMİST";
+  if (s.includes("ekotürk") || s.includes("ekoturk") || u.includes("ekoturk.com")) return "EKOTÜRK";
+  if (s.includes("bloomberg") || u.includes("bloomberght.com")) return "BLOOMBERG HT";
+  if (s.includes("aa") || s.includes("anadolu") || u.includes("aa.com.tr")) return "AA FİNANS";
+
+  if (rawSource && rawSource.trim().length > 0) {
+    return rawSource
+      .toUpperCase()
+      .replace(/\.COM(\.TR)?/g, "")
+      .trim();
+  }
+
+  return "FİNANS";
+}
+
+// Google News XML çıktısını parse et
+function parseGoogleNewsXml(xml: string): ApiNewsItem[] {
+  const items: ApiNewsItem[] = [];
   const itemChunks = xml.split("<item>").slice(1);
 
-  for (let i = 0; i < Math.min(itemChunks.length, 10); i++) {
-    const chunk = itemChunks[i];
-    const rawTitle = chunk.match(/<title>([\s\S]*?)<\/title>/)?.[1];
-    const rawLink = chunk.match(/<link>([\s\S]*?)<\/link>/)?.[1] || chunk.match(/<guid[^>]*>([\s\S]*?)<\/guid>/)?.[1];
-    const rawDesc = chunk.match(/<description>([\s\S]*?)<\/description>/)?.[1];
-    const rawContent = chunk.match(/<content:encoded>([\s\S]*?)<\/content:encoded>/)?.[1];
-    const rawPubDate = chunk.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1];
+  for (const chunk of itemChunks) {
+    const rawTitle = chunk.match(/<title>([\s\S]*?)<\/title>/i)?.[1];
+    const rawLink =
+      chunk.match(/<link>([\s\S]*?)<\/link>/i)?.[1] ||
+      chunk.match(/<guid[^>]*>([\s\S]*?)<\/guid>/i)?.[1];
+    const rawSource = chunk.match(/<source[^>]*>([\s\S]*?)<\/source>/i)?.[1];
+    const rawSourceUrl = chunk.match(/<source[^>]*url="([^"]*)"/i)?.[1];
+    const rawPubDate = chunk.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1];
+    const rawDesc = chunk.match(/<description>([\s\S]*?)<\/description>/i)?.[1];
 
-    const baslik = cleanHtml(rawTitle);
+    if (!rawTitle) continue;
+
+    const baslik = cleanTitle(rawTitle);
     if (!baslik || baslik.length < 5) continue;
 
-    const link = cleanHtml(rawLink) || varsayilanUrl;
-    const aciklama = cleanHtml(rawDesc || rawContent);
+    const kaynak = formatSourceBadge(rawSource, rawSourceUrl || rawLink);
+    const link = cleanHtml(rawLink) || "https://news.google.com";
 
     let pubDateObj = new Date();
     if (rawPubDate) {
@@ -65,27 +125,28 @@ function parseXmlItems(xml: string, kaynakAdi: string, varsayilanUrl: string): A
       month: "short",
     });
 
-    // 1 satırlık alt özet
-    const ozet = aciklama.slice(0, 110) || baslik;
+    const aciklama = cleanHtml(rawDesc);
+    const ozet = baslik; // Kullanıcı kuralı: kutucukta özet metin yok, sadece başlık ve modal detayı
 
-    // 2 paragraflık gövde metni
-    let p1 = aciklama;
-    let p2 = "Piyasa analistleri ve aracı kurum stratejistleri, konuya ilişkin ilk değerlendirmelerinde şirket bilançoları ve sektör rasyoları üzerindeki etkilerin yakından izleneceğini vurguladı.";
-    
-    if (aciklama.length > 140) {
-      const cumleler = aciklama.split(". ");
-      if (cumleler.length >= 2) {
-        const yari = Math.floor(cumleler.length / 2);
-        p1 = cumleler.slice(0, yari).join(". ") + ".";
-        p2 = cumleler.slice(yari).join(". ") + (cumleler[cumleler.length - 1].endsWith(".") ? "" : ".");
-      }
-    }
+    // Modal detay paragrafları (Temiz metin)
+    const p1 =
+      aciklama && aciklama.length > 25 && !aciklama.toLowerCase().startsWith("http")
+        ? aciklama
+        : `${kaynak} kaynaklı son dakika ekonomi ve finans gelişmesi: "${baslik}".`;
+    const p2 =
+      "Piyasa analistleri, haberin Borsa İstanbul şirket değerlemeleri, sektör endeksleri ve makro göstergeler üzerindeki olası etkilerini yakından izliyor.";
 
-    sonuclar.push({
-      id: `${kaynakAdi.toLowerCase()}_${i}_${pubDateObj.getTime()}`,
+    const slug = baslik
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .slice(0, 24);
+    const id = `gnews_${kaynak.toLowerCase().replace(/[^a-z]/g, "")}_${slug}_${pubDateObj.getTime()}`;
+
+    items.push({
+      id,
       zaman,
       tarih,
-      kaynak: kaynakAdi,
+      kaynak,
       baslik,
       ozet,
       paragraflar: [p1, p2],
@@ -94,208 +155,113 @@ function parseXmlItems(xml: string, kaynakAdi: string, varsayilanUrl: string): A
     });
   }
 
-  return sonuclar;
+  return items;
 }
 
-// 8 Finans Kaynağı için Zengin Gerçekçi Örnek Veri Havuzu (Yedek & Tamamlayıcı)
-const YEDEK_HABERLER: ApiNewsItem[] = [
-  {
-    id: "f1",
-    zaman: "17:15:22",
-    tarih: "Bugün",
-    kaynak: "FOREKS",
-    baslik: "BIST 100 Endeksinde bankacılık hisseleri öncülüğünde 11.200 puan seviyesi test edildi",
-    ozet: "XBANK bankacılık endeksi günlük %2.1 yükselişle işlem hacminde ilk sırayı koruyor.",
-    paragraflar: [
-      "Borsa İstanbul'da BIST 100 endeksi, haftanın üçüncü işlem gününde bankacılık ve ulaştırma hisselerinde yoğunlaşan alımlarla 11.200 direnç bandına doğru yükseldi. Günlük işlem hacminde kamu ve özel mevduat bankaları ilk sıralardaki yerini korurken, yurt dışı yerleşiklerin net para girişi genele yayılan iyimserliği destekledi.",
-      "Aracı kurum analistleri, faiz indirim döngüsüne dair makroekonomik beklentilerin net faiz marjlarını olumlu etkileyeceği beklentisiyle bankacılık hisselerine yönelik hedef fiyat revizyonlarının sürdüğünü ve 11.150 destek seviyesinin üzerinde kalıcılığın önem taşıdığını ifade etti."
-    ],
-    url: "https://www.foreks.com",
-    timestamp: Date.now() - 1000 * 60 * 4,
-  },
-  {
-    id: "b1",
-    zaman: "17:08:45",
-    tarih: "Bugün",
-    kaynak: "BLOOMBERG HT",
-    baslik: "SPK'dan yabancı finans kuruluşları ve sermaye piyasası işlemlerine ilişkin resmi açıklama",
-    ozet: "Kurul, piyasa derinliği ve yabancı fon hareketlerine ilişkin kamuoyundaki iddiaları değerlendirdi.",
-    paragraflar: [
-      "Sermaye Piyasası Kurulu (SPK), son günlerde kamuoyunda ve sosyal medyada yer alan yabancı finans kuruluşlarının Türkiye piyasalarındaki pozisyonlarına dair iddialara yönelik yazılı basın açıklaması gerçekleştirdi. Açıklamada, piyasa mekanizmalarının uluslararası şeffaflık standartlarında çalıştığı vurgulandı.",
-      "Kurul yetkilileri, piyasa bozucu eylemlere ve bilgi kirliliğine karşı gözetim ve denetim mekanizmalarının 7/24 esasıyla devrede olduğunu belirterek, yatırımcıların yalnızca resmi kanallardan yapılan bilgilendirmeleri dikkate alması gerektiğini hatırlattı."
-    ],
-    url: "https://www.bloomberght.com",
-    timestamp: Date.now() - 1000 * 60 * 11,
-  },
-  {
-    id: "a1",
-    zaman: "16:54:10",
-    tarih: "Bugün",
-    kaynak: "AA FİNANS",
-    baslik: "Hazine ve Maliye Bakanlığı: Merkezi yönetim nakit dengesi ilk 9 ayda hedeflerle uyumlu seyrediyor",
-    ozet: "Mali disiplin adımları ve kamuda tasarruf tedbirleri bütçe açığı göstergelerini olumlu etkiliyor.",
-    paragraflar: [
-      "Hazine ve Maliye Bakanlığı tarafından yayımlanan bütçe gerçekleşme raporuna göre, merkezi yönetim nakit dengesi ve borçlanma maliyetleri Orta Vadeli Program (OVP) projeksiyonları ile tam uyumlu olarak gerçekleşti. Hazine rezervlerinin güçlü seviyesini koruduğu ifade edildi.",
-      "Ekonomi yönetimi, mali konsolidasyon sürecinin enflasyonla mücadeleye doğrudan katkı sağladığını belirterek, borçlanmanın vadesini uzatırken TL cinsi sabit kuponlu ihraçlara yönelik talebin yüksek kaldığını kaydetti."
-    ],
-    url: "https://www.aa.com.tr",
-    timestamp: Date.now() - 1000 * 60 * 25,
-  },
-  {
-    id: "c1",
-    zaman: "16:42:33",
-    tarih: "Bugün",
-    kaynak: "CNBC-E",
-    baslik: "Türk Hava Yolları, 2026 kargo ve yolcu doluluk hedeflerinde çıtayı yükseltti",
-    ozet: "Turkish Cargo'nun pazar payı %6.2'ye ulaşırken filo kapasite artış planları hız kazandı.",
-    paragraflar: [
-      "CNBC-e yayınına katılan havacılık sektörü analistleri, Türk Hava Yolları'nın Asya-Pasifik ve Kuzey Amerika hatlarındaki transfer yolcu ivmelenmesinin kârlılık marjlarını yukarı taşıdığını belirtti. Şirketin yeni nesil geniş gövdeli uçak siparişleri filoya dahil edilmeye devam ediyor.",
-      "Küresel kargo taşımacılığında e-ticaret lojistiğinin büyümesiyle birlikte Turkish Cargo biriminin net ciro katkısının yıllık bazda çift haneli artış gösterdiği ve şirketin nakit yaratma kabiliyetini desteklediği dile getirildi."
-    ],
-    url: "https://www.cnbce.com",
-    timestamp: Date.now() - 1000 * 60 * 37,
-  },
-  {
-    id: "e1",
-    zaman: "16:31:02",
-    tarih: "Bugün",
-    kaynak: "EKONOMİM",
-    baslik: "Demir-çelik üreticilerinde kapasite kullanım oranı %78.6 düzeyine çıktı",
-    ozet: "Cevher ve enerji girdi maliyetlerindeki dengelenme ihracatçıların rekabet gücünü artırdı.",
-    paragraflar: [
-      "Türkiye Çelik İhracatçıları Birliği değerlendirmesinde, yeşil dönüşüm ve modernizasyon yatırımlarının tamamlanmasıyla katma değerli yassı çelik siparişlerinde belirgin bir artış kaydedildiği belirtildi. Özellikle Avrupa pazarında toparlanan talep üretimi destekliyor.",
-      "Sektör temsilcileri, hurda ve kütük çelik fiyatlarındaki istikrarın operasyonel kâr marjlarını koruduğunu ve yurt içi altyapı projelerinin iç pazar satışlarını canlı tuttuğunu ifade etti."
-    ],
-    url: "https://www.ekonomim.com",
-    timestamp: Date.now() - 1000 * 60 * 48,
-  },
-  {
-    id: "ekot1",
-    zaman: "16:18:40",
-    tarih: "Bugün",
-    kaynak: "EKOTÜRK",
-    baslik: "TCMB Haftalık Para ve Banka İstatistikleri: TL mevduat oranı %56.40 seviyesine yükseldi",
-    ozet: "Kur Korumalı Mevduat (KKM) toplam bakiyesinde haftalık 28 milyar liralık düşüş kaydedildi.",
-    paragraflar: [
-      "Ekotürk araştırma masasının derlediği verilere göre, bankacılık sektöründeki TL mevduat payının artışı ve yabancı para mevduatlardan TL enstrümanlara geçiş ivmesi sürüyor. Sektörün sermaye yeterlilik rasyosu (SYR) %17.2 ile güçlü seyrini korudu.",
-      "Ekonomistler, para politikasındaki kararlı duruş ve sterilizasyon adımlarının mevduat faizlerindeki oynaklığı sınırladığını ve dezenflasyon sürecinin kredibilitesini artırdığını belirtti."
-    ],
-    url: "https://www.ekoturk.com",
-    timestamp: Date.now() - 1000 * 60 * 61,
-  },
-  {
-    id: "bp1",
-    zaman: "16:05:15",
-    tarih: "Bugün",
-    kaynak: "BİGPARA",
-    baslik: "BIST Sanayi Endeksi'nde katma değerli ihracat yapan teknoloji ve savunma şirketleri ayrışıyor",
-    ozet: "Aselsan ve Ford Otosan'ın yeni sözleşme bildirimleri sonrası sektör işlem hacmi hareketlendi.",
-    paragraflar: [
-      "Bigpara piyasa bülteninde, sanayi şirketlerinin yurt dışı konsorsiyumlarla imzaladığı yüksek montanlı tedarik sözleşmelerinin bakiye siparişleri rekor seviyelere taşıdığı vurgulandı. Şirketlerin döviz yaratma kapasitesi yatırımcı ilgisini canlı tutuyor.",
-      "Teknik analiz göstergelerinde sanayi hisselerinin hareketli ortalamalarının üzerinde dengelendiği ve temettü verimi yüksek hisselerde kurumsal fon alımlarının yoğunlaştığı kaydedildi."
-    ],
-    url: "https://bigpara.hurriyet.com.tr",
-    timestamp: Date.now() - 1000 * 60 * 74,
-  },
-  {
-    id: "ekon1",
-    zaman: "15:50:50",
-    tarih: "Bugün",
-    kaynak: "EKONOMİST",
-    baslik: "Otomotiv yan sanayi ihracatında elektrikli araç batarya yatırımları payını artırıyor",
-    ozet: "Türkiye'deki batarya paketleme tesisleri küresel otomotiv markalarına ihracatını hızlandırdı.",
-    paragraflar: [
-      "Ekonomist dergisinin son araştırmasına göre, Türkiye'de üretilen yeni nesil ticari araç serileri ve batarya montaj hatları Avrupa'daki tedarik zincirlerinde kritik rol üstlenmeye başladı. Otomotiv yan sanayi şirketleri Ar-Ge yatırımlarını sürdürüyor.",
-      "Sektör raporunda, yerli parça kullanım oranının artmasının katma değeri yükselttiği ve önümüzdeki çeyreklerde ihracat gelirlerinin bilançolara daha güçlü yansıyacağı öngörüsüne yer verildi."
-    ],
-    url: "https://www.ekonomist.com.tr",
-    timestamp: Date.now() - 1000 * 60 * 89,
-  },
-];
+// Bellek içi önbellek (Memory Cache)
+let memoryCache: { items: ApiNewsItem[]; timestamp: number } = {
+  items: [],
+  timestamp: 0,
+};
 
 export async function GET() {
+  const simdi = Date.now();
+
+  // 5 saniyeden taze önbellek varsa doğrudan sun
+  if (memoryCache.items.length > 0 && simdi - memoryCache.timestamp < 5000) {
+    return NextResponse.json({
+      success: true,
+      cached: true,
+      timestamp: memoryCache.timestamp,
+      items: memoryCache.items,
+    });
+  }
+
+  const googleNewsUrl =
+    "https://news.google.com/rss/search?q=(site:ekonomim.com+OR+site:cnbce.com+OR+site:ekonomist.com.tr+OR+site:ekoturk.com+OR+site:foreks.com)+when:1d&hl=tr&gl=TR&ceid=TR:tr";
+
   try {
-    // Açık RSS kaynakları (Bloomberg HT, Foreks, Ekonomim, Ekonomist)
-    const rssKaynaklari = [
-      { ad: "BLOOMBERG HT", url: "https://www.bloomberght.com/rss", site: "https://www.bloomberght.com" },
-      { ad: "FOREKS", url: "https://foreks.com/rss", site: "https://www.foreks.com" },
-      { ad: "EKONOMİM", url: "https://www.ekonomim.com/rss", site: "https://www.ekonomim.com" },
-      { ad: "EKONOMİST", url: "https://www.ekonomist.com.tr/rss", site: "https://www.ekonomist.com.tr" },
-    ];
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4500);
 
-    // Asenkron paralel istekler (3.2s zaman aşımıyla gecikmeleri engelle)
-    const rssSonuclari = await Promise.allSettled(
-      rssKaynaklari.map(async (k) => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3200);
-
-        try {
-          const res = await fetch(k.url, {
-            headers: {
-              "User-Agent":
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-              Accept: "application/rss+xml, application/xml, text/xml",
-            },
-            signal: controller.signal,
-            next: { revalidate: 5 }, // 5 saniyelik cache
-          });
-
-          clearTimeout(timeoutId);
-          if (!res.ok) return [];
-
-          const xml = await res.text();
-          return parseXmlItems(xml, k.ad, k.site);
-        } catch {
-          clearTimeout(timeoutId);
-          return [];
-        }
-      })
-    );
-
-    // Canlı RSS'ten toplanan haberler
-    const canliHaberler: ApiNewsItem[] = [];
-    rssSonuclari.forEach((s) => {
-      if (s.status === "fulfilled" && Array.isArray(s.value)) {
-        canliHaberler.push(...s.value);
-      }
+    const res = await fetch(googleNewsUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "application/rss+xml, application/xml, text/xml, */*",
+      },
+      signal: controller.signal,
+      next: { revalidate: 10 },
     });
 
-    // Başlık benzerliğiyle tekilleştirme haritası
-    const map = new Map<string, ApiNewsItem>();
+    clearTimeout(timeoutId);
 
-    // Önce canlı RSS haberlerini ekle
-    canliHaberler.forEach((h) => {
-      const baslikKisa = h.baslik.slice(0, 35).toLowerCase();
-      if (!map.has(baslikKisa)) {
-        map.set(baslikKisa, h);
+    if (res.ok) {
+      const xml = await res.text();
+      const parsedItems = parseGoogleNewsXml(xml);
+
+      if (parsedItems.length > 0) {
+        // Başlık benzerliği ile tekilleştirme (deduplication)
+        const tekilMap = new Map<string, ApiNewsItem>();
+        parsedItems.forEach((item) => {
+          const key = item.baslik.slice(0, 35).toLowerCase();
+          if (!tekilMap.has(key)) {
+            tekilMap.set(key, item);
+          }
+        });
+
+        // En yeniden en eskiye sırala (timestamp descending)
+        const sortedItems = Array.from(tekilMap.values()).sort(
+          (a, b) => b.timestamp - a.timestamp
+        );
+
+        memoryCache = {
+          items: sortedItems,
+          timestamp: simdi,
+        };
+
+        return NextResponse.json({
+          success: true,
+          cached: false,
+          timestamp: simdi,
+          items: sortedItems,
+        });
       }
-    });
+    }
 
-    // Ardından eksik kaynakları (AA Finans, CNBC-e, Ekotürk, Bigpara vb.) yedek havuzdan tamamla
-    YEDEK_HABERLER.forEach((h) => {
-      const baslikKisa = h.baslik.slice(0, 35).toLowerCase();
-      if (!map.has(baslikKisa)) {
-        map.set(baslikKisa, h);
-      }
-    });
-
-    // Zamana göre yeniden eskiye sırala (en son düşen en üstte)
-    const siraliHaberler = Array.from(map.values()).sort(
-      (a, b) => b.timestamp - a.timestamp
-    );
+    // Google News yanıt vermediyse önceki hafızayı dön
+    if (memoryCache.items.length > 0) {
+      return NextResponse.json({
+        success: true,
+        cached: true,
+        timestamp: memoryCache.timestamp,
+        items: memoryCache.items,
+      });
+    }
 
     return NextResponse.json({
-      success: true,
-      timestamp: Date.now(),
-      items: siraliHaberler,
+      success: false,
+      items: [],
+      error: "Haber akışına bağlanılıyor...",
     });
-  } catch {
-    // Hata durumunda yedek listeyi dön
-    return NextResponse.json({
-      success: true,
-      timestamp: Date.now(),
-      items: YEDEK_HABERLER,
-      fallback: true,
-    });
+  } catch (err: unknown) {
+    if (memoryCache.items.length > 0) {
+      return NextResponse.json({
+        success: true,
+        cached: true,
+        timestamp: memoryCache.timestamp,
+        items: memoryCache.items,
+      });
+    }
+
+    const errorMsg = err instanceof Error ? err.message : "Bilinmeyen hata";
+    return NextResponse.json(
+      {
+        success: false,
+        items: [],
+        error: errorMsg,
+      },
+      { status: 500 }
+    );
   }
 }
