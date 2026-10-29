@@ -22,21 +22,35 @@ function cleanHtml(html: string): string {
     .trim();
 }
 
-const formatTimeTR = (dateStr: string | number | Date): string => {
+const parseNewsTime = (dateInput: string | number | Date | null | undefined): string => {
+  if (!dateInput) return "--:--:--";
   try {
-    const d = new Date(dateStr);
+    const rawStr = String(dateInput).trim();
+    const d =
+      typeof dateInput === "number" || dateInput instanceof Date
+        ? new Date(dateInput)
+        : new Date(rawStr);
     if (isNaN(d.getTime())) return "--:--:--";
-    return new Intl.DateTimeFormat("tr-TR", {
-      timeZone: "Europe/Istanbul",
+
+    const now = new Date();
+    const diffHours = (d.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    if (diffHours > 1) {
+      d.setHours(d.getHours() - 3);
+    }
+
+    return d.toLocaleTimeString("tr-TR", {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
       hour12: false,
-    }).format(d);
+    });
   } catch {
     return "--:--:--";
   }
 };
+
+const formatTimeTR = parseNewsTime;
 
 function formatNaturalCase(text: string): string {
   if (!text) return "";
@@ -106,6 +120,8 @@ function formatHeadline(text: string): string {
 
 export async function GET() {
   const telegramUrl = "https://t.me/s/trad_fin";
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4000);
 
   try {
     const res = await fetch(telegramUrl, {
@@ -116,8 +132,11 @@ export async function GET() {
           "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9,tr;q=0.8",
       },
+      signal: controller.signal,
       next: { revalidate: 10 },
     });
+
+    clearTimeout(timeoutId);
 
     if (!res.ok) {
       throw new Error(`Telegram HTTP error: ${res.status}`);
@@ -190,5 +209,7 @@ export async function GET() {
       },
       { status: 500 }
     );
+  } finally {
+    clearTimeout(timeoutId);
   }
 }

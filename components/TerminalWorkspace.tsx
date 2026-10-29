@@ -25,7 +25,7 @@ export type TerminalHaber = {
   timestamp?: number;
 };
 
-const CACHE_KEY_BIST = "bist_turkiye_live_news_v2";
+const CACHE_KEY_BIST = "bpt_bist_news";
 
 interface ApiNewsItemResponse {
   id: string;
@@ -50,7 +50,7 @@ export interface GlobalNewsItem {
   rawClean?: string;
 }
 
-const CACHE_KEY_GLOBAL = "global_tradfin_news_v1";
+const CACHE_KEY_GLOBAL = "bpt_global_news";
 const CACHE_KEY_TRANSLATIONS = "global_translations_cache_v1";
 
 // Ticker ve gereksiz karakterleri temizleyen yardımcı fonksiyon
@@ -64,22 +64,39 @@ export function cleanWireText(text: string): string {
     .trim();
 }
 
-// Türkiye Yerel Saat Dilimi Formatlayıcı (Europe/Istanbul UTC+3)
-export const formatTimeTR = (dateStr: string | number | Date): string => {
+// Akıllı Saat Parse & Formatlama (Çifte UTC+3 dönüşümünü ve gelecekteki saatleri engelleyen fonksiyon)
+export const parseNewsTime = (dateInput: string | number | Date | null | undefined): string => {
+  if (!dateInput) return "--:--:--";
   try {
-    const d = new Date(dateStr);
+    const rawStr = String(dateInput).trim();
+    const d =
+      typeof dateInput === "number" || dateInput instanceof Date
+        ? new Date(dateInput)
+        : new Date(rawStr);
     if (isNaN(d.getTime())) return "--:--:--";
-    return new Intl.DateTimeFormat("tr-TR", {
-      timeZone: "Europe/Istanbul",
+
+    // Eğer tarih string'inde "+0300" veya "GMT+3" zaten açıkça varsa doğrudan yerel formatla
+    // Eğer UTC/Z veya offsetsiz geldiyse ama saat yerel saate göre gelecekte görünüyorsa düzelt
+    const now = new Date();
+    const diffHours = (d.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    // Saat gelecekte görünüyorsa (sunucu saati +3 fazla eklenmişse) 3 saat geri çek
+    if (diffHours > 1) {
+      d.setHours(d.getHours() - 3);
+    }
+
+    return d.toLocaleTimeString("tr-TR", {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
       hour12: false,
-    }).format(d);
+    });
   } catch {
     return "--:--:--";
   }
 };
+
+export const formatTimeTR = parseNewsTime;
 
 export function formatNaturalCase(text: string): string {
   if (!text) return "";
@@ -594,10 +611,62 @@ function parseRssWithDomParser(
 }
 
 export default function TerminalWorkspace() {
-  const [bistHaberleri, setBistHaberleri] = useState<TerminalHaber[]>([]);
-  const [globalHaberler, setGlobalHaberler] = useState<GlobalNewsItem[]>([]);
-  const [loadingBist, setLoadingBist] = useState<boolean>(true);
-  const [loadingGlobal, setLoadingGlobal] = useState<boolean>(true);
+  const [bistHaberleri, setBistHaberleri] = useState<TerminalHaber[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const cached = localStorage.getItem(CACHE_KEY_BIST);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return [];
+  });
+
+  const [globalHaberler, setGlobalHaberler] = useState<GlobalNewsItem[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const cached = localStorage.getItem(CACHE_KEY_GLOBAL);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return [];
+  });
+
+  const [loadingBist, setLoadingBist] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      const cached = localStorage.getItem(CACHE_KEY_BIST);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return false;
+      }
+    } catch {
+      // ignore
+    }
+    return true;
+  });
+
+  const [loadingGlobal, setLoadingGlobal] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      const cached = localStorage.getItem(CACHE_KEY_GLOBAL);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return false;
+      }
+    } catch {
+      // ignore
+    }
+    return true;
+  });
+
   const [seciliHaber, setSeciliHaber] = useState<TerminalHaber | null>(null);
   const [newlyArrivedIds, setNewlyArrivedIds] = useState<Set<string>>(new Set());
 
@@ -808,7 +877,7 @@ export default function TerminalWorkspace() {
       // Tarayıcının dosyayı doğrudan indirmesini engellemek ve CORS kuralını aşmak için allorigins proxy kullanımı
       const fetchUrl = (rssUrl: string) => {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6500);
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
         return fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(rssUrl), {
           signal: controller.signal,
         })
@@ -1034,7 +1103,7 @@ export default function TerminalWorkspace() {
                     }`}
                   >
                     <div className="flex items-center gap-2 font-mono text-[10.5px]">
-                      <span className="row-time tabular-nums text-slate-500">{h.zaman}</span>
+                      <span className="row-time tabular-nums text-slate-500">{parseNewsTime(h.timestamp || h.zaman)}</span>
                       <span className="px-1.5 py-0.5 rounded bg-[#0a1120] border border-slate-700/60 text-slate-300 font-mono text-[9.5px] uppercase tracking-wide">
                         [{h.kaynak}]
                       </span>
@@ -1079,6 +1148,7 @@ export default function TerminalWorkspace() {
             ) : (
               globalHaberler.map((h) => {
                 const displayTitle = formatNaturalCase(h.baslik);
+                const displayTime = parseNewsTime(h.timestamp || h.zaman);
 
                 return (
                   <article
@@ -1086,7 +1156,7 @@ export default function TerminalWorkspace() {
                     className="pb-3 border-b border-white/[0.06] last:border-0 flex items-start gap-3 select-text transition-colors hover:bg-white/[0.02] px-1"
                   >
                     <span className="font-mono text-slate-500 text-xs shrink-0 select-none pt-0.5 tabular-nums">
-                      {h.zaman}
+                      {displayTime}
                     </span>
 
                     <p className="text-xs text-slate-200 leading-relaxed font-normal flex-1 break-words">
