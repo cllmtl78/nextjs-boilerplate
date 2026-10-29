@@ -11,15 +11,22 @@ export type ApiNewsItem = {
   paragraflar: string[];
   url: string;
   timestamp: number;
+  dateObj?: string | null;
 };
 
 interface FeedConfig {
   url: string;
   badge: string;
   filterEconomyOnly?: boolean;
+  fallbackUrls?: string[];
 }
 
 const ACTIVE_FEEDS: FeedConfig[] = [
+  {
+    url: "https://www.aa.com.tr/tr/rss/default?cat=ekonomi",
+    fallbackUrls: ["https://www.aa.com.tr/tr/rss/ekonomi"],
+    badge: "AA FİNANS",
+  },
   { url: "https://www.ekonomim.com/rss", badge: "EKONOMİM" },
   { url: "https://www.cnbce.com/rss", badge: "CNBC-E" },
   { url: "https://www.ekonomist.com.tr/rss", badge: "EKONOMİST" },
@@ -38,13 +45,21 @@ const ACTIVE_FEEDS: FeedConfig[] = [
   },
 ];
 
-const parseNewsDate = (pubDateStr: string | number | Date | null | undefined): { time: string; timestamp: number } => {
-  if (!pubDateStr) return { time: "--:--:--", timestamp: 0 };
+const parseNewsDate = (
+  pubDateStr: string | number | Date | null | undefined
+): { time: string; timestamp: number; dateObj: Date | null } => {
+  if (!pubDateStr) return { time: "--:--:--", timestamp: 0, dateObj: null };
   try {
-    const raw = String(pubDateStr).trim();
-    const d = typeof pubDateStr === "number" || pubDateStr instanceof Date ? new Date(pubDateStr) : new Date(raw);
+    const raw = typeof pubDateStr === "string" ? pubDateStr.trim() : pubDateStr;
+    const d = typeof raw === "number" || raw instanceof Date ? new Date(raw) : new Date(raw);
 
-    if (isNaN(d.getTime())) return { time: "--:--:--", timestamp: 0 };
+    if (isNaN(d.getTime())) return { time: "--:--:--", timestamp: 0, dateObj: null };
+
+    // Eğer parse edilen saat şu anki zamandan 15 dakikadan daha ilerideyse çift ekleme olmuştur:
+    const now = new Date();
+    if (d.getTime() > now.getTime() + 15 * 60 * 1000) {
+      d.setHours(d.getHours() - 3);
+    }
 
     const formattedTime = new Intl.DateTimeFormat("tr-TR", {
       timeZone: "Europe/Istanbul",
@@ -57,10 +72,23 @@ const parseNewsDate = (pubDateStr: string | number | Date | null | undefined): {
     return {
       time: formattedTime,
       timestamp: d.getTime(),
+      dateObj: d,
     };
   } catch {
-    return { time: "--:--:--", timestamp: 0 };
+    return { time: "--:--:--", timestamp: 0, dateObj: null };
   }
+};
+
+const isToday = (dateObj: Date | number | string | null | undefined): boolean => {
+  if (!dateObj) return false;
+  const d = dateObj instanceof Date ? dateObj : new Date(dateObj);
+  if (isNaN(d.getTime())) return false;
+  const today = new Date();
+  return (
+    d.getDate() === today.getDate() &&
+    d.getMonth() === today.getMonth() &&
+    d.getFullYear() === today.getFullYear()
+  );
 };
 
 function cleanHtmlText(str?: string | null): string {
@@ -150,7 +178,7 @@ function parseFeedXml(xml: string, feed: FeedConfig): ApiNewsItem[] {
     const url = cleanHtmlText(linkMatch);
 
     const pubDateMatch = chunk.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i)?.[1];
-    const { time, timestamp } = parseNewsDate(pubDateMatch);
+    const { time, timestamp, dateObj } = parseNewsDate(pubDateMatch);
     const zaman = time;
 
     const descMatch =
@@ -177,6 +205,7 @@ function parseFeedXml(xml: string, feed: FeedConfig): ApiNewsItem[] {
       paragraflar,
       url,
       timestamp,
+      dateObj: dateObj ? dateObj.toISOString() : null,
     });
   }
 
@@ -203,35 +232,43 @@ export async function GET() {
   }
 
   try {
-    // 8 kaynağı aynı anda paralel çek (Promise.allSettled) 8s timeout ile
+    // Tüm kaynakları (ve fallback URL'lerini) paralel çek
     const results = await Promise.allSettled(
       ACTIVE_FEEDS.map(async (feed) => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const urlsToTry = [feed.url, ...(feed.fallbackUrls || [])];
+        let xml = "";
 
-        try {
-          const res = await fetch(feed.url, {
-            headers: {
-              "User-Agent":
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-              Accept: "application/rss+xml, application/xml, text/xml, */*",
-            },
-            signal: controller.signal,
-            next: { revalidate: 15 },
-          });
+        for (const targetUrl of urlsToTry) {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-          clearTimeout(timeoutId);
+          try {
+            const res = await fetch(targetUrl, {
+              headers: {
+                "User-Agent":
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                Accept: "application/rss+xml, application/xml, text/xml, */*",
+              },
+              signal: controller.signal,
+              next: { revalidate: 15 },
+            });
 
-          if (!res.ok) {
-            return [];
+            clearTimeout(timeoutId);
+
+            if (res.ok) {
+              const text = await res.text();
+              if (text && text.includes("<item")) {
+                xml = text;
+                break;
+              }
+            }
+          } catch {
+            clearTimeout(timeoutId);
           }
-
-          const xml = await res.text();
-          return parseFeedXml(xml, feed);
-        } catch {
-          clearTimeout(timeoutId);
-          return [];
         }
+
+        if (!xml) return [];
+        return parseFeedXml(xml, feed);
       })
     );
 
@@ -243,14 +280,17 @@ export async function GET() {
     });
 
     if (allItems.length > 0) {
+      // 2. GÜNLÜK AKIŞI SIFIRLAMA: Sadece bugünün haberlerini filtrele
+      const todaysNews = allItems.filter((item) => isToday(item.dateObj || item.timestamp));
+
+      // Zaman damgasına göre en yeniden en eskiye sırala
+      todaysNews.sort((a, b) => b.timestamp - a.timestamp);
+
       // Başlık bazlı tekilleştirme (de-duplicate)
       const seen = new Set<string>();
       const deduplicated: ApiNewsItem[] = [];
 
-      // Zaman damgasına göre en yeniden en eskiye sırala
-      allItems.sort((a, b) => b.timestamp - a.timestamp);
-
-      for (const item of allItems) {
+      for (const item of todaysNews) {
         const normKey = item.baslik.toLowerCase().replace(/[^a-z0-9ğüşıöç]/g, "").slice(0, 40);
         if (!seen.has(normKey)) {
           seen.add(normKey);

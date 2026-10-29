@@ -24,6 +24,7 @@ export type TerminalHaber = {
   kapTuru?: "ÖDA" | "PGO" | "FR" | "GKK" | "SÖZ";
   resmiKurum?: "TCMB" | "SPK" | "BDDK" | "HMB" | "TÜİK" | "RESMİ GAZETE";
   timestamp?: number;
+  dateObj?: Date | null;
 };
 
 const CACHE_KEY_BIST = "bpt_bist_news";
@@ -40,6 +41,7 @@ interface ApiNewsItemResponse {
   detay?: string;
   url?: string;
   timestamp?: number;
+  dateObj?: string | null;
 }
 
 
@@ -66,19 +68,24 @@ export function cleanWireText(text: string): string {
     .trim();
 }
 
-// Standart UTC/GMT Kontrollü Türkiye Saati (Europe/Istanbul) Çeviricisi
-export const parseNewsDate = (pubDateStr: string | number | Date | null | undefined): { time: string; timestamp: number } => {
-  if (!pubDateStr) return { time: "--:--:--", timestamp: 0 };
+// Standart UTC/GMT ve Çift Timezone Kontrollü Türkiye Saati (Europe/Istanbul) Çeviricisi
+export const parseNewsDate = (
+  pubDateStr: string | number | Date | null | undefined
+): { time: string; timestamp: number; dateObj: Date | null } => {
+  if (!pubDateStr) return { time: "--:--:--", timestamp: 0, dateObj: null };
   try {
-    const raw = String(pubDateStr).trim();
-    const d = typeof pubDateStr === "number" || pubDateStr instanceof Date ? new Date(pubDateStr) : new Date(raw);
+    const raw = typeof pubDateStr === "string" ? pubDateStr.trim() : pubDateStr;
+    const d = typeof raw === "number" || raw instanceof Date ? new Date(raw) : new Date(raw);
 
     // Eğer tarih parse edilemediyse
-    if (isNaN(d.getTime())) return { time: "--:--:--", timestamp: 0 };
+    if (isNaN(d.getTime())) return { time: "--:--:--", timestamp: 0, dateObj: null };
 
-    // Eğer RSS saati saf UTC/GMT ise veya timezone belirtilmemişse (+0000, GMT, Z)
-    // Türkiye saati UTC+3 olduğu için doğru yerel zamanı hesapla
-    // Intl.DateTimeFormat 'Europe/Istanbul' timezone'u ile d'yi çevir:
+    // Eğer parse edilen saat şu anki zamandan 15 dakikadan daha ilerideyse çift ekleme olmuştur:
+    const now = new Date();
+    if (d.getTime() > now.getTime() + 15 * 60 * 1000) {
+      d.setHours(d.getHours() - 3);
+    }
+
     const formattedTime = new Intl.DateTimeFormat("tr-TR", {
       timeZone: "Europe/Istanbul",
       hour: "2-digit",
@@ -90,15 +97,18 @@ export const parseNewsDate = (pubDateStr: string | number | Date | null | undefi
     return {
       time: formattedTime,
       timestamp: d.getTime(),
+      dateObj: d,
     };
   } catch {
-    return { time: "--:--:--", timestamp: 0 };
+    return { time: "--:--:--", timestamp: 0, dateObj: null };
   }
 };
 
-export const normalizeNewsDate = (pubDateStr: string | number | Date | null | undefined): { timestamp: number; zaman: string; time: string } => {
+export const normalizeNewsDate = (
+  pubDateStr: string | number | Date | null | undefined
+): { timestamp: number; zaman: string; time: string; dateObj: Date | null } => {
   const res = parseNewsDate(pubDateStr);
-  return { timestamp: res.timestamp, zaman: res.time, time: res.time };
+  return { timestamp: res.timestamp, zaman: res.time, time: res.time, dateObj: res.dateObj };
 };
 
 export const parseNewsTime = (dateInput: string | number | Date | null | undefined): string => {
@@ -106,6 +116,19 @@ export const parseNewsTime = (dateInput: string | number | Date | null | undefin
 };
 
 export const formatTimeTR = parseNewsTime;
+
+// 2. GÜNLÜK AKIŞI SIFIRLAMA (23:59 Sonrası Yeni Gün Temizliği):
+export const isToday = (dateObj: Date | number | string | null | undefined): boolean => {
+  if (!dateObj) return false;
+  const d = dateObj instanceof Date ? dateObj : new Date(dateObj);
+  if (isNaN(d.getTime())) return false;
+  const today = new Date();
+  return (
+    d.getDate() === today.getDate() &&
+    d.getMonth() === today.getMonth() &&
+    d.getFullYear() === today.getFullYear()
+  );
+};
 
 export function formatNaturalCase(text: string): string {
   if (!text) return "";
@@ -351,8 +374,20 @@ const RESMI_HABERLER: TerminalHaber[] = [
   },
 ];
 
-// Aktif Doğrudan 8 RSS Kaynak Konfigürasyonu
-const ACTIVE_RSS_SOURCES: { url: string; badge: string; filterEconomyOnly?: boolean }[] = [
+export interface RssFeedConfig {
+  url: string;
+  badge: string;
+  filterEconomyOnly?: boolean;
+  fallbackUrls?: string[];
+}
+
+// Aktif Doğrudan RSS Kaynak Konfigürasyonu
+const ACTIVE_RSS_SOURCES: RssFeedConfig[] = [
+  {
+    url: "https://www.aa.com.tr/tr/rss/default?cat=ekonomi",
+    fallbackUrls: ["https://www.aa.com.tr/tr/rss/ekonomi"],
+    badge: "AA FİNANS",
+  },
   { url: "https://www.ekonomim.com/rss", badge: "EKONOMİM" },
   { url: "https://www.cnbce.com/rss", badge: "CNBC-E" },
   { url: "https://www.ekonomist.com.tr/rss", badge: "EKONOMİST" },
@@ -422,7 +457,7 @@ function extractTwoParagraphs(desc: string, title: string, badge: string): strin
 // DOMParser ile RSS XML ayrıştırma
 function parseRssWithDomParser(
   xmlText: string,
-  feed: { url: string; badge: string; filterEconomyOnly?: boolean }
+  feed: RssFeedConfig
 ): TerminalHaber[] {
   if (!xmlText || typeof xmlText !== "string") return [];
   const items: TerminalHaber[] = [];
@@ -470,7 +505,7 @@ function parseRssWithDomParser(
       const rawLink = cleanHtmlStr(linkEl?.textContent || guidEl?.textContent || "#");
 
       const pubDateEl = node.getElementsByTagName("pubDate")[0];
-      const { time, timestamp } = parseNewsDate(pubDateEl?.textContent);
+      const { time, timestamp, dateObj } = parseNewsDate(pubDateEl?.textContent);
 
       const descEl = node.getElementsByTagName("description")[0];
       const cleanDesc = cleanHtmlStr(descEl?.textContent);
@@ -491,6 +526,7 @@ function parseRssWithDomParser(
         url: rawLink,
         kategori: "bist",
         timestamp,
+        dateObj,
       });
     }
   } catch {
@@ -527,7 +563,7 @@ function parseRssWithDomParser(
       const rawLink = cleanHtmlStr(linkMatch);
 
       const pubDateMatch = chunk.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i)?.[1];
-      const { time, timestamp } = parseNewsDate(pubDateMatch);
+      const { time, timestamp, dateObj } = parseNewsDate(pubDateMatch);
 
       const descMatch =
         chunk.match(/<description[^>]*>([\s\S]*?)<\/description>/i)?.[1] ||
@@ -549,6 +585,7 @@ function parseRssWithDomParser(
         url: rawLink,
         kategori: "bist",
         timestamp,
+        dateObj,
       });
     });
   }
@@ -563,7 +600,19 @@ export default function TerminalWorkspace() {
       const cached = localStorage.getItem(CACHE_KEY_BIST);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Eğer hafızadaki kayıtlı son haberin tarihi dünden kalmaysa localStorage önbelleğini otomatik temizle
+          const latestItem = parsed[0];
+          const latestTime = latestItem?.timestamp || (latestItem?.dateObj ? new Date(latestItem.dateObj).getTime() : 0);
+          if (latestTime && !isToday(latestTime)) {
+            localStorage.removeItem(CACHE_KEY_BIST);
+            return [];
+          }
+          const filtered = parsed.filter((it: TerminalHaber) => isToday(it.dateObj || it.timestamp));
+          if (filtered.length > 0) return filtered;
+          localStorage.removeItem(CACHE_KEY_BIST);
+          return [];
+        }
       }
     } catch {
       // ignore
@@ -591,7 +640,13 @@ export default function TerminalWorkspace() {
       const cached = localStorage.getItem(CACHE_KEY_BIST);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return false;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const latestItem = parsed[0];
+          const latestTime = latestItem?.timestamp || (latestItem?.dateObj ? new Date(latestItem.dateObj).getTime() : 0);
+          if (latestTime && isToday(latestTime)) {
+            return false;
+          }
+        }
       }
     } catch {
       // ignore
@@ -855,11 +910,23 @@ export default function TerminalWorkspace() {
       const kaynakIsimleri: string[] = [];
       const allNews: TerminalHaber[] = [];
 
-      // Şu 8 kaynağın tamamını Promise.allSettled ile çek
+      // Tüm kaynakları Promise.allSettled ile çek
       const results = await Promise.allSettled(
         ACTIVE_RSS_SOURCES.map(async (feed) => {
           try {
-            const xml = await fetchRSS(feed.url);
+            let xml = await fetchRSS(feed.url);
+
+            // AA Finans ve diğer kaynaklar için: eğer yanıtta <item> bulunamazsa alternatif/fallback URL'e istek at
+            if ((!xml || !xml.includes("<item")) && feed.fallbackUrls && feed.fallbackUrls.length > 0) {
+              for (const fallbackUrl of feed.fallbackUrls) {
+                const altXml = await fetchRSS(fallbackUrl);
+                if (altXml && altXml.includes("<item")) {
+                  xml = altXml;
+                  break;
+                }
+              }
+            }
+
             if (xml) {
               const parsed = parseRssWithDomParser(xml, feed);
               if (parsed && parsed.length > 0) {
@@ -891,7 +958,8 @@ export default function TerminalWorkspace() {
             const data = await res.json();
             if (data.items && Array.isArray(data.items) && data.items.length > 0) {
               data.items.forEach((it: ApiNewsItemResponse) => {
-                const itemTime = it.time || it.zaman || parseNewsDate(it.timestamp).time;
+                const parsedDate = parseNewsDate(it.timestamp || it.dateObj);
+                const itemTime = it.time || it.zaman || parsedDate.time;
                 allNews.push({
                   id: it.id,
                   zaman: itemTime,
@@ -905,6 +973,7 @@ export default function TerminalWorkspace() {
                   url: it.url || "#",
                   kategori: "bist" as const,
                   timestamp: it.timestamp,
+                  dateObj: parsedDate.dateObj,
                 });
               });
             }
@@ -915,14 +984,18 @@ export default function TerminalWorkspace() {
       }
 
       if (allNews.length > 0) {
-        // Tüm haberleri tek bir potada topladıktan sonra b.timestamp - a.timestamp şeklinde en güncelden eskiye doğru tek bir liste halinde diz
-        allNews.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        // 2. GÜNLÜK AKIŞI SIFIRLAMA (23:59 Sonrası Yeni Gün Temizliği):
+        // Haber birikmesini engelle: Sadece bugünün haberleri listelensin
+        const todaysNews = allNews.filter((item) => isToday(item.dateObj || item.timestamp));
+
+        // En güncelden eskiye doğru sırala
+        todaysNews.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
         // Mükerrer haberleri filtrele
         const seenTitles = new Set<string>();
         const deduplicated: TerminalHaber[] = [];
 
-        for (const item of allNews) {
+        for (const item of todaysNews) {
           const normKey = item.baslik.toLowerCase().replace(/[^a-z0-9ğüşıöç]/g, "").slice(0, 40);
           if (!seenTitles.has(normKey)) {
             seenTitles.add(normKey);
@@ -962,9 +1035,13 @@ export default function TerminalWorkspace() {
         isInitialLoadRef.current = false;
         setBistHaberleri(deduplicated);
 
-        // Başarılı akışı anında yerel hafızaya (localStorage) kaydet
+        // Başarılı akışı anında yerel hafızaya (localStorage) kaydet, liste boşsa temizle
         try {
-          localStorage.setItem(CACHE_KEY_BIST, JSON.stringify(deduplicated));
+          if (deduplicated.length > 0) {
+            localStorage.setItem(CACHE_KEY_BIST, JSON.stringify(deduplicated));
+          } else {
+            localStorage.removeItem(CACHE_KEY_BIST);
+          }
         } catch {
           // LocalStorage hatası yoksayılır
         }
