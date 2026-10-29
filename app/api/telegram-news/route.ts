@@ -22,35 +22,59 @@ function cleanHtml(html: string): string {
     .trim();
 }
 
-const parseNewsTime = (dateInput: string | number | Date | null | undefined): string => {
-  if (!dateInput) return "--:--:--";
+function normalizeNewsDate(dateInput: string | number | Date | null | undefined): {
+  timestamp: number;
+  zaman: string;
+} {
+  const now = Date.now();
+  if (!dateInput) {
+    const d = new Date(now);
+    return {
+      timestamp: now,
+      zaman: d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
+    };
+  }
+
   try {
-    const rawStr = String(dateInput).trim();
+    const rawStr = typeof dateInput === "string" ? dateInput.trim() : "";
     const d =
       typeof dateInput === "number" || dateInput instanceof Date
         ? new Date(dateInput)
         : new Date(rawStr);
-    if (isNaN(d.getTime())) return "--:--:--";
 
-    const now = new Date();
-    const diffHours = (d.getTime() - now.getTime()) / (1000 * 60 * 60);
+    if (isNaN(d.getTime())) {
+      const fallback = new Date(now);
+      return {
+        timestamp: now,
+        zaman: fallback.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
+      };
+    }
 
+    const diffHours = (d.getTime() - now) / (1000 * 60 * 60);
     if (diffHours > 1) {
       d.setHours(d.getHours() - 3);
     }
 
-    return d.toLocaleTimeString("tr-TR", {
+    const normTimestamp = d.getTime();
+    const zaman = d.toLocaleTimeString("tr-TR", {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
       hour12: false,
     });
-  } catch {
-    return "--:--:--";
-  }
-};
 
-const formatTimeTR = parseNewsTime;
+    return {
+      timestamp: normTimestamp,
+      zaman,
+    };
+  } catch {
+    const fallback = new Date(now);
+    return {
+      timestamp: now,
+      zaman: fallback.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
+    };
+  }
+}
 
 function formatNaturalCase(text: string): string {
   if (!text) return "";
@@ -121,7 +145,7 @@ function formatHeadline(text: string): string {
 export async function GET() {
   const telegramUrl = "https://t.me/s/trad_fin";
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 4000);
+  const timeoutId = setTimeout(() => controller.abort(), 2500);
 
   try {
     const res = await fetch(telegramUrl, {
@@ -163,22 +187,7 @@ export async function GET() {
         if (!rawContent || rawContent.length < 3) continue;
 
         const formatted = formatHeadline(rawContent);
-
-        let timestamp = Date.now();
-        let zamanStr = "";
-
-        if (timeMatch && timeMatch[1]) {
-          const dateStr = timeMatch[1];
-          const dateObj = new Date(dateStr);
-          if (!isNaN(dateObj.getTime())) {
-            timestamp = dateObj.getTime();
-            zamanStr = formatTimeTR(dateStr);
-          }
-        }
-
-        if (!zamanStr || zamanStr === "--:--:--") {
-          zamanStr = formatTimeTR(timestamp);
-        }
+        const { timestamp, zaman: zamanStr } = normalizeNewsDate(timeMatch ? timeMatch[1] : null);
 
         const postId = postMatch ? postMatch[1] : `trad_fin_${timestamp}_${i}`;
 

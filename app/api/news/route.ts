@@ -38,35 +38,59 @@ const ACTIVE_FEEDS: FeedConfig[] = [
   },
 ];
 
-const parseNewsTime = (dateInput: string | number | Date | null | undefined): string => {
-  if (!dateInput) return "--:--:--";
+function normalizeNewsDate(dateInput: string | number | Date | null | undefined): {
+  timestamp: number;
+  zaman: string;
+} {
+  const now = Date.now();
+  if (!dateInput) {
+    const d = new Date(now);
+    return {
+      timestamp: now,
+      zaman: d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
+    };
+  }
+
   try {
-    const rawStr = String(dateInput).trim();
+    const rawStr = typeof dateInput === "string" ? dateInput.trim() : "";
     const d =
       typeof dateInput === "number" || dateInput instanceof Date
         ? new Date(dateInput)
         : new Date(rawStr);
-    if (isNaN(d.getTime())) return "--:--:--";
 
-    const now = new Date();
-    const diffHours = (d.getTime() - now.getTime()) / (1000 * 60 * 60);
+    if (isNaN(d.getTime())) {
+      const fallback = new Date(now);
+      return {
+        timestamp: now,
+        zaman: fallback.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
+      };
+    }
 
+    const diffHours = (d.getTime() - now) / (1000 * 60 * 60);
     if (diffHours > 1) {
       d.setHours(d.getHours() - 3);
     }
 
-    return d.toLocaleTimeString("tr-TR", {
+    const normTimestamp = d.getTime();
+    const zaman = d.toLocaleTimeString("tr-TR", {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
       hour12: false,
     });
-  } catch {
-    return "--:--:--";
-  }
-};
 
-const formatTimeTR = parseNewsTime;
+    return {
+      timestamp: normTimestamp,
+      zaman,
+    };
+  } catch {
+    const fallback = new Date(now);
+    return {
+      timestamp: now,
+      zaman: fallback.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
+    };
+  }
+}
 
 function cleanHtmlText(str?: string | null): string {
   if (!str) return "";
@@ -155,20 +179,7 @@ function parseFeedXml(xml: string, feed: FeedConfig): ApiNewsItem[] {
     const url = cleanHtmlText(linkMatch);
 
     const pubDateMatch = chunk.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i)?.[1];
-    let timestamp = Date.now();
-    let zaman = "";
-    if (pubDateMatch) {
-      const dateStr = pubDateMatch.trim();
-      const parsedDate = new Date(dateStr);
-      if (!isNaN(parsedDate.getTime())) {
-        timestamp = parsedDate.getTime();
-        zaman = formatTimeTR(dateStr);
-      }
-    }
-
-    if (!zaman || zaman === "--:--:--") {
-      zaman = formatTimeTR(timestamp);
-    }
+    const { timestamp, zaman } = normalizeNewsDate(pubDateMatch);
 
     const descMatch =
       chunk.match(/<description[^>]*>([\s\S]*?)<\/description>/i)?.[1] ||
@@ -219,11 +230,11 @@ export async function GET() {
   }
 
   try {
-    // 8 kaynağı aynı anda paralel çek (Promise.allSettled)
+    // 8 kaynağı aynı anda paralel çek (Promise.allSettled) 2.5s agresif timeout ile
     const results = await Promise.allSettled(
       ACTIVE_FEEDS.map(async (feed) => {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const timeoutId = setTimeout(() => controller.abort(), 2500);
 
         try {
           const res = await fetch(feed.url, {
