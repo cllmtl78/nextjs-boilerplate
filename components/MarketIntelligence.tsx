@@ -480,7 +480,7 @@ export default function MarketIntelligence() {
 
         {/* Sekme 1: SEKTÖR AKIŞI (Çift Yönlü 0-Merkezli Bar Grafiği) */}
         {activeTab === "sectors" ? (
-          <div className="overflow-y-auto flex-1 p-3 space-y-2 pane-scroll">
+          <div className="flex flex-col justify-between h-full flex-1 px-3 py-1">
             {sectors.map((s) => {
               const isPositive = s.change >= 0;
               const widthPct = Math.min(
@@ -544,9 +544,9 @@ export default function MarketIntelligence() {
           </div>
         ) : (
           /* Sekme 2, 3, 4: Artanlar / Düşenler / Hacim (İlk 10 Hisse) */
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col h-full overflow-hidden">
             {/* Tablo Başlıkları */}
-            <div className="grid grid-cols-12 px-3.5 py-2 text-[10.5px] font-mono text-slate-500 border-b border-white/[0.04] bg-slate-900/30">
+            <div className="grid grid-cols-12 px-3.5 py-1.5 text-[10.5px] font-mono text-slate-500 border-b border-white/[0.04] bg-slate-900/30 shrink-0">
               <span className="col-span-3">SEMBOL</span>
               <span className="col-span-3 text-right">SON (TL)</span>
               <span className="col-span-3 text-right">HACİM</span>
@@ -554,7 +554,7 @@ export default function MarketIntelligence() {
             </div>
 
             {/* Hisse Satırları (Maksimum 10) */}
-            <div className="overflow-y-auto flex-1 divide-y divide-white/[0.03] pane-scroll">
+            <div className="flex flex-col justify-between h-full flex-1 py-1 divide-y divide-white/[0.03]">
               {currentStocks.map((stock) => {
                 const isPositive = stock.changePercent >= 0;
                 const isTicking = tickingSymbol === stock.symbol;
@@ -562,7 +562,7 @@ export default function MarketIntelligence() {
                 return (
                   <div
                     key={stock.symbol}
-                    className={`grid grid-cols-12 px-3.5 py-2 text-xs font-mono items-center hover:bg-[#111a2e]/60 transition-colors ${
+                    className={`grid grid-cols-12 px-3.5 py-1 text-xs font-mono items-center hover:bg-[#111a2e]/60 transition-colors ${
                       isTicking ? (isPositive ? "bg-emerald-950/20" : "bg-rose-950/20") : ""
                     }`}
                   >
@@ -622,7 +622,7 @@ export default function MarketIntelligence() {
         </div>
 
         {/* Canlı Takvim Satırları (Ferah Boşluk ve Net Sağ/Sol Hiyerarşi) */}
-        <div className="overflow-y-auto flex-1 divide-y divide-white/[0.04] pane-scroll">
+        <div className="overflow-y-auto flex-1 pane-scroll">
           {calendarEvents.map((item) => {
             const trTitle = translateIndicatorTitle(item.title);
             const hasActual = item.actual !== null && item.actual !== undefined;
@@ -630,7 +630,7 @@ export default function MarketIntelligence() {
             return (
               <div
                 key={item.id}
-                className="py-2.5 px-3 border-b border-white/[0.04] flex items-center justify-between gap-3 hover:bg-[#111a2e]/60 transition-colors"
+                className="py-3 px-3.5 border-b border-white/[0.06] last:border-b-0 flex items-center justify-between gap-4 hover:bg-[#111a2e]/60 transition-colors"
               >
                 {/* Sol Taraf: Saat, Bayrak, Başlık ve Beklenti Detayı */}
                 <div className="flex-1 min-w-0">
@@ -645,7 +645,7 @@ export default function MarketIntelligence() {
                   </div>
 
                   {/* Alt Detay: Beklenti vs Önceki */}
-                  <div className="text-[11px] font-mono text-slate-400 mt-1 pl-6 flex items-center gap-2">
+                  <div className="text-[11px] font-mono text-slate-400 mt-0.5 pl-6 flex items-center gap-2">
                     <span>
                       Bekl:{" "}
                       <span className="text-slate-200 font-medium tabular-nums">
