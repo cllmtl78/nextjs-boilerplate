@@ -43,12 +43,13 @@ function normalizeNewsDate(dateInput: string | number | Date | null | undefined)
     }
 
     const timestamp = d.getTime();
-    const zaman = d.toLocaleTimeString("tr-TR", {
+    const zaman = new Intl.DateTimeFormat("tr-TR", {
+      timeZone: "Europe/Istanbul",
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
       hour12: false,
-    });
+    }).format(d);
 
     return {
       timestamp,

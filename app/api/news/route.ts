@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 export type ApiNewsItem = {
   id: string;
   zaman: string; // HH:mm:ss
+  time?: string;
   tarih: string;
   kaynak: string;
   baslik: string;
@@ -37,45 +38,30 @@ const ACTIVE_FEEDS: FeedConfig[] = [
   },
 ];
 
-function normalizeNewsDate(dateInput: string | number | Date | null | undefined): {
-  timestamp: number;
-  zaman: string;
-} {
-  if (!dateInput) {
-    return {
-      timestamp: 0,
-      zaman: "--:--:--",
-    };
-  }
-
+const parseNewsDate = (pubDateStr: string | number | Date | null | undefined): { time: string; timestamp: number } => {
+  if (!pubDateStr) return { time: "--:--:--", timestamp: 0 };
   try {
-    const d = new Date(dateInput);
-    if (isNaN(d.getTime())) {
-      return {
-        timestamp: 0,
-        zaman: "--:--:--",
-      };
-    }
+    const raw = String(pubDateStr).trim();
+    const d = typeof pubDateStr === "number" || pubDateStr instanceof Date ? new Date(pubDateStr) : new Date(raw);
 
-    const timestamp = d.getTime();
-    const zaman = d.toLocaleTimeString("tr-TR", {
+    if (isNaN(d.getTime())) return { time: "--:--:--", timestamp: 0 };
+
+    const formattedTime = new Intl.DateTimeFormat("tr-TR", {
+      timeZone: "Europe/Istanbul",
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
       hour12: false,
-    });
+    }).format(d);
 
     return {
-      timestamp,
-      zaman,
+      time: formattedTime,
+      timestamp: d.getTime(),
     };
   } catch {
-    return {
-      timestamp: 0,
-      zaman: "--:--:--",
-    };
+    return { time: "--:--:--", timestamp: 0 };
   }
-}
+};
 
 function cleanHtmlText(str?: string | null): string {
   if (!str) return "";
@@ -164,7 +150,8 @@ function parseFeedXml(xml: string, feed: FeedConfig): ApiNewsItem[] {
     const url = cleanHtmlText(linkMatch);
 
     const pubDateMatch = chunk.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i)?.[1];
-    const { timestamp, zaman } = normalizeNewsDate(pubDateMatch);
+    const { time, timestamp } = parseNewsDate(pubDateMatch);
+    const zaman = time;
 
     const descMatch =
       chunk.match(/<description[^>]*>([\s\S]*?)<\/description>/i)?.[1] ||
@@ -182,6 +169,7 @@ function parseFeedXml(xml: string, feed: FeedConfig): ApiNewsItem[] {
     items.push({
       id,
       zaman,
+      time,
       tarih: "Bugün",
       kaynak: feed.badge,
       baslik,

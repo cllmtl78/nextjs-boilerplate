@@ -11,6 +11,7 @@ import MarketIntelligence from "@/components/MarketIntelligence";
 export type TerminalHaber = {
   id: string;
   zaman: string;
+  time?: string;
   tarih: string;
   kaynak: string;
   baslik: string;
@@ -30,6 +31,7 @@ const CACHE_KEY_BIST = "bpt_bist_news";
 interface ApiNewsItemResponse {
   id: string;
   zaman: string;
+  time?: string;
   tarih?: string;
   kaynak: string;
   baslik: string;
@@ -64,63 +66,43 @@ export function cleanWireText(text: string): string {
     .trim();
 }
 
-// Doğrudan yerel saat ve sayısal epoch damgası üreten tarih fonksiyonu (saat ekleme/çıkarma yok)
-export function normalizeNewsDate(dateInput: string | number | Date | null | undefined): {
-  timestamp: number;
-  zaman: string;
-} {
-  if (!dateInput) {
-    return {
-      timestamp: 0,
-      zaman: "--:--:--",
-    };
-  }
-
+// Standart UTC/GMT Kontrollü Türkiye Saati (Europe/Istanbul) Çeviricisi
+export const parseNewsDate = (pubDateStr: string | number | Date | null | undefined): { time: string; timestamp: number } => {
+  if (!pubDateStr) return { time: "--:--:--", timestamp: 0 };
   try {
-    const d = new Date(dateInput);
-    if (isNaN(d.getTime())) {
-      return {
-        timestamp: 0,
-        zaman: "--:--:--",
-      };
-    }
+    const raw = String(pubDateStr).trim();
+    const d = typeof pubDateStr === "number" || pubDateStr instanceof Date ? new Date(pubDateStr) : new Date(raw);
 
-    const timestamp = d.getTime();
-    const zaman = d.toLocaleTimeString("tr-TR", {
+    // Eğer tarih parse edilemediyse
+    if (isNaN(d.getTime())) return { time: "--:--:--", timestamp: 0 };
+
+    // Eğer RSS saati saf UTC/GMT ise veya timezone belirtilmemişse (+0000, GMT, Z)
+    // Türkiye saati UTC+3 olduğu için doğru yerel zamanı hesapla
+    // Intl.DateTimeFormat 'Europe/Istanbul' timezone'u ile d'yi çevir:
+    const formattedTime = new Intl.DateTimeFormat("tr-TR", {
+      timeZone: "Europe/Istanbul",
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
       hour12: false,
-    });
+    }).format(d);
 
     return {
-      timestamp,
-      zaman,
+      time: formattedTime,
+      timestamp: d.getTime(),
     };
   } catch {
-    return {
-      timestamp: 0,
-      zaman: "--:--:--",
-    };
+    return { time: "--:--:--", timestamp: 0 };
   }
-}
+};
+
+export const normalizeNewsDate = (pubDateStr: string | number | Date | null | undefined): { timestamp: number; zaman: string; time: string } => {
+  const res = parseNewsDate(pubDateStr);
+  return { timestamp: res.timestamp, zaman: res.time, time: res.time };
+};
 
 export const parseNewsTime = (dateInput: string | number | Date | null | undefined): string => {
-  if (!dateInput) return "--:--:--";
-  try {
-    const d = new Date(dateInput);
-    if (isNaN(d.getTime())) return "--:--:--";
-
-    // HİÇBİR SAAT EKLEME/ÇIKARMA YAPMADAN DOĞRUDAN YEREL SAATİ AL:
-    return d.toLocaleTimeString("tr-TR", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    });
-  } catch {
-    return "--:--:--";
-  }
+  return parseNewsDate(dateInput).time;
 };
 
 export const formatTimeTR = parseNewsTime;
@@ -488,7 +470,7 @@ function parseRssWithDomParser(
       const rawLink = cleanHtmlStr(linkEl?.textContent || guidEl?.textContent || "#");
 
       const pubDateEl = node.getElementsByTagName("pubDate")[0];
-      const { timestamp, zaman } = normalizeNewsDate(pubDateEl?.textContent);
+      const { time, timestamp } = parseNewsDate(pubDateEl?.textContent);
 
       const descEl = node.getElementsByTagName("description")[0];
       const cleanDesc = cleanHtmlStr(descEl?.textContent);
@@ -498,7 +480,8 @@ function parseRssWithDomParser(
 
       items.push({
         id,
-        zaman,
+        zaman: time,
+        time,
         tarih: "Bugün",
         kaynak: feed.badge,
         baslik: rawTitle,
@@ -544,7 +527,7 @@ function parseRssWithDomParser(
       const rawLink = cleanHtmlStr(linkMatch);
 
       const pubDateMatch = chunk.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i)?.[1];
-      const { timestamp, zaman } = normalizeNewsDate(pubDateMatch);
+      const { time, timestamp } = parseNewsDate(pubDateMatch);
 
       const descMatch =
         chunk.match(/<description[^>]*>([\s\S]*?)<\/description>/i)?.[1] ||
@@ -555,7 +538,8 @@ function parseRssWithDomParser(
 
       items.push({
         id: `rss_fb_${feed.badge.toLowerCase().replace(/[^a-z]/g, "")}_${timestamp}_${i}`,
-        zaman,
+        zaman: time,
+        time,
         tarih: "Bugün",
         kaynak: feed.badge,
         baslik: rawTitle,
@@ -907,9 +891,11 @@ export default function TerminalWorkspace() {
             const data = await res.json();
             if (data.items && Array.isArray(data.items) && data.items.length > 0) {
               data.items.forEach((it: ApiNewsItemResponse) => {
+                const itemTime = it.time || it.zaman || parseNewsDate(it.timestamp).time;
                 allNews.push({
                   id: it.id,
-                  zaman: it.zaman || formatTimeTR(it.timestamp || Date.now()),
+                  zaman: itemTime,
+                  time: itemTime,
                   tarih: it.tarih || "Bugün",
                   kaynak: it.kaynak,
                   baslik: it.baslik,
@@ -1092,7 +1078,7 @@ export default function TerminalWorkspace() {
                     }`}
                   >
                     <div className="flex items-center gap-2 font-mono text-[10.5px]">
-                      <span className="row-time tabular-nums text-slate-500">{h.zaman || parseNewsTime(h.timestamp)}</span>
+                      <span className="row-time tabular-nums text-slate-500">{h.time || h.zaman}</span>
                       <span className="px-1.5 py-0.5 rounded bg-[#0a1120] border border-slate-700/60 text-slate-300 font-mono text-[9.5px] uppercase tracking-wide">
                         [{h.kaynak}]
                       </span>
