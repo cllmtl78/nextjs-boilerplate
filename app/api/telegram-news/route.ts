@@ -26,36 +26,23 @@ function normalizeNewsDate(dateInput: string | number | Date | null | undefined)
   timestamp: number;
   zaman: string;
 } {
-  const now = Date.now();
   if (!dateInput) {
-    const d = new Date(now);
     return {
-      timestamp: now,
-      zaman: d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
+      timestamp: 0,
+      zaman: "--:--:--",
     };
   }
 
   try {
-    const rawStr = typeof dateInput === "string" ? dateInput.trim() : "";
-    const d =
-      typeof dateInput === "number" || dateInput instanceof Date
-        ? new Date(dateInput)
-        : new Date(rawStr);
-
+    const d = new Date(dateInput);
     if (isNaN(d.getTime())) {
-      const fallback = new Date(now);
       return {
-        timestamp: now,
-        zaman: fallback.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
+        timestamp: 0,
+        zaman: "--:--:--",
       };
     }
 
-    const diffHours = (d.getTime() - now) / (1000 * 60 * 60);
-    if (diffHours > 1) {
-      d.setHours(d.getHours() - 3);
-    }
-
-    const normTimestamp = d.getTime();
+    const timestamp = d.getTime();
     const zaman = d.toLocaleTimeString("tr-TR", {
       hour: "2-digit",
       minute: "2-digit",
@@ -64,14 +51,13 @@ function normalizeNewsDate(dateInput: string | number | Date | null | undefined)
     });
 
     return {
-      timestamp: normTimestamp,
+      timestamp,
       zaman,
     };
   } catch {
-    const fallback = new Date(now);
     return {
-      timestamp: now,
-      zaman: fallback.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
+      timestamp: 0,
+      zaman: "--:--:--",
     };
   }
 }

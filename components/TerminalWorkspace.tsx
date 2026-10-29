@@ -64,43 +64,28 @@ export function cleanWireText(text: string): string {
     .trim();
 }
 
-// Akıllı Tarih & Saat Normalizasyonu: Hem sayısal timestamp hem de senkron zaman metni üretir.
+// Doğrudan yerel saat ve sayısal epoch damgası üreten tarih fonksiyonu (saat ekleme/çıkarma yok)
 export function normalizeNewsDate(dateInput: string | number | Date | null | undefined): {
   timestamp: number;
   zaman: string;
 } {
-  const now = Date.now();
   if (!dateInput) {
-    const d = new Date(now);
     return {
-      timestamp: now,
-      zaman: d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
+      timestamp: 0,
+      zaman: "--:--:--",
     };
   }
 
   try {
-    const rawStr = typeof dateInput === "string" ? dateInput.trim() : "";
-    const d =
-      typeof dateInput === "number" || dateInput instanceof Date
-        ? new Date(dateInput)
-        : new Date(rawStr);
-
+    const d = new Date(dateInput);
     if (isNaN(d.getTime())) {
-      const fallback = new Date(now);
       return {
-        timestamp: now,
-        zaman: fallback.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
+        timestamp: 0,
+        zaman: "--:--:--",
       };
     }
 
-    // Gelecekteki saatleri kontrol et:
-    // Eğer saat yerel zamana göre 1 saatten daha ilerideyse 3 saat geri çek
-    const diffHours = (d.getTime() - now) / (1000 * 60 * 60);
-    if (diffHours > 1) {
-      d.setHours(d.getHours() - 3);
-    }
-
-    const normTimestamp = d.getTime();
+    const timestamp = d.getTime();
     const zaman = d.toLocaleTimeString("tr-TR", {
       hour: "2-digit",
       minute: "2-digit",
@@ -109,20 +94,33 @@ export function normalizeNewsDate(dateInput: string | number | Date | null | und
     });
 
     return {
-      timestamp: normTimestamp,
+      timestamp,
       zaman,
     };
   } catch {
-    const fallback = new Date(now);
     return {
-      timestamp: now,
-      zaman: fallback.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
+      timestamp: 0,
+      zaman: "--:--:--",
     };
   }
 }
 
 export const parseNewsTime = (dateInput: string | number | Date | null | undefined): string => {
-  return normalizeNewsDate(dateInput).zaman;
+  if (!dateInput) return "--:--:--";
+  try {
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return "--:--:--";
+
+    // HİÇBİR SAAT EKLEME/ÇIKARMA YAPMADAN DOĞRUDAN YEREL SAATİ AL:
+    return d.toLocaleTimeString("tr-TR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+  } catch {
+    return "--:--:--";
+  }
 };
 
 export const formatTimeTR = parseNewsTime;
@@ -641,8 +639,8 @@ export default function TerminalWorkspace() {
 
 
 
-  // MyMemory API ile İngilizce -> Türkçe çeviri motoru (TEK VE KESİN ÇEVİRİ MOTORU)
-  const translateWithMyMemory = useCallback(async (rawText: string): Promise<string> => {
+  // Google Gemini Flash API ile Finansal Çeviri Motoru (TEK VE KESİN MOTOR)
+  const translateWithGemini = useCallback(async (rawText: string): Promise<string> => {
     if (!rawText) return "";
     try {
       // 1. Regex temizliği: $ sembollü borsa kodlarını ve Telegram artıklarını sil
@@ -659,23 +657,81 @@ export default function TerminalWorkspace() {
         return translationsCacheRef.current.get(clean)!;
       }
 
-      // 2. MyMemory API doğrudan GET çağrısı (en -> tr)
-      const endpoint = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(clean)}&langpair=en|tr`;
-      const response = await fetch(endpoint);
-      const result = await response.json();
-
-      if (result && result.responseData && result.responseData.translatedText) {
-        let trText = result.responseData.translatedText;
-
-        // Finansal isimleri ve yanlış çevrilen terimleri düzelt
-        trText = trText
-          .replace(/\bSavaş\b/gi, "Warsh")
-          .replace(/\bAi'nin\b/gi, "Bessent'in")
-          .replace(/\bKredi sporları\b/gi, "Kredi marjları");
-
-        translationsCacheRef.current.set(clean, trText);
-        return trText;
+      // API key: Kullanıcı tarafından localStorage'a kaydedilmiş key varsa al
+      let userKey = "";
+      if (typeof window !== "undefined") {
+        userKey = localStorage.getItem("gemini_api_key") || "";
       }
+
+      let translatedResult = "";
+
+      // 1. Birincil Yol: Sunucu tarafı proxy rotası (/api/translate - process.env.GEMINI_API_KEY)
+      try {
+        const res = await fetch("/api/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: clean, apiKey: userKey }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.translated && typeof data.translated === "string") {
+            translatedResult = data.translated;
+          }
+        }
+      } catch {
+        // Sunucu rotası geçici hata verirse REST fallback'e geç
+      }
+
+      // 2. İkincil Doğrudan REST API Uç Noktası (Kullanıcı key'i varsa doğrudan çağrı)
+      if (!translatedResult && userKey) {
+        try {
+          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${userKey}`;
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              system_instruction: {
+                parts: [
+                  {
+                    text:
+                      "Sen Bloomberg ve TradFi için çalışan kıdemli bir finans editörüsün. Sana verilen kısa Wall Street/Telegram haberini Türkçeye çevir.\n" +
+                      "KESİN KURALLAR:\n" +
+                      "1. 'AI' kelimesini asla 'Aı' veya benzeri yapma; doğrudan 'Yapay Zeka' olarak çevir.\n" +
+                      "2. Şirket isimlerini ASLA Türkçeleştirme ('Alphabet' şirketini 'alfabe' yapma, 'Alphabet' olarak koru; 'Jump Trading', 'Susquehanna', 'Marvell', 'Lumentum' olduğu gibi kalsın).\n" +
+                      "3. Özel isimleri ASLA çevirme: 'Warsh', 'Bessent', 'Trump', 'Powell', 'Vance' aynen kalsın.\n" +
+                      "4. Finansal terimleri koru: EPS, Capex, Rev, Est, Q1, Q2, Q3, Q4, FOMC, Fed kısaltmalarını büyük harfle bırak. 'Hard-liner' ifadesini 'şahin/katı tutumlu' olarak çevir, 'sert liner' yazma.\n" +
+                      "5. Sadece ve sadece çevrilmiş tek satırlık Türkçe sonucu döndür; açıklama, tırnak işareti veya fazladan hiçbir şey ekleme.",
+                  },
+                ],
+              },
+              contents: [{ parts: [{ text: clean }] }],
+              generationConfig: { temperature: 0.1 },
+            }),
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            const textPart = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+            if (textPart) {
+              translatedResult = textPart;
+            }
+          }
+        } catch {
+          // REST API hatası yoksayılır
+        }
+      }
+
+      if (translatedResult) {
+        // Tırnak işaretlerini ve baştaki fazlalıkları temizle
+        const finalTr = translatedResult
+          .replace(/^["'“”«»]+|["'“”«»]+$/g, "")
+          .replace(/^[\*\/\s]+/, "")
+          .trim();
+
+        translationsCacheRef.current.set(clean, finalTr);
+        return finalTr;
+      }
+
       return clean;
     } catch {
       return rawText;
@@ -748,11 +804,11 @@ export default function TerminalWorkspace() {
         // En yeni en üstte olacak şekilde sırala
         items.sort((a, b) => b.timestamp - a.timestamp);
 
-        // Telegram mesajlarını MyMemory API ile Türkçeye çevir
+        // Telegram mesajlarını Gemini Flash API ile Türkçeye çevir
         const translatedItems: GlobalNewsItem[] = await Promise.all(
           items.slice(0, 25).map(async (item) => {
             const rawContent = item.rawText || item.baslik;
-            const trTitle = await translateWithMyMemory(rawContent);
+            const trTitle = await translateWithGemini(rawContent);
             return {
               id: item.id,
               zaman: item.zaman,
@@ -783,7 +839,7 @@ export default function TerminalWorkspace() {
     } finally {
       setLoadingGlobal(false);
     }
-  }, [translateWithMyMemory]);
+  }, [translateWithGemini]);
 
 
 
@@ -1108,7 +1164,8 @@ export default function TerminalWorkspace() {
                 return (
                   <div
                     key={item.id || index}
-                    className="flex items-start gap-3 pb-3 border-b border-slate-800/80 last:border-b-0 w-full"
+                    style={{ gap: "14px" }}
+                    className="flex items-start pb-3 border-b border-slate-800/80 last:border-b-0 w-full"
                   >
                     {/* 1. Sol Kolon: Sabit genişlikli saat, aşağı kaymaz */}
                     <span className="font-mono text-[11px] text-slate-500 shrink-0 select-none pt-0.5">
