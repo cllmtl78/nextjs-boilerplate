@@ -694,3 +694,12 @@ button {
 .animate-fadeIn {
   animation: fadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+@keyframes borderSnake {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.animate-border-beam {
+  animation: borderSnake 4s linear infinite;
+}

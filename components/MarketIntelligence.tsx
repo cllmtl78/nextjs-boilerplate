@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   ArrowUpRight,
   ArrowDownRight,
-  FileText,
 } from "lucide-react";
 
 type MoverTab = "sectors" | "gainers" | "losers" | "volume";
@@ -118,7 +117,7 @@ const FALLBACK_CALENDAR: EconomicCalendarItem[] = [
   },
   {
     id: "fb_eu_1",
-    title: "Euro Bölgesi Tüketici Güven Endeksi Final",
+    title: "Euro Bölgesi Tüketici Güven Endeksi (Nihai)",
     country: "EU",
     date: new Date().toISOString(),
     time: "12:00",
@@ -228,7 +227,7 @@ const translateIndicatorTitle = (title: string): string => {
   return title;
 };
 
-// Ülke rozeti renklendirme (TR: kırmızı, US: mavi, EU: lacivert/mavi, CN: sarı/kırmızı, JP: mor/indigo)
+// Ülke rozeti renklendirme (TR: kırmızı, US: mavi, EU: lacivert/mavi, CN: amber, JP: indigo)
 const renderCountryBadge = (country: "TR" | "US" | "EU" | "CN" | "JP") => {
   switch (country) {
     case "TR":
@@ -299,7 +298,6 @@ export default function MarketIntelligence() {
     }
     return FALLBACK_CALENDAR;
   });
-  const [loadingCalendar, setLoadingCalendar] = useState<boolean>(false);
 
   // 1. Canlı BIST verilerini sunucu rotasından çek (/api/bist-movers)
   useEffect(() => {
@@ -327,8 +325,11 @@ export default function MarketIntelligence() {
       }
     };
 
-    fetchMovers();
-    const interval = setInterval(fetchMovers, 15000);
+    void fetchMovers();
+    const interval = setInterval(() => {
+      void fetchMovers();
+    }, 15000);
+
     return () => {
       isMounted = false;
       clearInterval(interval);
@@ -336,51 +337,58 @@ export default function MarketIntelligence() {
   }, []);
 
   // 2. Canlı Takvim Verisi Çekme (TradingView API /api/calendar + Günlük Otomatik Sıfırlama)
-  const loadCalendarEvents = useCallback(async () => {
-    try {
-      const today = new Date();
-      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  useEffect(() => {
+    let isMounted = true;
 
-      // Günlük sıfırlama kontrolü: Eğer kayıtlı tarih bugünden farklıysa önbelleği temizle
-      if (typeof window !== "undefined") {
+    // Yeni gün kontrolü (dünün takvimi kalmışsa sil)
+    if (typeof window !== "undefined") {
+      try {
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
         const storedDate = localStorage.getItem(CACHE_CALENDAR_DATE);
         if (storedDate && storedDate !== todayStr) {
           localStorage.removeItem(CACHE_CALENDAR_DATA);
+          localStorage.setItem(CACHE_CALENDAR_DATE, todayStr);
         }
-        localStorage.setItem(CACHE_CALENDAR_DATE, todayStr);
+      } catch {
+        // ignore
       }
+    }
 
-      const res = await fetch("/api/calendar", { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data.events) && data.events.length > 0) {
-          setCalendarEvents(data.events);
-          if (typeof window !== "undefined") {
-            try {
-              localStorage.setItem(CACHE_CALENDAR_DATA, JSON.stringify(data.events));
-            } catch {
-              // ignore
+    const fetchCalendar = async () => {
+      try {
+        const res = await fetch("/api/calendar", { cache: "no-store" });
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          if (Array.isArray(data.events) && data.events.length > 0) {
+            setCalendarEvents(data.events);
+            if (typeof window !== "undefined") {
+              try {
+                const today = new Date();
+                const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+                localStorage.setItem(CACHE_CALENDAR_DATE, todayStr);
+                localStorage.setItem(CACHE_CALENDAR_DATA, JSON.stringify(data.events));
+              } catch {
+                // ignore
+              }
             }
           }
         }
+      } catch {
+        // Ağ kesintisinde mevcut veriler korunur
       }
-    } catch {
-      // Ağ hatasında fallback veya localStorage aktif kalır
-    } finally {
-      setLoadingCalendar(false);
-    }
-  }, []);
+    };
 
-  useEffect(() => {
-    void loadCalendarEvents();
-
-    // 45 saniyede bir yeni açıklanan verileri tazele
+    void fetchCalendar();
     const interval = setInterval(() => {
-      void loadCalendarEvents();
+      void fetchCalendar();
     }, 45000);
 
-    return () => clearInterval(interval);
-  }, [loadCalendarEvents]);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   // 3. Canlı terminal hissi için mikro dalgalanma (Fiyat/oran titremesi)
   useEffect(() => {
@@ -432,19 +440,19 @@ export default function MarketIntelligence() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-[10px]">
-      {/* ================= 1. KOLON: / BIST Hareketler ================= */}
-      <div className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[320px] overflow-hidden">
-        {/* Header (Eşitlenmiş h-10 px-4) */}
-        <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
+      {/* ================= 1. KOLON: / BIST Hareketler (h-[380px]) ================= */}
+      <div className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[380px] overflow-hidden">
+        {/* Header: Başlık ve Entegre Segment Sekmeleri */}
+        <div className="h-10 px-3 sm:px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
           <div className="flex items-center">
-            <span className="font-mono text-xs font-semibold tracking-wider text-slate-200">
-              <span className="text-[#38bdf8] font-bold mr-1.5">/</span>
+            <span className="font-mono text-xs font-bold tracking-wider text-slate-200">
+              <span className="text-[#38bdf8] mr-1.5 font-bold">/</span>
               BIST Hareketler
             </span>
           </div>
 
-          {/* Sekme Sıralaması: Sektör | Artanlar | Düşenler | Hacim */}
-          <div className="flex items-center gap-1 sm:gap-2">
+          {/* Entegre Segment Sekmeleri: Sektör | Artanlar | Düşenler | Hacim */}
+          <div className="flex items-center gap-1 bg-slate-950/60 p-1 rounded-md border border-white/[0.06]">
             {[
               { id: "sectors" as const, label: "Sektör" },
               { id: "gainers" as const, label: "Artanlar" },
@@ -457,16 +465,13 @@ export default function MarketIntelligence() {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`relative px-2 py-1 text-[11px] font-mono transition-colors ${
+                  className={`px-3 py-1 text-xs font-mono rounded transition-all select-none ${
                     isActive
-                      ? "text-[#38bdf8] font-bold"
-                      : "text-slate-400 hover:text-slate-200 font-normal"
+                      ? "bg-[#2563eb] text-white font-semibold shadow-sm"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]"
                   }`}
                 >
-                  <span>{tab.label}</span>
-                  {isActive && (
-                    <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#2563eb]" />
-                  )}
+                  {tab.label}
                 </button>
               );
             })}
@@ -475,7 +480,7 @@ export default function MarketIntelligence() {
 
         {/* Sekme 1: SEKTÖR AKIŞI (Çift Yönlü 0-Merkezli Bar Grafiği) */}
         {activeTab === "sectors" ? (
-          <div className="overflow-y-auto flex-1 p-2.5 space-y-1.5 pane-scroll">
+          <div className="overflow-y-auto flex-1 p-3 space-y-2 pane-scroll">
             {sectors.map((s) => {
               const isPositive = s.change >= 0;
               const widthPct = Math.min(
@@ -486,7 +491,7 @@ export default function MarketIntelligence() {
               return (
                 <div
                   key={s.code}
-                  className="flex items-center text-xs font-mono py-0.5 hover:bg-white/[0.02] rounded px-1.5 transition-colors"
+                  className="flex items-center text-xs font-mono py-1 hover:bg-white/[0.02] rounded px-1.5 transition-colors"
                 >
                   {/* Sol: Sektör Kodu ve İsim */}
                   <div className="w-[110px] shrink-0 flex items-center justify-between pr-2 border-r border-white/[0.04]">
@@ -541,7 +546,7 @@ export default function MarketIntelligence() {
           /* Sekme 2, 3, 4: Artanlar / Düşenler / Hacim (İlk 10 Hisse) */
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Tablo Başlıkları */}
-            <div className="grid grid-cols-12 px-3 py-1.5 text-[10px] font-mono text-slate-500 border-b border-white/[0.04] bg-slate-900/30">
+            <div className="grid grid-cols-12 px-3.5 py-2 text-[10.5px] font-mono text-slate-500 border-b border-white/[0.04] bg-slate-900/30">
               <span className="col-span-3">SEMBOL</span>
               <span className="col-span-3 text-right">SON (TL)</span>
               <span className="col-span-3 text-right">HACİM</span>
@@ -557,11 +562,11 @@ export default function MarketIntelligence() {
                 return (
                   <div
                     key={stock.symbol}
-                    className={`grid grid-cols-12 px-3 py-1.5 text-xs font-mono items-center hover:bg-[#111a2e]/60 transition-colors ${
+                    className={`grid grid-cols-12 px-3.5 py-2 text-xs font-mono items-center hover:bg-[#111a2e]/60 transition-colors ${
                       isTicking ? (isPositive ? "bg-emerald-950/20" : "bg-rose-950/20") : ""
                     }`}
                   >
-                    {/* Sembol (Şirket ismi kaldırıldı, sadece kalın #38bdf8) */}
+                    {/* Sembol (Sadece kalın #38bdf8 kodu) */}
                     <div className="col-span-3 flex items-center gap-1.5">
                       <span className="text-[#38bdf8] font-bold text-[12px] tracking-wide">
                         {stock.symbol}
@@ -604,122 +609,119 @@ export default function MarketIntelligence() {
         )}
       </div>
 
-      {/* ================= 2. KOLON: / TAKVİM (Gerçek Zamanlı 5 Bölge Makro Akışı) ================= */}
-      <div className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[320px] overflow-hidden">
-        {/* Header (Eşitlenmiş h-10 px-4 - Sağ tarafta hiçbir etiket yok) */}
+      {/* ================= 2. KOLON: / TAKVİM (Ferah Tipografi & h-[380px]) ================= */}
+      <div className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[380px] overflow-hidden">
+        {/* Header */}
         <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
           <div className="flex items-center">
-            <span className="font-mono text-xs font-semibold tracking-wider text-slate-200">
-              <span className="text-[#38bdf8] font-bold mr-1.5">/</span>
+            <span className="font-mono text-xs font-bold tracking-wider text-slate-200">
+              <span className="text-[#38bdf8] mr-1.5 font-bold">/</span>
               TAKVİM
             </span>
           </div>
         </div>
 
-        {/* Canlı Takvim Satırları */}
-        <div className="overflow-y-auto flex-1 divide-y divide-white/[0.03] pane-scroll">
-          {loadingCalendar && calendarEvents.length === 0 ? (
-            <div className="p-6 flex flex-col items-center justify-center h-48 text-center gap-2 font-mono select-none">
-              <div className="flex items-center gap-2 text-[#38bdf8] text-xs">
-                <span className="w-2 h-2 rounded-full bg-[#2563eb] animate-ping" />
-                <span>Makroekonomik takvim güncelleniyor...</span>
-              </div>
-            </div>
-          ) : (
-            calendarEvents.map((item) => {
-              const trTitle = translateIndicatorTitle(item.title);
-              const hasActual = item.actual !== null && item.actual !== undefined;
+        {/* Canlı Takvim Satırları (Ferah Boşluk ve Net Sağ/Sol Hiyerarşi) */}
+        <div className="overflow-y-auto flex-1 divide-y divide-white/[0.04] pane-scroll">
+          {calendarEvents.map((item) => {
+            const trTitle = translateIndicatorTitle(item.title);
+            const hasActual = item.actual !== null && item.actual !== undefined;
 
-              return (
-                <div
-                  key={item.id}
-                  className="px-3 py-2 hover:bg-[#111a2e]/60 transition-colors flex flex-col gap-1 text-xs border-b border-white/[0.04]"
-                >
-                  {/* Üst Satır: Saat, Ülke Rozeti ve Gösterge Adı */}
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      {/* Saat (Europe/Istanbul) */}
-                      <span className="font-mono tabular-nums text-[11px] text-slate-400 font-semibold shrink-0">
-                        {item.time}
-                      </span>
-
-                      {/* Ülke Rozeti (TR, US, EU, CN, JP) */}
-                      {renderCountryBadge(item.country)}
-
-                      {/* Veri Adı */}
-                      <span className="font-medium text-slate-200 text-xs truncate leading-tight">
-                        {trTitle}
-                      </span>
-                    </div>
-
-                    {/* Açıklanan Değer (Varsa sağ uçta yeşil rozet, yoksa --) */}
-                    <div className="shrink-0 pl-2">
-                      {hasActual ? (
-                        <span className="font-mono text-[11px] font-bold text-emerald-400 px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/40 tabular-nums">
-                          {String(item.actual)}
-                        </span>
-                      ) : (
-                        <span className="font-mono text-[11px] text-slate-600 tabular-nums">
-                          --
-                        </span>
-                      )}
-                    </div>
+            return (
+              <div
+                key={item.id}
+                className="py-2.5 px-3 border-b border-white/[0.04] flex items-center justify-between gap-3 hover:bg-[#111a2e]/60 transition-colors"
+              >
+                {/* Sol Taraf: Saat, Bayrak, Başlık ve Beklenti Detayı */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono tabular-nums text-slate-400 font-semibold shrink-0">
+                      {item.time}
+                    </span>
+                    {renderCountryBadge(item.country)}
+                    <span className="text-xs font-medium text-slate-100 truncate leading-tight">
+                      {trTitle}
+                    </span>
                   </div>
 
-                  {/* Alt Satır: Beklenti | Önceki Değerleri */}
-                  <div className="flex items-center justify-between text-[10px] font-mono pl-7">
-                    <div className="flex items-center gap-2 text-slate-500">
-                      <span>
-                        Bekl:{" "}
-                        <span className="text-slate-300 font-medium tabular-nums">
-                          {item.forecast !== null && item.forecast !== undefined ? String(item.forecast) : "--"}
-                        </span>
+                  {/* Alt Detay: Beklenti vs Önceki */}
+                  <div className="text-[11px] font-mono text-slate-400 mt-1 pl-6 flex items-center gap-2">
+                    <span>
+                      Bekl:{" "}
+                      <span className="text-slate-200 font-medium tabular-nums">
+                        {item.forecast !== null && item.forecast !== undefined ? String(item.forecast) : "--"}
                       </span>
-                      <span className="text-slate-700">|</span>
-                      <span>
-                        Önceki:{" "}
-                        <span className="text-slate-400 tabular-nums">
-                          {item.previous !== null && item.previous !== undefined ? String(item.previous) : "--"}
-                        </span>
+                    </span>
+                    <span className="text-slate-700">|</span>
+                    <span>
+                      Önceki:{" "}
+                      <span className="text-slate-300 tabular-nums">
+                        {item.previous !== null && item.previous !== undefined ? String(item.previous) : "--"}
                       </span>
-                    </div>
-
-                    {hasActual && (
-                      <span className="text-[9px] text-emerald-500/80 font-mono">
-                        AÇIKLANDI
-                      </span>
-                    )}
+                    </span>
                   </div>
                 </div>
-              );
-            })
-          )}
+
+                {/* Sağ Taraf: Sabit Genişlikli Açıklanan Değer Bloğu */}
+                <div className="w-24 text-right shrink-0">
+                  {hasActual ? (
+                    <>
+                      <span className="text-xs font-mono font-bold text-emerald-400 block tabular-nums">
+                        {String(item.actual)}
+                      </span>
+                      <span className="text-[9px] font-mono tracking-wider text-emerald-500/80 uppercase block mt-0.5">
+                        AÇIKLANDI
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xs font-mono text-slate-600 block tabular-nums">
+                        --
+                      </span>
+                      <span className="text-[9px] font-mono tracking-wider text-slate-600 uppercase block mt-0.5">
+                        BEKLENİYOR
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* ================= 3. KOLON: / Bülten ================= */}
-      <div className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[320px] overflow-hidden">
-        {/* Header (Eşitlenmiş h-10 px-4 - Sağ tarafta hiçbir etiket yok) */}
-        <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
-          <div className="flex items-center">
-            <span className="font-mono text-xs font-semibold tracking-wider text-slate-200">
-              <span className="text-[#38bdf8] font-bold mr-1.5">/</span>
-              Bülten
-            </span>
-          </div>
-        </div>
+      {/* ================= 3. KOLON: / Bülten (Dönen Neon Işık - Border Beam - h-[380px]) ================= */}
+      <div className="relative rounded-lg p-[1px] overflow-hidden bg-slate-900/60 h-[380px]">
+        {/* Dönen Koni / Gradyan Efekti (Snake Animation) */}
+        <div 
+          className="absolute -inset-[100%] animate-border-beam"
+          style={{
+            background: "conic-gradient(from 0deg, transparent 0 340deg, #38bdf8 360deg)",
+          }}
+        />
 
-        {/* Gövde: Soluk Bülten Verisi Bekleniyor */}
-        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center select-none">
-          <div className="w-10 h-10 rounded-full bg-[#2563eb]/10 border border-[#2563eb]/20 flex items-center justify-center mb-2.5">
-            <FileText className="w-5 h-5 text-[#38bdf8]/70" />
+        {/* İç Kart Gövdesi */}
+        <div className="relative h-full w-full bg-[#0b0f19] rounded-[7px] flex flex-col z-10 overflow-hidden">
+          {/* Başlık Alanı */}
+          <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
+            <span className="text-xs font-mono font-bold text-slate-200">
+              <span className="text-[#38bdf8] mr-1">/</span>Bülten
+            </span>
+            <span className="text-[10px] font-mono text-slate-500 tracking-wider">RAPOR & ANALİZ</span>
           </div>
-          <span className="font-mono text-xs text-slate-400 font-medium">
-            Bülten verisi bekleniyor...
-          </span>
-          <p className="text-[11px] text-slate-500 mt-1 max-w-[220px] leading-relaxed">
-            Günlük aracı kurum ve bülten raporları akışa eklenecektir.
-          </p>
+
+          {/* İçerik */}
+          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+            <div className="w-12 h-12 rounded-full bg-[#38bdf8]/10 border border-[#38bdf8]/20 flex items-center justify-center text-[#38bdf8] mb-3 shadow-[0_0_15px_rgba(56,189,248,0.15)]">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <p className="text-xs font-semibold text-slate-200">Bülten verisi bekleniyor...</p>
+            <p className="text-[11px] text-slate-500 mt-1 max-w-[200px]">
+              Günlük aracı kurum ve bülten raporları akışa eklenecektir.
+            </p>
+          </div>
         </div>
       </div>
     </div>
