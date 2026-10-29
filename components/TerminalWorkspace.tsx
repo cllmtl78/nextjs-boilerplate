@@ -369,9 +369,8 @@ const RESMI_HABERLER: TerminalHaber[] = [
   },
 ];
 
-// Aktif Doğrudan RSS Kaynak Konfigürasyonu (AA Finans dahil)
+// Aktif Doğrudan 8 RSS Kaynak Konfigürasyonu
 const ACTIVE_RSS_SOURCES: { url: string; badge: string; filterEconomyOnly?: boolean }[] = [
-  { url: "https://www.aa.com.tr/tr/rss/default?cat=ekonomi", badge: "AA FİNANS" },
   { url: "https://www.ekonomim.com/rss", badge: "EKONOMİM" },
   { url: "https://www.cnbce.com/rss", badge: "CNBC-E" },
   { url: "https://www.ekonomist.com.tr/rss", badge: "EKONOMİST" },
@@ -843,108 +842,101 @@ export default function TerminalWorkspace() {
 
 
 
-  // 8 Kaynaklı Canlı RSS Çekme Motoru (Promise.allSettled & Çoklu Proxy Havuzu & 2.5s Agresif Timeout)
+  // 8 Kaynaklı Güçlü Çift/Çoklu Proxy Havuzu (AbortSignal.timeout(8000))
+  const fetchRSS = async (url: string): Promise<string | null> => {
+    const proxies = [
+      (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+      (u: string) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+      (u: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+    ];
+
+    for (const getProxyUrl of proxies) {
+      try {
+        const res = await fetch(getProxyUrl(url), { signal: AbortSignal.timeout(8000) });
+        if (res.ok) {
+          const text = await res.text();
+          if (text && (text.includes("<rss") || text.includes("<xml") || text.includes("<feed"))) {
+            return text;
+          }
+        }
+      } catch {
+        // Bir sonraki proxy'ye geç
+      }
+    }
+    return null;
+  };
+
   const loadNews = useCallback(async () => {
     try {
-      // Çoklu proxy havuzu (allorigins, corsproxy.io, codetabs)
-      const PROXY_BUILDERS = [
-        (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-        (url: string) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-        (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-      ];
+      const kaynakIsimleri: string[] = [];
+      const allNews: TerminalHaber[] = [];
 
-      const fetchWithAggressiveTimeout = async (url: string, timeoutMs = 2500): Promise<string> => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-        try {
-          const res = await fetch(url, { signal: controller.signal });
-          clearTimeout(timeoutId);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          return await res.text();
-        } catch (err) {
-          clearTimeout(timeoutId);
-          throw err;
-        }
-      };
-
-      const fetchRssFeedWithFallback = async (feedUrl: string, feedIndex: number): Promise<string> => {
-        // Kaynaklar arasında proxy dağıtımı yaparak tek bir proxy kuyruğunun kilitlenmesini engelle
-        const primaryIdx = feedIndex % PROXY_BUILDERS.length;
-        const secondaryIdx = (primaryIdx + 1) % PROXY_BUILDERS.length;
-        const primaryUrl = PROXY_BUILDERS[primaryIdx](feedUrl);
-
-        try {
-          const text = await fetchWithAggressiveTimeout(primaryUrl, 2500);
-          if (text && text.trim().length > 30) return text;
-        } catch {
-          // İlk proxy 2.5 saniyede dönmez veya hata verirse anında yedek proxy'ye geç
-        }
-
-        const fallbackUrl = PROXY_BUILDERS[secondaryIdx](feedUrl);
-        return await fetchWithAggressiveTimeout(fallbackUrl, 2500);
-      };
-
-      // Promise.allSettled kullanarak 8 kaynağı 2.5s agresif timeout ile paralel çek
+      // Şu 8 kaynağın tamamını Promise.allSettled ile çek
       const results = await Promise.allSettled(
-        ACTIVE_RSS_SOURCES.map(async (feed, idx) => {
+        ACTIVE_RSS_SOURCES.map(async (feed) => {
           try {
-            const xml = await fetchRssFeedWithFallback(feed.url, idx);
-            if (xml && xml.trim().length > 0) {
-              return parseRssWithDomParser(xml, feed);
+            const xml = await fetchRSS(feed.url);
+            if (xml) {
+              const parsed = parseRssWithDomParser(xml, feed);
+              if (parsed && parsed.length > 0) {
+                kaynakIsimleri.push(feed.badge);
+                return { badge: feed.badge, items: parsed };
+              }
             }
-            return [];
+            return { badge: feed.badge, items: [] };
           } catch {
-            return [];
+            return { badge: feed.badge, items: [] };
           }
         })
       );
 
-      let items: TerminalHaber[] = [];
+      console.log("Çekilen kaynaklar:", kaynakIsimleri);
+
+      // Gelen her başarılı XML'deki haberleri ortak bir diziye push et
       results.forEach((res) => {
-        if (res.status === "fulfilled" && Array.isArray(res.value)) {
-          items.push(...res.value);
+        if (res.status === "fulfilled" && Array.isArray(res.value?.items)) {
+          allNews.push(...res.value.items);
         }
       });
 
-      // Eğer proxy havuzu geçici olarak yanıt vermediyse veya boş döndüyse, sunucu tarafındaki /api/news rotasını dene
-      if (items.length === 0) {
+      // Eğer dış proxy havuzu tamamen kapalıysa veya boşsa, sunucu tarafındaki /api/news rotasını dene
+      if (allNews.length === 0) {
         try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 2500);
-          const res = await fetch("/api/news", { cache: "no-store", signal: controller.signal });
-          clearTimeout(timeoutId);
+          const res = await fetch("/api/news", { cache: "no-store", signal: AbortSignal.timeout(8000) });
           if (res.ok) {
             const data = await res.json();
             if (data.items && Array.isArray(data.items) && data.items.length > 0) {
-              items = data.items.map((it: ApiNewsItemResponse) => ({
-                id: it.id,
-                zaman: it.zaman || formatTimeTR(it.timestamp || Date.now()),
-                tarih: it.tarih || "Bugün",
-                kaynak: it.kaynak,
-                baslik: it.baslik,
-                ozet: it.baslik,
-                paragraflar: it.paragraflar,
-                detay: it.paragraflar?.join("\n\n") || it.detay || it.baslik,
-                url: it.url || "#",
-                kategori: "bist" as const,
-                timestamp: it.timestamp,
-              }));
+              data.items.forEach((it: ApiNewsItemResponse) => {
+                allNews.push({
+                  id: it.id,
+                  zaman: it.zaman || formatTimeTR(it.timestamp || Date.now()),
+                  tarih: it.tarih || "Bugün",
+                  kaynak: it.kaynak,
+                  baslik: it.baslik,
+                  ozet: it.baslik,
+                  paragraflar: it.paragraflar,
+                  detay: it.paragraflar?.join("\n\n") || it.detay || it.baslik,
+                  url: it.url || "#",
+                  kategori: "bist" as const,
+                  timestamp: it.timestamp,
+                });
+              });
             }
           }
         } catch {
-          // Sunucu yedek isteği yoksayılır
+          // Sunucu isteği hatası yoksayılır
         }
       }
 
-      if (items.length > 0) {
-        // 1. KRONOLOJİK SIRALAMA: Tek bir havuzda toplanan haberleri kesinlikle sayısal timestamp değerine göre büyükten küçüğe sırala
-        items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      if (allNews.length > 0) {
+        // Tüm haberleri tek bir potada topladıktan sonra b.timestamp - a.timestamp şeklinde en güncelden eskiye doğru tek bir liste halinde diz
+        allNews.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
-        // 2. MÜKERRER FİLTRELEME: Birebir aynı başlığa sahip mükerrer haberleri filtrele
+        // Mükerrer haberleri filtrele
         const seenTitles = new Set<string>();
         const deduplicated: TerminalHaber[] = [];
 
-        for (const item of items) {
+        for (const item of allNews) {
           const normKey = item.baslik.toLowerCase().replace(/[^a-z0-9ğüşıöç]/g, "").slice(0, 40);
           if (!seenTitles.has(normKey)) {
             seenTitles.add(normKey);
@@ -952,7 +944,6 @@ export default function TerminalWorkspace() {
           }
         }
 
-        // Filtreleme sonrasında da kronolojik zaman sırasını garantile
         deduplicated.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
         // Yeni haber tespiti (İlk yükleme sonrasında yeni düşen haberler için parlama/fade efekti)

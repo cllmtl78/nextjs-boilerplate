@@ -19,7 +19,6 @@ interface FeedConfig {
 }
 
 const ACTIVE_FEEDS: FeedConfig[] = [
-  { url: "https://www.aa.com.tr/tr/rss/default?cat=ekonomi", badge: "AA FİNANS" },
   { url: "https://www.ekonomim.com/rss", badge: "EKONOMİM" },
   { url: "https://www.cnbce.com/rss", badge: "CNBC-E" },
   { url: "https://www.ekonomist.com.tr/rss", badge: "EKONOMİST" },
@@ -216,11 +215,11 @@ export async function GET() {
   }
 
   try {
-    // 8 kaynağı aynı anda paralel çek (Promise.allSettled) 2.5s agresif timeout ile
+    // 8 kaynağı aynı anda paralel çek (Promise.allSettled) 8s timeout ile
     const results = await Promise.allSettled(
       ACTIVE_FEEDS.map(async (feed) => {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2500);
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
 
         try {
           const res = await fetch(feed.url, {
