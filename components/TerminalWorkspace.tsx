@@ -1,11 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import {
-  X,
-  ExternalLink,
-  Layers,
-} from "lucide-react";
 import MarketIntelligence from "@/components/MarketIntelligence";
 
 export type TerminalHaber = {
@@ -406,20 +401,49 @@ const ACTIVE_RSS_SOURCES: RssFeedConfig[] = [
   },
 ];
 
+// HTML entity decode mekanizması (&ouml;, &uuml;, &ccedil;, &rsquo;, &#39; vb. temizliği)
+export const decodeHtmlEntities = (str?: string | null): string => {
+  if (!str) return "";
+  const raw = String(str).replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, "$1");
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return raw
+      .replace(/&ouml;/gi, "ö")
+      .replace(/&Ouml;/gi, "Ö")
+      .replace(/&uuml;/gi, "ü")
+      .replace(/&Uuml;/gi, "Ü")
+      .replace(/&ccedil;/gi, "ç")
+      .replace(/&Ccedil;/gi, "Ç")
+      .replace(/&thorn;/gi, "ş")
+      .replace(/&yacute;/gi, "ı")
+      .replace(/&eth;/gi, "ğ")
+      .replace(/&rsquo;/gi, "’")
+      .replace(/&lsquo;/gi, "‘")
+      .replace(/&rdquo;/gi, "”")
+      .replace(/&ldquo;/gi, "“")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#039;/g, "'")
+      .replace(/&#39;/g, "'")
+      .replace(/&#036;/g, "$")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&nbsp;/g, " ")
+      .replace(/<[^>]*>?/gm, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+  try {
+    const txt = document.createElement("textarea");
+    txt.innerHTML = raw;
+    return txt.value.replace(/<[^>]*>?/gm, "").replace(/\s+/g, " ").trim();
+  } catch {
+    return raw.replace(/<[^>]*>?/gm, "").replace(/\s+/g, " ").trim();
+  }
+};
+
 // HTML ve özel karakterleri temizleyen yardımcı
 function cleanHtmlStr(str?: string | null): string {
-  if (!str) return "";
-  return str
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, "$1")
-    .replace(/<[^>]*>?/gi, " ")
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return decodeHtmlEntities(str);
 }
 
 // Description metninden ilk 2 paragrafı ayıklayan fonksiyon
@@ -1120,13 +1144,16 @@ export default function TerminalWorkspace() {
 
   return (
     <div className="terminal-workspace">
-      {/* 3-SÜTUNLU KOMPAKT ENDÜSTRİYEL TERMİNAL DÜZENİ */}
+      {/* 3-SÜTUNLU KOMPAKT ENDÜSTRİYEL TERMİNAL DÜZENİ (ÜST SIRA) */}
       <div className="terminal-grid">
         {/* SÜTUN 1: BIST & Türkiye (Canlı Çok Kaynaklı Akış) */}
-        <section className="terminal-pane">
-          <div className="pane-header">
-            <div className="pane-title-group">
-              <h2 className="pane-title">BIST & Türkiye</h2>
+        <section className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[520px] overflow-hidden">
+          <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
+            <div className="flex items-center">
+              <h2 className="font-mono text-xs font-semibold tracking-wider text-slate-200">
+                <span className="text-[#38bdf8] font-bold mr-1.5">/</span>
+                BIST & Türkiye
+              </h2>
             </div>
           </div>
 
@@ -1135,8 +1162,8 @@ export default function TerminalWorkspace() {
               <TerminalSkeletonList count={6} />
             ) : bistHaberleri.length === 0 ? (
               <div className="p-6 flex flex-col items-center justify-center h-48 text-center gap-2.5 font-mono select-none">
-                <div className="flex items-center gap-2 text-cyan-400 text-xs font-semibold">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                <div className="flex items-center gap-2 text-[#38bdf8] text-xs font-semibold">
+                  <span className="w-2 h-2 rounded-full bg-[#2563eb] animate-ping" />
                   <span>Canlı akış bekleniyor...</span>
                 </div>
                 <p className="text-[11px] text-slate-500 max-w-[320px]">
@@ -1160,13 +1187,13 @@ export default function TerminalWorkspace() {
                         [{h.kaynak}]
                       </span>
                       {isNew && (
-                        <span className="px-1 py-0.2 rounded bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 text-[8.5px] font-bold animate-pulse">
+                        <span className="px-1.5 py-0.2 rounded text-[#38bdf8] bg-[#2563eb]/15 border border-[#2563eb]/30 text-[8.5px] font-bold animate-pulse">
                           YENİ
                         </span>
                       )}
                     </div>
 
-                    <h3 className="row-headline font-medium text-slate-200 group-hover:text-cyan-400 cursor-pointer transition text-xs leading-snug">
+                    <h3 className="row-headline font-medium text-slate-200 group-hover:text-[#38bdf8] cursor-pointer transition text-xs leading-snug">
                       {h.baslik}
                     </h3>
                   </article>
@@ -1176,16 +1203,19 @@ export default function TerminalWorkspace() {
           </div>
         </section>
 
-        {/* SÜTUN 2: Global (Telegram @trad_fin Canlı Otomatik Çevrilen Akış - Tıklanamaz, Rozetsiz) */}
-        <section className="terminal-pane">
-          <div className="pane-header">
-            <div className="pane-title-group">
-              <h2 className="pane-title">Global</h2>
+        {/* SÜTUN 2: Global (Telegram @trad_fin Canlı Otomatik Çevrilen Akış) */}
+        <section className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[520px] overflow-hidden">
+          <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
+            <div className="flex items-center">
+              <h2 className="font-mono text-xs font-semibold tracking-wider text-slate-200">
+                <span className="text-[#38bdf8] font-bold mr-1.5">/</span>
+                Global
+              </h2>
             </div>
           </div>
 
-          {/* Ana Liste Kapsayıcısı: her satır arasına 12px net dikey boşluk */}
-          <div className="flex flex-col gap-3 p-2 overflow-y-auto pane-scroll flex-1 min-h-0">
+          {/* Ana Liste Kapsayıcısı */}
+          <div className="flex flex-col gap-3 p-3 overflow-y-auto pane-scroll flex-1 min-h-0">
             {loadingGlobal ? (
               Array.from({ length: 6 }).map((_, i) => (
                 <div
@@ -1201,8 +1231,8 @@ export default function TerminalWorkspace() {
               ))
             ) : globalHaberler.length === 0 ? (
               <div className="p-6 flex flex-col items-center justify-center h-48 text-center gap-2.5 font-mono select-none">
-                <div className="flex items-center gap-2 text-cyan-400 text-xs font-semibold">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                <div className="flex items-center gap-2 text-[#38bdf8] text-xs font-semibold">
+                  <span className="w-2 h-2 rounded-full bg-[#2563eb] animate-ping" />
                   <span>Küresel canlı akış bekleniyor...</span>
                 </div>
                 <p className="text-[11px] text-slate-500 max-w-[320px]">
@@ -1221,14 +1251,14 @@ export default function TerminalWorkspace() {
                     style={{ gap: "14px" }}
                     className="flex items-start pb-3 border-b border-slate-800/80 last:border-b-0 w-full"
                   >
-                    {/* 1. Sol Kolon: Sabit genişlikli saat, aşağı kaymaz */}
+                    {/* 1. Sol Kolon: Sabit genişlikli saat */}
                     <span className="font-mono text-[11px] text-slate-500 shrink-0 select-none pt-0.5">
                       {itemTime}
                     </span>
 
                     {/* 2. Sağ Kolon: Haber metni */}
                     <p className="text-[12px] text-slate-200 leading-relaxed font-normal m-0 p-0 flex-1">
-                      <span className="text-cyan-400 font-bold mr-1">/</span>
+                      <span className="text-[#38bdf8] font-bold mr-1">/</span>
                       {itemText}
                     </p>
                   </div>
@@ -1241,10 +1271,13 @@ export default function TerminalWorkspace() {
         {/* SÜTUN 3: KAP Bildirimleri + Resmi Kurumlar */}
         <div className="terminal-stack">
           {/* Üst: KAP Bildirimleri */}
-          <section className="terminal-pane pane-kap">
-            <div className="pane-header">
-              <div className="pane-title-group">
-                <h2 className="pane-title">KAP Bildirimleri</h2>
+          <section className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[255px] overflow-hidden">
+            <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
+              <div className="flex items-center">
+                <h2 className="font-mono text-xs font-semibold tracking-wider text-slate-200">
+                  <span className="text-[#38bdf8] font-bold mr-1.5">/</span>
+                  KAP Bildirimleri
+                </h2>
               </div>
             </div>
 
@@ -1258,7 +1291,7 @@ export default function TerminalWorkspace() {
                   <div className="kap-row-top">
                     <div className="flex items-center gap-2">
                       {h.hisseler?.map((s) => (
-                        <span key={s} className="kap-code-prominent font-mono">
+                        <span key={s} className="text-[#38bdf8] font-mono font-bold text-[11px] tracking-tight">
                           {s}
                         </span>
                       ))}
@@ -1273,7 +1306,7 @@ export default function TerminalWorkspace() {
                     </span>
                   </div>
 
-                  <h3 className="row-headline kap-headline group-hover:text-cyan-400 transition">
+                  <h3 className="row-headline kap-headline group-hover:text-[#38bdf8] transition">
                     {h.baslik}
                   </h3>
                 </article>
@@ -1282,10 +1315,13 @@ export default function TerminalWorkspace() {
           </section>
 
           {/* Alt: Resmi Kurumlar */}
-          <section className="terminal-pane pane-resmi">
-            <div className="pane-header">
-              <div className="pane-title-group">
-                <h2 className="pane-title">Resmi Kurumlar</h2>
+          <section className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[255px] overflow-hidden">
+            <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
+              <div className="flex items-center">
+                <h2 className="font-mono text-xs font-semibold tracking-wider text-slate-200">
+                  <span className="text-[#38bdf8] font-bold mr-1.5">/</span>
+                  Resmi Kurumlar
+                </h2>
               </div>
             </div>
 
@@ -1301,7 +1337,7 @@ export default function TerminalWorkspace() {
                     <span className="resmi-badge">@{h.resmiKurum || h.kaynak}</span>
                   </div>
 
-                  <h3 className="row-headline font-medium text-slate-200 group-hover:text-cyan-400 transition text-xs leading-snug">
+                  <h3 className="row-headline font-medium text-slate-200 group-hover:text-[#38bdf8] transition text-xs leading-snug">
                     {h.baslik}
                   </h3>
                 </article>
@@ -1309,162 +1345,101 @@ export default function TerminalWorkspace() {
             </div>
           </section>
         </div>
+      </div>
 
-        {/* ALT SATIR: MARKET INTELLIGENCE (BIST HAREKETLER, SEKTÖR AKIŞI, TAKVİM) */}
+      {/* ALT SIRA: 3 KOLONLU GRID (/ BIST Hareketler, / TAKVİM, / Bülten) */}
+      <div className="w-full mt-4" style={{ marginTop: "16px" }}>
         <MarketIntelligence />
       </div>
 
-      {/* BLOOMBERG / REFINITIV KALİTESİNDE PROFESYONEL HABER DETAY MODALI (STORY VIEW) */}
+      {/* 3. HABER DETAY MODALI (PREMIUM TERMINAL TASARIMI) */}
       {seciliHaber && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-fadeIn"
           onClick={() => setSeciliHaber(null)}
           role="dialog"
           aria-modal="true"
         >
+          {/* Modal Box */}
           <div
-            className="w-full max-w-2xl bg-[#0b101b] border border-cyan-500/20 rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col relative text-left"
+            className="w-full max-w-2xl bg-[#0b0f19] border border-[#2563eb]/40 rounded-xl shadow-[0_0_50px_rgba(37,99,235,0.15)] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Üst Zarif Cyan Gradient Çizgi */}
-            <div className="bg-gradient-to-r from-transparent via-cyan-500 to-transparent h-[1px] w-full shrink-0" />
+            {/* Üst İnce Accent Çizgisi */}
+            <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-[#2563eb] to-transparent" />
 
-            {/* HEADER: Kaynak Etiketi + Yayın Saati + ESC Rozeti & Kapat Butonu */}
-            <div className="px-6 py-4 flex items-center justify-between border-b border-white/[0.06] bg-[#0c1220]/70">
-              <div className="flex items-center gap-2.5 font-mono">
-                <span className="text-xs font-mono font-bold text-cyan-400 bg-cyan-950/40 border border-cyan-800/50 px-2 py-0.5 rounded tracking-wide uppercase">
-                  [{seciliHaber.kaynak}]
+            {/* Header */}
+            <div className="px-6 pt-5 pb-4 border-b border-white/[0.06] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-xs font-bold text-white bg-[#2563eb] px-2.5 py-1 rounded tracking-wider shadow-sm uppercase">
+                  {seciliHaber.kaynak}
                 </span>
-                <span className="text-xs font-mono text-slate-400 tabular-nums">
-                  {seciliHaber.zaman} {seciliHaber.tarih ? `· ${seciliHaber.tarih}` : ""}
+                <span className="font-mono text-xs text-slate-400">
+                  {seciliHaber.time || seciliHaber.zaman} · {seciliHaber.tarih || "Bugün"}
                 </span>
-                {seciliHaber.hisseler && seciliHaber.hisseler.length > 0 && (
-                  <span className="text-cyan-400 font-bold ml-1 font-mono text-xs">
-                    {seciliHaber.hisseler.join(", ")}
-                  </span>
-                )}
               </div>
-
-              <div className="flex items-center gap-2">
-                <kbd className="px-1.5 py-0.5 text-[9px] font-mono bg-slate-800 border border-slate-700 rounded text-slate-400 select-none">
-                  ESC
-                </kbd>
-                <button
-                  onClick={() => setSeciliHaber(null)}
-                  className="text-slate-400 hover:text-white p-1 hover:bg-slate-800 rounded transition"
-                  type="button"
-                  aria-label="Kapat"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* BODY: Başlık + Temizlenmiş Özet/Paragraflar + Metadata Barı */}
-            <div className="p-6 pt-5 flex-1 overflow-y-auto max-h-[55vh]">
-              {/* Başlık */}
-              <h2 className="text-lg font-semibold text-white tracking-tight leading-snug mb-4 border-b border-white/[0.06] pb-3">
-                {seciliHaber.baslik}
-              </h2>
-
-              {/* Özet / İçerik (Başlık tekrarını filtreleyen temiz metin) */}
-              <div className="text-sm text-slate-300 leading-relaxed space-y-3 font-normal pr-1">
-                {(() => {
-                  const rawList =
-                    seciliHaber.paragraflar && seciliHaber.paragraflar.length > 0
-                      ? seciliHaber.paragraflar
-                      : seciliHaber.detay
-                      ? seciliHaber.detay.split("\n\n")
-                      : seciliHaber.ozet
-                      ? [seciliHaber.ozet]
-                      : [];
-
-                  // Başlıkla neredeyse birebir örtüşen tekrarlı cümleleri filtrele
-                  const cleanTitle = seciliHaber.baslik
-                    .toLowerCase()
-                    .replace(/[^a-z0-9ğüşıöç]/g, "");
-
-                  const filtered = rawList
-                    .map((p) => p.trim())
-                    .filter((p) => {
-                      if (!p) return false;
-                      const cleanP = p.toLowerCase().replace(/[^a-z0-9ğüşıöç]/g, "");
-                      if (cleanP === cleanTitle) return false;
-                      if (cleanTitle.length > 25 && cleanP.startsWith(cleanTitle.slice(0, 35))) {
-                        return false;
-                      }
-                      return true;
-                    });
-
-                  if (filtered.length > 0) {
-                    return filtered.map((paragraf, idx) => (
-                      <p key={idx} className="text-slate-300">
-                        {paragraf}
-                      </p>
-                    ));
-                  }
-
-                  return (
-                    <p className="text-slate-300">
-                      {seciliHaber.ozet ||
-                        seciliHaber.detay ||
-                        "Haber detayları piyasa kaynakları üzerinden canlı doğrulanmıştır."}
-                    </p>
-                  );
-                })()}
-              </div>
-
-              {/* Metadata Barı */}
-              <div className="border-t border-white/[0.06] mt-5 pt-3.5 flex flex-wrap items-center justify-between text-[11px] font-mono text-slate-400 bg-white/[0.02] px-3.5 py-2.5 rounded-lg border border-white/[0.04]">
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-500">Kategori:</span>
-                  <span className="text-slate-300 font-medium">
-                    {seciliHaber.kategori === "bist"
-                      ? "Piyasa Özeti / BIST"
-                      : seciliHaber.kategori === "kap"
-                      ? "KAP Kamuyu Aydınlatma"
-                      : seciliHaber.kategori === "resmi"
-                      ? "Resmi Kurum Bülteni"
-                      : "Piyasa Özeti"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <span>
-                    Durum: <strong className="text-emerald-400 font-normal">Doğrulandı</strong>
-                  </span>
-                  <span className="text-slate-600">|</span>
-                  <span className="text-cyan-400 font-semibold">Terminal Desk</span>
-                </div>
-              </div>
-            </div>
-
-            {/* FOOTER: Sol "Kaynağında Oku" butonu + Sağ "Kapat" butonu */}
-            <div className="p-4 px-6 border-t border-white/[0.06] bg-[#080d16] flex items-center justify-between mt-auto">
-              {seciliHaber.url && seciliHaber.url !== "#" ? (
-                <a
-                  href={seciliHaber.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-medium px-4 py-2 rounded-md transition flex items-center gap-1.5 shadow-lg shadow-cyan-950 font-sans"
-                >
-                  <span>Kaynağında Oku</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-              ) : (
-                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono">
-                  <Layers className="w-3.5 h-3.5" />
-                  <span>Terminal Orijinal Kayıt</span>
-                </div>
-              )}
-
               <button
-                type="button"
                 onClick={() => setSeciliHaber(null)}
-                className="text-xs text-slate-400 hover:text-slate-200 px-3 py-2 rounded hover:bg-slate-800/60 font-mono transition"
+                className="flex items-center gap-1.5 text-xs font-mono text-slate-400 hover:text-white px-2.5 py-1 rounded-md hover:bg-white/[0.06] transition"
               >
-                Kapat
+                <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700">ESC</span>
+                <span>✕</span>
               </button>
             </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+              <h2 className="text-lg font-bold text-slate-100 leading-snug tracking-tight">
+                {decodeHtmlEntities(seciliHaber.baslik)}
+              </h2>
+              <p className="text-sm text-slate-300 leading-relaxed font-normal whitespace-pre-line">
+                {decodeHtmlEntities(
+                  seciliHaber.paragraflar && seciliHaber.paragraflar.length > 0
+                    ? seciliHaber.paragraflar.join("\n\n")
+                    : seciliHaber.detay || seciliHaber.ozet || "Haber detayları piyasa kaynakları üzerinden canlı aktarılmıştır."
+                )}
+              </p>
+            </div>
+
+            {/* Footer Bar */}
+            <div className="px-6 py-4 bg-[#080c14] border-t border-white/[0.06] flex items-center justify-between gap-4">
+              <div className="text-[11px] font-mono text-slate-500">
+                Kategori: <span className="text-slate-300">
+                  {seciliHaber.kategori === "bist"
+                    ? "Piyasa Özeti / BIST"
+                    : seciliHaber.kategori === "kap"
+                    ? "KAP Kamuyu Aydınlatma"
+                    : seciliHaber.kategori === "resmi"
+                    ? "Resmi Kurum Bülteni"
+                    : "Piyasa Özeti / BIST"}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setSeciliHaber(null)}
+                  className="text-xs font-medium text-slate-400 hover:text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition"
+                >
+                  Kapat
+                </button>
+                {seciliHaber.url && seciliHaber.url !== "#" ? (
+                  <a
+                    href={seciliHaber.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-xs font-semibold text-white bg-[#2563eb] hover:bg-[#1d4ed8] px-5 py-2.5 rounded-lg shadow-lg shadow-[#2563eb]/25 transition active:scale-95"
+                  >
+                    <span>Kaynağında Oku</span>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                ) : (
+                  <span className="text-xs text-slate-500 font-mono">Terminal Orijinal Kayıt</span>
+                )}
+              </div>
+            </div>
+
           </div>
         </div>
       )}

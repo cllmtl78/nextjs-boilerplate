@@ -319,6 +319,7 @@ button {
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   align-items: stretch;
+  margin-bottom: 16px;
 }
 
 .terminal-stack {
@@ -449,7 +450,7 @@ button {
 }
 
 .kap-code-prominent {
-  color: #38bdf8; /* Cyan */
+  color: #3b66ff;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -662,12 +663,12 @@ button {
 /* ================= 7. LIVE NEWS GLOW ANIMATION ================= */
 @keyframes newsGlowFade {
   0% {
-    background-color: rgba(6, 182, 212, 0.26);
-    box-shadow: inset 0 0 14px rgba(6, 182, 212, 0.38);
+    background-color: rgba(0, 45, 200, 0.35);
+    box-shadow: inset 0 0 14px rgba(0, 45, 200, 0.45);
   }
   50% {
-    background-color: rgba(6, 182, 212, 0.12);
-    box-shadow: inset 0 0 6px rgba(6, 182, 212, 0.18);
+    background-color: rgba(0, 45, 200, 0.16);
+    box-shadow: inset 0 0 6px rgba(0, 45, 200, 0.22);
   }
   100% {
     background-color: transparent;
@@ -677,4 +678,19 @@ button {
 
 .terminal-row-new {
   animation: newsGlowFade 3.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
