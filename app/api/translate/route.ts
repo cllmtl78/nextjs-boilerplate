@@ -1,13 +1,30 @@
 import { GoogleGenAI } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 
-const SYSTEM_INSTRUCTION = `Sen Bloomberg ve TradFi için çalışan kıdemli bir finans editörüsün. Sana verilen kısa Wall Street/Telegram haberini Türkçeye çevir.
-KESİN KURALLAR:
-1. 'AI' kelimesini asla 'Aı' veya benzeri yapma; doğrudan 'Yapay Zeka' olarak çevir.
-2. Şirket isimlerini ASLA Türkçeleştirme ('Alphabet' şirketini 'alfabe' yapma, 'Alphabet' olarak koru; 'Jump Trading', 'Susquehanna', 'Marvell', 'Lumentum' olduğu gibi kalsın).
-3. Özel isimleri ASLA çevirme: 'Warsh', 'Bessent', 'Trump', 'Powell', 'Vance' aynen kalsın.
-4. Finansal terimleri koru: EPS, Capex, Rev, Est, Q1, Q2, Q3, Q4, FOMC, Fed kısaltmalarını büyük harfle bırak. 'Hard-liner' ifadesini 'şahin/katı tutumlu' olarak çevir, 'sert liner' yazma.
-5. Sadece ve sadece çevrilmiş tek satırlık Türkçe sonucu döndür; açıklama, tırnak işareti veya fazladan hiçbir şey ekleme.`;
+const SYSTEM_INSTRUCTION = `Sen Bloomberg ve TradFi için çalışan kıdemli bir borsa bülteni editörüsün. Aşağıdaki Wall Street haberini Türkçeye çevir.
+Kurallar:
+- Özel isimleri ve şirketleri ASLA çevirme (Binance, Coinbase, Intel, Reddit, Amazon, Sandisk, Brian Armstrong aynen kalsın).
+- Finans terimlerini koru: EPS, Revenue (Hasılat), Q1, Q2, Q3, Q4, Capex, Devops, Private key, Stock split (Hisse bölünmesi).
+- Sadece tek satır Türkçe çeviriyi ver, tırnak veya açıklama ekleme.`;
+
+async function fetchMyMemoryFallback(text: string): Promise<string> {
+  try {
+    const res = await fetch(
+      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|tr`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const tr = data?.responseData?.translatedText;
+      if (tr && typeof tr === "string" && !tr.includes("MYMEMORY WARNING")) {
+        return tr.trim();
+      }
+    }
+  } catch {
+    // fallback error ignored
+  }
+  return text;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,6 +34,7 @@ export async function POST(req: NextRequest) {
     const apiKey =
       clientApiKey?.trim() ||
       process.env.GEMINI_API_KEY ||
+      process.env.NEXT_PUBLIC_GEMINI_KEY ||
       process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
       "";
 
@@ -33,9 +51,10 @@ export async function POST(req: NextRequest) {
       }
 
       if (!apiKey) {
+        const fallbackTranslation = await fetchMyMemoryFallback(cleanText);
         return NextResponse.json({
-          translated: cleanText,
-          warning: "GEMINI_API_KEY bulunamadı, orijinal metin kullanıldı.",
+          translated: fallbackTranslation,
+          source: "mymemory-fallback",
         });
       }
 
@@ -50,29 +69,39 @@ export async function POST(req: NextRequest) {
         });
 
         const response = await ai.models.generateContent({
-          model: "gemini-3.8-flash",
-          contents: cleanText,
+          model: "gemini-2.5-flash",
+          contents: `Haber: ${cleanText}`,
           config: {
             systemInstruction: SYSTEM_INSTRUCTION,
             temperature: 0.1,
           },
         });
 
-        const translated = response.text?.trim() || cleanText;
-        return NextResponse.json({ translated });
-      } catch (sdkErr) {
+        const translated = response.text?.trim() || "";
+        if (translated) {
+          const finalClean = translated
+            .replace(/^["'“”«»]+|["'“”«»]+$/g, "")
+            .replace(/^Haber:\s*/i, "")
+            .trim();
+          return NextResponse.json({ translated: finalClean, source: "gemini-sdk" });
+        }
+      } catch {
         // SDK çağrısı başarısız olursa REST API fallback'i dene
         try {
-          const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+          const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
           const restRes = await fetch(restUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              system_instruction: {
-                parts: [{ text: SYSTEM_INSTRUCTION }],
-              },
-              contents: [{ parts: [{ text: cleanText }] }],
-              generationConfig: { temperature: 0.1 },
+              contents: [
+                {
+                  parts: [
+                    {
+                      text: `${SYSTEM_INSTRUCTION}\n\nHaber: ${cleanText}`,
+                    },
+                  ],
+                },
+              ],
             }),
           });
 
@@ -81,15 +110,20 @@ export async function POST(req: NextRequest) {
             const candidateText =
               data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
             if (candidateText) {
-              return NextResponse.json({ translated: candidateText });
+              const finalClean = candidateText
+                .replace(/^["'“”«»]+|["'“”«»]+$/g, "")
+                .replace(/^Haber:\s*/i, "")
+                .trim();
+              return NextResponse.json({ translated: finalClean, source: "gemini-rest" });
             }
           }
         } catch {
           // REST fallback de başarısız
         }
 
-        console.error("Gemini translation error:", sdkErr);
-        return NextResponse.json({ translated: cleanText });
+        // Gemini erişilemediyse MyMemory ile çevir
+        const fallbackText = await fetchMyMemoryFallback(cleanText);
+        return NextResponse.json({ translated: fallbackText, source: "mymemory-fallback" });
       }
     }
 

@@ -63,31 +63,42 @@ export function cleanWireText(text: string): string {
     .trim();
 }
 
-// Standart UTC/GMT ve Çift Timezone Kontrollü Türkiye Saati (Europe/Istanbul) Çeviricisi
+// Gerçek Yayın Zaman Damgası ve Türkiye Saati (Europe/Istanbul) Çeviricisi
 export const parseNewsDate = (
   pubDateStr: string | number | Date | null | undefined
-): { time: string; timestamp: number; dateObj: Date | null } => {
-  if (!pubDateStr) return { time: "--:--:--", timestamp: 0, dateObj: null };
-  try {
-    const raw = typeof pubDateStr === "string" ? pubDateStr.trim() : pubDateStr;
-    const d = typeof raw === "number" || raw instanceof Date ? new Date(raw) : new Date(raw);
-
-    // Eğer tarih parse edilemediyse
-    if (isNaN(d.getTime())) return { time: "--:--:--", timestamp: 0, dateObj: null };
-
-    // Eğer parse edilen saat şu anki zamandan 15 dakikadan daha ilerideyse çift ekleme olmuştur:
+): { time: string; timestamp: number; dateObj: Date } => {
+  if (!pubDateStr) {
     const now = new Date();
-    if (d.getTime() > now.getTime() + 15 * 60 * 1000) {
-      d.setHours(d.getHours() - 3);
-    }
-
-    const formattedTime = new Intl.DateTimeFormat("tr-TR", {
-      timeZone: "Europe/Istanbul",
+    const time = now.toLocaleTimeString("tr-TR", {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
-      hour12: false,
-    }).format(d);
+      timeZone: "Europe/Istanbul",
+    });
+    return { time, timestamp: now.getTime(), dateObj: now };
+  }
+  try {
+    const raw = typeof pubDateStr === "string" ? pubDateStr.trim() : pubDateStr;
+    const d = new Date(raw);
+
+    // Eğer tarih parse edilemediyse veya geçersizse Date.now() ver
+    if (isNaN(d.getTime())) {
+      const now = new Date();
+      const time = now.toLocaleTimeString("tr-TR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        timeZone: "Europe/Istanbul",
+      });
+      return { time, timestamp: now.getTime(), dateObj: now };
+    }
+
+    const formattedTime = d.toLocaleTimeString("tr-TR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      timeZone: "Europe/Istanbul",
+    });
 
     return {
       time: formattedTime,
@@ -95,7 +106,14 @@ export const parseNewsDate = (
       dateObj: d,
     };
   } catch {
-    return { time: "--:--:--", timestamp: 0, dateObj: null };
+    const now = new Date();
+    const time = now.toLocaleTimeString("tr-TR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      timeZone: "Europe/Istanbul",
+    });
+    return { time, timestamp: now.getTime(), dateObj: now };
   }
 };
 
@@ -387,7 +405,6 @@ const ACTIVE_RSS_SOURCES: RssFeedConfig[] = [
   { url: "https://www.cnbce.com/rss", badge: "CNBC-E" },
   { url: "https://www.ekonomist.com.tr/rss", badge: "EKONOMİST" },
   { url: "https://www.foreks.com/rss", badge: "FOREKS" },
-  { url: "https://uzmanpara.milliyet.com.tr/haber_rss/", badge: "UZMAN PARA" },
   { url: "https://www.ntv.com.tr/ntvpara.rss", badge: "NTV PARA" },
   {
     url: "https://www.turkiyegazetesi.com.tr/rss",
@@ -617,6 +634,132 @@ function parseRssWithDomParser(
   return items;
 }
 
+// Çevrilen haberleri hafızada tutarak gereksiz API çağrısını engelle
+const getTranslationCache = (): Record<string, string> => {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem("bpt_global_translations") || "{}");
+  } catch {
+    return {};
+  }
+};
+
+const saveTranslationCache = (hash: string, text: string) => {
+  if (typeof window === "undefined") return;
+  try {
+    const cache = getTranslationCache();
+    cache[hash] = text;
+    localStorage.setItem("bpt_global_translations", JSON.stringify(cache));
+  } catch {
+    // ignore
+  }
+};
+
+// Google Gemini Flash ile Profesyonel Finans Çevirisi Motoru
+export const translateFinancialWithGemini = async (rawText: string): Promise<string> => {
+  if (!rawText) return "";
+
+  // 1. Temizlik
+  const clean = rawText
+    .replace(/\$[A-Z]{1,6}\b/g, "") // $ borsa kodlarını temizle
+    .replace(/^\[.*?\]\s*·?\s*/gi, "") // Süre artıklarını temizle
+    .replace(/[•·]+$/, "")
+    .trim();
+
+  if (!clean) return "";
+
+  // 2. Cache Kontrolü (Daha önce çevrildiyse doğrudan getir)
+  const textHash = clean.slice(0, 30);
+  const cache = getTranslationCache();
+  if (cache[textHash]) return cache[textHash];
+
+  // 3. Gemini Flash Çağrısı (API Key env veya değişken üzerinden)
+  const API_KEY =
+    process.env.NEXT_PUBLIC_GEMINI_KEY ||
+    (typeof window !== "undefined" && ((window as unknown as { __GEMINI_KEY__?: string }).__GEMINI_KEY__ || localStorage.getItem("gemini_api_key"))) ||
+    "";
+
+  // 3.a Öncelikli: Next.js Sunucu Proxy Rotası (/api/translate - process.env.GEMINI_API_KEY)
+  try {
+    const sRes = await fetch("/api/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: clean, apiKey: API_KEY }),
+    });
+    if (sRes.ok) {
+      const sData = await sRes.json();
+      if (sData.translated && typeof sData.translated === "string" && sData.translated !== clean) {
+        saveTranslationCache(textHash, sData.translated);
+        return sData.translated;
+      }
+    }
+  } catch {
+    // Sunucu rotası geçici hata verirse REST veya MyMemory'e geç
+  }
+
+  // 3.b API Key girilmediyse fallback olarak MyMemory üzerinden hızlı çevir
+  if (!API_KEY) {
+    try {
+      const res = await fetch(
+        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(clean)}&langpair=en|tr`
+      );
+      const d = await res.json();
+      const resText = d?.responseData?.translatedText || clean;
+      saveTranslationCache(textHash, resText);
+      return resText;
+    } catch {
+      return clean;
+    }
+  }
+
+  // 3.c Doğrudan Google Gemini REST Çağrısı
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: `Sen Bloomberg ve TradFi için çalışan kıdemli bir borsa bülteni editörüsün. Aşağıdaki Wall Street haberini Türkçeye çevir.
+Kurallar:
+- Özel isimleri ve şirketleri ASLA çevirme (Binance, Coinbase, Intel, Reddit, Amazon, Sandisk, Brian Armstrong aynen kalsın).
+- Finans terimlerini koru: EPS, Revenue (Hasılat), Q1, Q2, Q3, Q4, Capex, Devops, Private key, Stock split (Hisse bölünmesi).
+- Sadece tek satır Türkçe çeviriyi ver, tırnak veya açıklama ekleme.
+
+Haber: ${clean}`,
+                },
+              ],
+            },
+          ],
+        }),
+      }
+    );
+
+    const data = await res.json();
+    const result = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || clean;
+    const finalClean = result.replace(/^["'“”«»]+|["'“”«»]+$/g, "").replace(/^Haber:\s*/i, "").trim();
+    saveTranslationCache(textHash, finalClean);
+    return finalClean;
+  } catch {
+    // Fallback olarak MyMemory
+    try {
+      const fb = await fetch(
+        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(clean)}&langpair=en|tr`
+      );
+      const d = await fb.json();
+      const resText = d?.responseData?.translatedText || clean;
+      saveTranslationCache(textHash, resText);
+      return resText;
+    } catch {
+      return clean;
+    }
+  }
+};
+
 export default function TerminalWorkspace() {
   const [bistHaberleri, setBistHaberleri] = useState<TerminalHaber[]>(() => {
     if (typeof window === "undefined") return [];
@@ -701,104 +844,6 @@ export default function TerminalWorkspace() {
 
 
 
-  // Google Gemini Flash API ile Finansal Çeviri Motoru (TEK VE KESİN MOTOR)
-  const translateWithGemini = useCallback(async (rawText: string): Promise<string> => {
-    if (!rawText) return "";
-    try {
-      // 1. Regex temizliği: $ sembollü borsa kodlarını ve Telegram artıklarını sil
-      const clean = rawText
-        .replace(/\$[A-Z]{1,6}\b/g, "")
-        .replace(/^\[.*?\]\s*·?\s*/gi, "")
-        .replace(/[•·]+$/, "")
-        .trim();
-
-      if (!clean) return "";
-
-      // Önbellek kontrolü (aynı metin için mükerrer ağ çağrılarını engeller)
-      if (translationsCacheRef.current.has(clean)) {
-        return translationsCacheRef.current.get(clean)!;
-      }
-
-      // API key: Kullanıcı tarafından localStorage'a kaydedilmiş key varsa al
-      let userKey = "";
-      if (typeof window !== "undefined") {
-        userKey = localStorage.getItem("gemini_api_key") || "";
-      }
-
-      let translatedResult = "";
-
-      // 1. Birincil Yol: Sunucu tarafı proxy rotası (/api/translate - process.env.GEMINI_API_KEY)
-      try {
-        const res = await fetch("/api/translate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: clean, apiKey: userKey }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.translated && typeof data.translated === "string") {
-            translatedResult = data.translated;
-          }
-        }
-      } catch {
-        // Sunucu rotası geçici hata verirse REST fallback'e geç
-      }
-
-      // 2. İkincil Doğrudan REST API Uç Noktası (Kullanıcı key'i varsa doğrudan çağrı)
-      if (!translatedResult && userKey) {
-        try {
-          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${userKey}`;
-          const response = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              system_instruction: {
-                parts: [
-                  {
-                    text:
-                      "Sen Bloomberg ve TradFi için çalışan kıdemli bir finans editörüsün. Sana verilen kısa Wall Street/Telegram haberini Türkçeye çevir.\n" +
-                      "KESİN KURALLAR:\n" +
-                      "1. 'AI' kelimesini asla 'Aı' veya benzeri yapma; doğrudan 'Yapay Zeka' olarak çevir.\n" +
-                      "2. Şirket isimlerini ASLA Türkçeleştirme ('Alphabet' şirketini 'alfabe' yapma, 'Alphabet' olarak koru; 'Jump Trading', 'Susquehanna', 'Marvell', 'Lumentum' olduğu gibi kalsın).\n" +
-                      "3. Özel isimleri ASLA çevirme: 'Warsh', 'Bessent', 'Trump', 'Powell', 'Vance' aynen kalsın.\n" +
-                      "4. Finansal terimleri koru: EPS, Capex, Rev, Est, Q1, Q2, Q3, Q4, FOMC, Fed kısaltmalarını büyük harfle bırak. 'Hard-liner' ifadesini 'şahin/katı tutumlu' olarak çevir, 'sert liner' yazma.\n" +
-                      "5. Sadece ve sadece çevrilmiş tek satırlık Türkçe sonucu döndür; açıklama, tırnak işareti veya fazladan hiçbir şey ekleme.",
-                  },
-                ],
-              },
-              contents: [{ parts: [{ text: clean }] }],
-              generationConfig: { temperature: 0.1 },
-            }),
-          });
-
-          if (response.ok) {
-            const result = await response.json();
-            const textPart = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-            if (textPart) {
-              translatedResult = textPart;
-            }
-          }
-        } catch {
-          // REST API hatası yoksayılır
-        }
-      }
-
-      if (translatedResult) {
-        // Tırnak işaretlerini ve baştaki fazlalıkları temizle
-        const finalTr = translatedResult
-          .replace(/^["'“”«»]+|["'“”«»]+$/g, "")
-          .replace(/^[\*\/\s]+/, "")
-          .trim();
-
-        translationsCacheRef.current.set(clean, finalTr);
-        return finalTr;
-      }
-
-      return clean;
-    } catch {
-      return rawText;
-    }
-  }, []);
 
   const loadGlobalNews = useCallback(async () => {
 
@@ -868,9 +913,9 @@ export default function TerminalWorkspace() {
 
         // Telegram mesajlarını Gemini Flash API ile Türkçeye çevir
         const translatedItems: GlobalNewsItem[] = await Promise.all(
-          items.slice(0, 25).map(async (item) => {
+          items.slice(0, 30).map(async (item) => {
             const rawContent = item.rawText || item.baslik;
-            const trTitle = await translateWithGemini(rawContent);
+            const trTitle = await translateFinancialWithGemini(rawContent);
             return {
               id: item.id,
               zaman: item.zaman,
@@ -884,14 +929,9 @@ export default function TerminalWorkspace() {
 
         setGlobalHaberler(translatedItems);
 
-        // Başarılı akışı ve çevirileri yerel hafızaya kaydet
+        // Başarılı akışı yerel hafızaya kaydet
         try {
           localStorage.setItem(CACHE_KEY_GLOBAL, JSON.stringify(translatedItems));
-          const cacheObj: Record<string, string> = {};
-          translationsCacheRef.current.forEach((val, key) => {
-            cacheObj[key] = val;
-          });
-          localStorage.setItem(CACHE_KEY_TRANSLATIONS, JSON.stringify(cacheObj));
         } catch {
           // Önbellek yazma hatası yoksayılır
         }
@@ -901,9 +941,7 @@ export default function TerminalWorkspace() {
     } finally {
       setLoadingGlobal(false);
     }
-  }, [translateWithGemini]);
-
-
+  }, []);
 
   // 8 Kaynaklı Güçlü Çift/Çoklu Proxy Havuzu (AbortSignal.timeout(8000))
   const fetchRSS = async (url: string): Promise<string | null> => {
@@ -974,6 +1012,9 @@ export default function TerminalWorkspace() {
         }
       });
 
+      // Tüm kaynaklardan gelen haberler birleştikten sonra sayısal sıralamayı kesin uygula:
+      allNews.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
       // Eğer dış proxy havuzu tamamen kapalıysa veya boşsa, sunucu tarafındaki /api/news rotasını dene
       if (allNews.length === 0) {
         try {
@@ -1008,24 +1049,31 @@ export default function TerminalWorkspace() {
       }
 
       if (allNews.length > 0) {
+        // Tüm kaynaklardan gelen haberleri kesin sırala
+        allNews.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
         // 2. GÜNLÜK AKIŞI SIFIRLAMA (23:59 Sonrası Yeni Gün Temizliği):
-        // Haber birikmesini engelle: Sadece bugünün haberleri listelensin
+        // Haber birikmesini engelle: Öncelikle bugünün haberleri listelensin
         const todaysNews = allNews.filter((item) => isToday(item.dateObj || item.timestamp));
+        const listToProcess = todaysNews.length > 0 ? todaysNews : allNews;
 
         // En güncelden eskiye doğru sırala
-        todaysNews.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        listToProcess.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
         // Mükerrer haberleri filtrele
         const seenTitles = new Set<string>();
         const deduplicated: TerminalHaber[] = [];
 
-        for (const item of todaysNews) {
+        for (const item of listToProcess) {
           const normKey = item.baslik.toLowerCase().replace(/[^a-z0-9ğüşıöç]/g, "").slice(0, 40);
           if (!seenTitles.has(normKey)) {
             seenTitles.add(normKey);
             deduplicated.push(item);
           }
         }
+
+        // Kesin sayısal sıralama (En son yayınlanan haber her zaman 1. sırada / en üstte)
+        deduplicated.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
         deduplicated.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 

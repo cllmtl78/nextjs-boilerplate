@@ -31,7 +31,6 @@ const ACTIVE_FEEDS: FeedConfig[] = [
   { url: "https://www.cnbce.com/rss", badge: "CNBC-E" },
   { url: "https://www.ekonomist.com.tr/rss", badge: "EKONOMİST" },
   { url: "https://www.foreks.com/rss", badge: "FOREKS" },
-  { url: "https://uzmanpara.milliyet.com.tr/haber_rss/", badge: "UZMAN PARA" },
   { url: "https://www.ntv.com.tr/ntvpara.rss", badge: "NTV PARA" },
   {
     url: "https://www.turkiyegazetesi.com.tr/rss",
@@ -47,27 +46,38 @@ const ACTIVE_FEEDS: FeedConfig[] = [
 
 const parseNewsDate = (
   pubDateStr: string | number | Date | null | undefined
-): { time: string; timestamp: number; dateObj: Date | null } => {
-  if (!pubDateStr) return { time: "--:--:--", timestamp: 0, dateObj: null };
-  try {
-    const raw = typeof pubDateStr === "string" ? pubDateStr.trim() : pubDateStr;
-    const d = typeof raw === "number" || raw instanceof Date ? new Date(raw) : new Date(raw);
-
-    if (isNaN(d.getTime())) return { time: "--:--:--", timestamp: 0, dateObj: null };
-
-    // Eğer parse edilen saat şu anki zamandan 15 dakikadan daha ilerideyse çift ekleme olmuştur:
+): { time: string; timestamp: number; dateObj: Date } => {
+  if (!pubDateStr) {
     const now = new Date();
-    if (d.getTime() > now.getTime() + 15 * 60 * 1000) {
-      d.setHours(d.getHours() - 3);
-    }
-
-    const formattedTime = new Intl.DateTimeFormat("tr-TR", {
-      timeZone: "Europe/Istanbul",
+    const time = now.toLocaleTimeString("tr-TR", {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
-      hour12: false,
-    }).format(d);
+      timeZone: "Europe/Istanbul",
+    });
+    return { time, timestamp: now.getTime(), dateObj: now };
+  }
+  try {
+    const raw = typeof pubDateStr === "string" ? pubDateStr.trim() : pubDateStr;
+    const d = new Date(raw);
+
+    if (isNaN(d.getTime())) {
+      const now = new Date();
+      const time = now.toLocaleTimeString("tr-TR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        timeZone: "Europe/Istanbul",
+      });
+      return { time, timestamp: now.getTime(), dateObj: now };
+    }
+
+    const formattedTime = d.toLocaleTimeString("tr-TR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      timeZone: "Europe/Istanbul",
+    });
 
     return {
       time: formattedTime,
@@ -75,7 +85,14 @@ const parseNewsDate = (
       dateObj: d,
     };
   } catch {
-    return { time: "--:--:--", timestamp: 0, dateObj: null };
+    const now = new Date();
+    const time = now.toLocaleTimeString("tr-TR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      timeZone: "Europe/Istanbul",
+    });
+    return { time, timestamp: now.getTime(), dateObj: now };
   }
 };
 

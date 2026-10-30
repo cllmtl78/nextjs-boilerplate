@@ -269,13 +269,187 @@ const renderCountryBadge = (country: "TR" | "US" | "EU" | "CN" | "JP") => {
   }
 };
 
+const CACHE_BIST_DATA = "bpt_bist_market_data";
+
+interface RawBistStock {
+  kod?: string;
+  symbol?: string;
+  sembol?: string;
+  code?: string;
+  ad?: string;
+  name?: string;
+  fiyat?: number | string;
+  son?: number | string;
+  last?: number | string;
+  price?: number | string;
+  kapanis?: number | string;
+  yuzdedegisim?: number | string;
+  degisim?: number | string;
+  changePercent?: number | string;
+  change?: number | string;
+  fark?: number | string;
+  hacim?: number | string;
+  hacimtl?: number | string;
+  volume?: number | string;
+  vol?: number | string;
+}
+
+function parseRawStock(raw: RawBistStock): (StockMover & { volumeNum: number }) | null {
+  const symbol = String(raw.kod || raw.symbol || raw.sembol || raw.code || "").trim().toUpperCase();
+  if (!symbol || symbol.length < 2 || symbol.length > 8) return null;
+
+  const parseNum = (val: unknown): number => {
+    if (typeof val === "number") return isNaN(val) ? 0 : val;
+    if (typeof val === "string") {
+      // 1.234,56 veya 1234.56 formatı temizliği
+      const clean = val.replace(/\s+/g, "").replace(/\./g, "").replace(",", ".");
+      const num = parseFloat(clean);
+      return isNaN(num) ? 0 : num;
+    }
+    return 0;
+  };
+
+  const price = parseNum(raw.fiyat ?? raw.son ?? raw.last ?? raw.price ?? raw.kapanis);
+  const changePercent = parseNum(raw.yuzdedegisim ?? raw.degisim ?? raw.changePercent ?? raw.change ?? raw.fark);
+  const volumeNum = parseNum(raw.hacimtl ?? raw.hacim ?? raw.volume ?? raw.vol);
+
+  const formatVolume = (vol: number): string => {
+    if (vol >= 1_000_000_000) {
+      return `${(vol / 1_000_000_000).toFixed(2)} Mr TL`;
+    }
+    if (vol >= 1_000_000) {
+      return `${(vol / 1_000_000).toFixed(2)} Mn TL`;
+    }
+    if (vol > 0) {
+      return `${Math.round(vol).toLocaleString("tr-TR")} TL`;
+    }
+    return "--";
+  };
+
+  return {
+    symbol,
+    price: price > 0 ? price : 10.0,
+    changePercent: Math.round(changePercent * 100) / 100,
+    volumeStr: formatVolume(volumeNum),
+    volumeNum,
+    isUp: changePercent >= 0,
+  };
+}
+
+// 1. CANLI VERİ ÇEKME MOTORU (BIST Canlı API):
+const fetchBistMarketData = async (): Promise<unknown[] | null> => {
+  const targetUrl = "https://bigpara.hurriyet.com.tr/api/v1/hisse/canli";
+  const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`;
+
+  try {
+    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(6000) });
+    const json = await res.json();
+    if (json && Array.isArray(json.data) && json.data.length > 0) {
+      return json.data;
+    }
+  } catch {
+    // Alternatif proxy fallback: allorigins
+    try {
+      const resAlt = await fetch(
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+        { signal: AbortSignal.timeout(6000) }
+      );
+      const jsonAlt = await resAlt.json();
+      if (jsonAlt && Array.isArray(jsonAlt.data) && jsonAlt.data.length > 0) {
+        return jsonAlt.data;
+      }
+    } catch {
+      // proxy fallback hatası
+    }
+  }
+
+  // 3. Fallback: Next.js sunucu proxy rotası (/api/bist-movers)
+  try {
+    const sRes = await fetch("/api/bist-movers", { cache: "no-store", signal: AbortSignal.timeout(5000) });
+    if (sRes.ok) {
+      const sJson = await sRes.json();
+      if (sJson && (Array.isArray(sJson.gainers) || Array.isArray(sJson.data))) {
+        return sJson.data || [...(sJson.gainers || []), ...(sJson.losers || []), ...(sJson.volume || [])];
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return null;
+};
+
+// 3. SEKTÖR AKIŞI VE DİNAMİK YÜZDE BARLARI LİSTESİ:
+const SECTOR_DEFINITIONS: { code: string; name: string; keyStocks: string[]; fallbackChange: number }[] = [
+  { code: "XBANK", name: "Bankacılık", keyStocks: ["AKBNK", "ISCTR", "YKBNK", "GARAN", "VAKBN"], fallbackChange: 2.48 },
+  { code: "XULAŞ", name: "Ulaştırma", keyStocks: ["THYAO", "PGSUS", "TAVHL", "CLEBI"], fallbackChange: 2.15 },
+  { code: "XHOLD", name: "Holding", keyStocks: ["KCHOL", "SAHOL", "ALARK", "ENKAI"], fallbackChange: 1.34 },
+  { code: "XMANA", name: "Metal Ana", keyStocks: ["EREGL", "KRDMD", "CEMTS"], fallbackChange: 0.72 },
+  { code: "XUSIN", name: "Sanayi", keyStocks: ["FROTO", "TOASO", "TUPRS", "SISE", "ARCLK"], fallbackChange: 0.45 },
+  { code: "XGIDA", name: "Gıda İçecek", keyStocks: ["BIMAS", "MGROS", "CCOLA", "ULKER"], fallbackChange: -0.38 },
+  { code: "XGMYO", name: "Gayrimenkul", keyStocks: ["EKGYO", "SNGYO", "ISGYO", "TRGYO"], fallbackChange: -0.82 },
+  { code: "XBLSM", name: "Bilişim", keyStocks: ["MIATK", "REEDR", "KFEIN", "VBTYZ"], fallbackChange: -1.24 },
+  { code: "XKMYA", name: "Kimya Petrol", keyStocks: ["SASA", "HEKTS", "PETKM", "GUBRF"], fallbackChange: -1.55 },
+  { code: "XINSA", name: "İnşaat", keyStocks: ["ENKAI", "OYAKC", "CIMSA", "NUHCM"], fallbackChange: -1.82 },
+];
+
 export default function MarketIntelligence() {
   // Varsayılan olarak (ilk açılışta) Sektör sekmesi aktif
   const [activeTab, setActiveTab] = useState<MoverTab>("sectors");
-  const [gainers, setGainers] = useState<StockMover[]>(DEFAULT_GAINERS);
-  const [losers, setLosers] = useState<StockMover[]>(DEFAULT_LOSERS);
-  const [volume, setVolume] = useState<StockMover[]>(DEFAULT_VOLUME);
-  const [sectors, setSectors] = useState<SectorItem[]>(DEFAULT_SECTORS);
+
+  // Sayfa ilk açıldığında localStorage'daki son veriyi hemen ekrana bas
+  const [gainers, setGainers] = useState<StockMover[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem(CACHE_BIST_DATA);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed?.gainers) && parsed.gainers.length > 0) return parsed.gainers;
+        }
+      } catch {}
+    }
+    return DEFAULT_GAINERS;
+  });
+
+  const [losers, setLosers] = useState<StockMover[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem(CACHE_BIST_DATA);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed?.losers) && parsed.losers.length > 0) return parsed.losers;
+        }
+      } catch {}
+    }
+    return DEFAULT_LOSERS;
+  });
+
+  const [volume, setVolume] = useState<StockMover[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem(CACHE_BIST_DATA);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed?.volume) && parsed.volume.length > 0) return parsed.volume;
+        }
+      } catch {}
+    }
+    return DEFAULT_VOLUME;
+  });
+
+  const [sectors, setSectors] = useState<SectorItem[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem(CACHE_BIST_DATA);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed?.sectors) && parsed.sectors.length > 0) return parsed.sectors;
+        }
+      } catch {}
+    }
+    return DEFAULT_SECTORS;
+  });
+
   const [tickingSymbol, setTickingSymbol] = useState<string | null>(null);
 
   // Canlı Takvim State (Önce localStorage veya fallback ile başlat)
@@ -299,36 +473,128 @@ export default function MarketIntelligence() {
     return FALLBACK_CALENDAR;
   });
 
-  // 1. Canlı BIST verilerini sunucu rotasından çek (/api/bist-movers)
+  // 1 & 4. BIST CANLI VERİ ÇEKME & 20 SANİYEDE BİR GÜNCELLEME:
   useEffect(() => {
     let isMounted = true;
-    const fetchMovers = async () => {
-      try {
-        const res = await fetch("/api/bist-movers", { cache: "no-store" });
-        if (res.ok && isMounted) {
-          const data = await res.json();
-          if (data.gainers && Array.isArray(data.gainers)) {
-            setGainers(data.gainers.slice(0, 10));
-          }
-          if (data.losers && Array.isArray(data.losers)) {
-            setLosers(data.losers.slice(0, 10));
-          }
-          if (data.volume && Array.isArray(data.volume)) {
-            setVolume(data.volume.slice(0, 10));
-          }
-          if (data.sectors && Array.isArray(data.sectors)) {
-            setSectors(data.sectors);
-          }
+
+    const processAndSetMarketData = (rawList: unknown[]) => {
+      if (!Array.isArray(rawList) || rawList.length === 0) return;
+
+      const parsedStocks: (StockMover & { volumeNum: number })[] = [];
+      const stockMap = new Map<string, StockMover & { volumeNum: number }>();
+
+      rawList.forEach((item) => {
+        const parsed = parseRawStock(item as RawBistStock);
+        if (parsed) {
+          parsedStocks.push(parsed);
+          stockMap.set(parsed.symbol, parsed);
         }
-      } catch {
-        // Fallback veriler aktif kalır
+      });
+
+      if (parsedStocks.length === 0) return;
+
+      // 2. DİNAMİK LİSTE HESAPLAMA (Artanlar, Düşenler, Hacim):
+      // Artanlar: list.sort((a, b) => b.changePercent - a.changePercent).slice(0, 10)
+      const sortedGainers: StockMover[] = [...parsedStocks]
+        .sort((a, b) => b.changePercent - a.changePercent)
+        .slice(0, 10)
+        .map(({ symbol, price, changePercent, volumeStr, isUp }) => ({
+          symbol,
+          price,
+          changePercent,
+          volumeStr,
+          isUp,
+        }));
+
+      // Düşenler: list.sort((a, b) => a.changePercent - b.changePercent).slice(0, 10)
+      const sortedLosers: StockMover[] = [...parsedStocks]
+        .sort((a, b) => a.changePercent - b.changePercent)
+        .slice(0, 10)
+        .map(({ symbol, price, changePercent, volumeStr, isUp }) => ({
+          symbol,
+          price,
+          changePercent,
+          volumeStr,
+          isUp,
+        }));
+
+      // Hacim: list.sort((a, b) => b.volume - a.volume).slice(0, 10)
+      const sortedVolume: StockMover[] = [...parsedStocks]
+        .sort((a, b) => b.volumeNum - a.volumeNum)
+        .slice(0, 10)
+        .map(({ symbol, price, changePercent, volumeStr, isUp }) => ({
+          symbol,
+          price,
+          changePercent,
+          volumeStr,
+          isUp,
+        }));
+
+      // 3. SEKTÖR AKIŞI VE DİNAMİK YÜZDE BARLARI
+      const dynamicSectors: SectorItem[] = SECTOR_DEFINITIONS.map((def) => {
+        // Eğer veri listesinde doğrudan endeks varsa onu al
+        if (stockMap.has(def.code)) {
+          return {
+            code: def.code,
+            name: def.name,
+            change: stockMap.get(def.code)!.changePercent,
+          };
+        }
+
+        // İlgili sektör hisselerinden anlık ağırlıklı ortalama çıkar
+        const matching = def.keyStocks
+          .map((sym) => stockMap.get(sym))
+          .filter((st): st is StockMover & { volumeNum: number } => !!st);
+
+        let finalChange = def.fallbackChange;
+        if (matching.length > 0) {
+          const sum = matching.reduce((acc, curr) => acc + curr.changePercent, 0);
+          finalChange = Math.round((sum / matching.length) * 100) / 100;
+        }
+
+        return {
+          code: def.code,
+          name: def.name,
+          change: finalChange,
+        };
+      });
+
+      if (isMounted) {
+        setGainers(sortedGainers);
+        setLosers(sortedLosers);
+        setVolume(sortedVolume);
+        setSectors(dynamicSectors);
+
+        try {
+          localStorage.setItem(
+            CACHE_BIST_DATA,
+            JSON.stringify({
+              gainers: sortedGainers,
+              losers: sortedLosers,
+              volume: sortedVolume,
+              sectors: dynamicSectors,
+              timestamp: Date.now(),
+            })
+          );
+        } catch {
+          // ignore
+        }
       }
     };
 
-    void fetchMovers();
+    const updateMarketData = async () => {
+      const data = await fetchBistMarketData();
+      if (data && Array.isArray(data) && data.length > 0) {
+        processAndSetMarketData(data);
+      }
+    };
+
+    void updateMarketData();
+
+    // Seans esnasında her 20 saniyede bir arka planda sessizce yeni fiyatları çekip listeleri otomatik yeniden sırala
     const interval = setInterval(() => {
-      void fetchMovers();
-    }, 15000);
+      void updateMarketData();
+    }, 20000);
 
     return () => {
       isMounted = false;
@@ -436,8 +702,6 @@ export default function MarketIntelligence() {
       ? losers.slice(0, 10)
       : volume.slice(0, 10);
 
-  const maxAbsSectorChange = 3.2;
-
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-[10px]">
       {/* ================= 1. KOLON: / BIST Hareketler (h-[380px]) ================= */}
@@ -478,15 +742,12 @@ export default function MarketIntelligence() {
           </div>
         </div>
 
-        {/* Sekme 1: SEKTÖR AKIŞI (Çift Yönlü 0-Merkezli Bar Grafiği) */}
+        {/* Sekme 1: SEKTÖR AKIŞI (Çift Yönlü 0-Merkezli Dinamik Bar Grafiği) */}
         {activeTab === "sectors" ? (
           <div className="flex flex-col justify-between h-full flex-1 px-3 py-1">
             {sectors.map((s) => {
               const isPositive = s.change >= 0;
-              const widthPct = Math.min(
-                100,
-                Math.round((Math.abs(s.change) / maxAbsSectorChange) * 100)
-              );
+              const barWidthPct = Math.min(Math.abs(s.change) * 25, 100);
 
               return (
                 <div
@@ -495,42 +756,44 @@ export default function MarketIntelligence() {
                 >
                   {/* Sol: Sektör Kodu ve İsim */}
                   <div className="w-[110px] shrink-0 flex items-center justify-between pr-2 border-r border-white/[0.04]">
-                    <span className="text-[#38bdf8] font-bold text-[11px]">{s.code}</span>
+                    <span className="text-[#38bdf8] font-bold text-[11px] font-mono">{s.code}</span>
                     <span className="text-slate-400 text-[10px] truncate max-w-[65px]">
                       {s.name}
                     </span>
                   </div>
 
-                  {/* Orta: 0 Merkezli Çift Yönlü Bar */}
-                  <div className="flex-1 flex items-center h-4 mx-2 relative bg-slate-900/40 rounded-sm overflow-hidden">
-                    {/* Merkez Çizgisi */}
-                    <div className="absolute left-1/2 top-0 bottom-0 w-[1px] bg-slate-700/60 z-10" />
+                  {/* Orta: relative w-28 h-2 bg-slate-900 rounded ve orta çizgi referansı */}
+                  <div className="flex-1 flex items-center justify-center mx-2">
+                    <div className="relative w-28 h-2 bg-slate-900 rounded overflow-hidden flex items-center">
+                      {/* Merkez Çizgisi */}
+                      <div className="absolute left-1/2 top-0 bottom-0 w-[1px] bg-slate-700/60 z-10" />
 
-                    {/* Negatif Bar (Sola doğru) */}
-                    <div className="w-1/2 h-full flex justify-end">
-                      {!isPositive && (
-                        <div
-                          className="h-full bg-rose-500/80 rounded-l-xs transition-all duration-500"
-                          style={{ width: `${widthPct}%` }}
-                        />
-                      )}
-                    </div>
+                      {/* Negatif Bar (Kırmızıya boyanır bg-rose-500, sola doğru uzar) */}
+                      <div className="w-1/2 h-full flex justify-end">
+                        {!isPositive && (
+                          <div
+                            className="h-full bg-rose-500 rounded-l transition-all duration-500"
+                            style={{ width: `${barWidthPct}%` }}
+                          />
+                        )}
+                      </div>
 
-                    {/* Pozitif Bar (Sağa doğru) */}
-                    <div className="w-1/2 h-full flex justify-start">
-                      {isPositive && (
-                        <div
-                          className="h-full bg-emerald-500/80 rounded-r-xs transition-all duration-500"
-                          style={{ width: `${widthPct}%` }}
-                        />
-                      )}
+                      {/* Pozitif Bar (Yeşile boyanır bg-emerald-500, sağa doğru uzar) */}
+                      <div className="w-1/2 h-full flex justify-start">
+                        {isPositive && (
+                          <div
+                            className="h-full bg-emerald-500 rounded-r transition-all duration-500"
+                            style={{ width: `${barWidthPct}%` }}
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Sağ: Yüzde Değer */}
+                  {/* Sağ: Yüzde Metni (pozitifte +X.XX% yeşil, negatifte -X.XX% kırmızı) */}
                   <div className="w-[52px] shrink-0 text-right">
                     <span
-                      className={`text-[11px] font-semibold tabular-nums ${
+                      className={`text-[11px] font-semibold font-mono tabular-nums ${
                         isPositive ? "text-emerald-400" : "text-rose-400"
                       }`}
                     >
