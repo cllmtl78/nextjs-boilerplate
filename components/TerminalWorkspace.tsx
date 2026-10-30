@@ -80,7 +80,6 @@ export const parseNewsDate = (
     const raw = typeof pubDateStr === "string" ? pubDateStr.trim() : pubDateStr;
     const d = new Date(raw);
 
-    // Eğer tarih parse edilemediyse veya geçersizse Date.now() ver
     if (isNaN(d.getTime())) {
       const now = new Date();
       const time = now.toLocaleTimeString("tr-TR", {
@@ -179,8 +178,12 @@ function TerminalSkeletonList({ count = 5 }: { count?: number }) {
   );
 }
 
+// ============================================================================
+// KAP BİLDİRİMLERİ: SAAT KİLİTLEME & ÇOKLU KAYNAK MOTORU (SIFIR Date.now() HATASI)
+// ============================================================================
+
 export interface KapItem {
-  id: string | number;
+  id: number;
   code: string;
   type: string;
   title: string;
@@ -191,9 +194,12 @@ export interface KapItem {
   kapUrl: string;
 }
 
-// Saat kilitleme yardımcı fonksiyonu (Asla Date.now() ile şimdiki zamanı uydurmaz)
+const CACHE_KEY_KAP_V3 = "bpt_kap_disclosures_v3";
+const CACHE_KEY_KAP_DATE = "bpt_kap_last_date_v3";
+
+// 1. SAAT KİLİTLEME YARDIMCI FONKSİYONU (Asla Date.now() veya new Date() ile şimdiki zamanı uydurmaz!)
 export const extractFixedKapTime = (rawDateStr: unknown): string => {
-  if (!rawDateStr) return "--:--:--";
+  if (!rawDateStr) return "--:--";
   const str = String(rawDateStr).trim();
   // İçinde HH:mm:ss veya HH:mm varsa doğrudan onu al, Date objesine sokup bozma
   const timeMatch = str.match(/\b([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?\b/);
@@ -202,53 +208,50 @@ export const extractFixedKapTime = (rawDateStr: unknown): string => {
       ? `${timeMatch[1]}:${timeMatch[2]}:${timeMatch[3]}`
       : `${timeMatch[1]}:${timeMatch[2]}:00`;
   }
-  const d = new Date(str);
-  if (!isNaN(d.getTime())) {
-    return new Intl.DateTimeFormat("tr-TR", {
-      timeZone: "Europe/Istanbul",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    }).format(d);
-  }
-  return "--:--:--";
+  return "--:--";
 };
 
-// 1. HER GECE 00:00'DA GÜNLÜK SIFIRLAMA KONTROLÜ (DÜNÜN KAP'LARINI TEMİZLEME):
-export const isTodayKap = (timestampOrStr: number | string | Date | null | undefined): boolean => {
-  if (!timestampOrStr) return true;
-  if (typeof timestampOrStr === "string") {
-    const s = timestampOrStr.toLowerCase();
-    if (s.includes("bugün") || (!s.includes(".") && !s.includes("-") && !s.includes("/"))) {
-      return true;
-    }
-    const todayTr = new Date().toLocaleDateString("tr-TR");
-    const todayIso = new Date().toISOString().split("T")[0];
-    if (s.includes(todayTr) || s.includes(todayIso)) return true;
-  }
-  const itemDate = new Date(timestampOrStr);
-  if (isNaN(itemDate.getTime())) return true;
+// Sadece bugünün KAP bildirimlerini kabul eden filtre
+export const isTodayKapString = (rawDateStr: unknown): boolean => {
+  if (!rawDateStr) return true;
+  const str = String(rawDateStr).trim().toLowerCase();
+  if (!str) return true;
+
+  // Eğer "bugün" yazıyorsa veya sadece saat varsa (nokta/tire içermiyorsa) bugündür
+  if (str.includes("bugün") || str.includes("today")) return true;
+  if (!str.includes(".") && !str.includes("-") && !str.includes("/")) return true;
+
   const now = new Date();
-  return (
-    itemDate.getDate() === now.getDate() &&
-    itemDate.getMonth() === now.getMonth() &&
-    itemDate.getFullYear() === now.getFullYear()
-  );
+  const dd = String(now.getDate()).padStart(2, "0");
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const yyyy = String(now.getFullYear());
+
+  // 30.10.2026, 2026-10-30 veya 30/10/2026 kontrolü
+  if (
+    str.includes(`${dd}.${mm}.${yyyy}`) ||
+    str.includes(`${yyyy}-${mm}-${dd}`) ||
+    str.includes(`${dd}/${mm}/${yyyy}`)
+  ) {
+    return true;
+  }
+
+  return false;
 };
 
 export const checkAndResetKapDailyCache = (): void => {
   if (typeof window === "undefined") return;
   try {
+    // İlk iş olarak eski takılı kalmış tüm KAP önbelleklerini temizle
+    localStorage.removeItem("bpt_kap_cache");
+    localStorage.removeItem("bpt_kap_disclosures");
+
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    const lastDate = localStorage.getItem("bpt_kap_last_date");
+    const lastDate = localStorage.getItem(CACHE_KEY_KAP_DATE);
 
     if (lastDate !== todayStr) {
-      // Gece 00:00 geçilmişse dünün önbelleğini derhal temizle
-      localStorage.removeItem("bpt_kap_cache");
-      localStorage.removeItem("bpt_kap_disclosures");
-      localStorage.setItem("bpt_kap_last_date", todayStr);
+      localStorage.removeItem(CACHE_KEY_KAP_V3);
+      localStorage.setItem(CACHE_KEY_KAP_DATE, todayStr);
     }
   } catch {
     // ignore
@@ -256,61 +259,57 @@ export const checkAndResetKapDailyCache = (): void => {
 };
 
 export const parseKapItems = (data: unknown[]): KapItem[] => {
-  return (data as Record<string, unknown>[])
-    .map((rawItem) => {
-      const item = (rawItem.basic as Record<string, unknown>) || rawItem;
-      const disclosureId = String(item.disclosureIndex || item.disclosureId || item.id || "");
-      const rawDate = item.publishDate || item.disclosureTime || item.date || item.time || "";
+  if (!Array.isArray(data)) return [];
+  const results: KapItem[] = [];
 
-      if (rawDate && !isTodayKap(String(rawDate))) {
-        return null;
-      }
+  data.slice(0, 40).forEach((rawItem) => {
+    if (!rawItem || typeof rawItem !== "object") return;
+    const obj = rawItem as Record<string, unknown>;
+    const basic = (obj.basic as Record<string, unknown>) || obj;
 
-      const fixedTime = extractFixedKapTime(rawDate);
-      const numId = Number(disclosureId.replace(/\D/g, "")) || 0;
+    const rawId = basic.disclosureIndex || basic.disclosureId || basic.id || basic.kapId;
+    const numId = Number(String(rawId || "").replace(/\D/g, ""));
+    if (!numId || numId < 1000) return;
 
-      return {
-        id: disclosureId || String(numId),
-        code: String(item.stockCodes || item.stockCode || item.relatedStocks || "KAP").toUpperCase(),
-        type: String(item.disclosureClass || item.disclosureType || item.type || "ÖDA").toUpperCase(),
-        title: String(item.companyTitle || item.companyName || item.stockTitle || "Şirket Bildirimi"),
-        subject: String(item.title || item.disclosureTitle || item.subject || "Açıklama"),
-        summary: String(item.summary || item.disclosureTitle || item.title || ""),
-        time: fixedTime,
-        timestamp: numId, // Sıralama için 7 haneli resmi KAP ID'sini baz al (En büyük ID = En yeni KAP)
-        kapUrl: disclosureId
-          ? `https://www.kap.org.tr/tr/Bildirim/${disclosureId}`
-          : "https://www.kap.org.tr",
-      };
-    })
-    .filter((item): item is KapItem => item !== null && Boolean(item.id))
-    .sort((a, b) => Number(b.id) - Number(a.id));
+    const rawTime =
+      basic.publishDate ||
+      basic.disclosureTime ||
+      basic.time ||
+      basic.saat ||
+      basic.tarih ||
+      "";
+
+    if (!isTodayKapString(rawTime)) return;
+
+    const fixedTime = extractFixedKapTime(rawTime);
+    const rawCode = String(
+      basic.stockCodes || basic.stockCode || basic.relatedStocks || basic.hisseKodu || basic.kod || "KAP"
+    )
+      .split(",")[0]
+      .trim()
+      .toUpperCase();
+
+    results.push({
+      id: numId,
+      code: rawCode || "KAP",
+      type: String(basic.disclosureClass || basic.disclosureType || basic.tur || basic.type || "ÖDA").toUpperCase(),
+      title: String(basic.companyTitle || basic.companyName || basic.sirketAdi || basic.title || "KAP Bildirimi").trim(),
+      subject: String(basic.title || basic.disclosureTitle || basic.baslik || basic.subject || "Özel Durum Açıklaması").trim(),
+      summary: String(basic.summary || basic.ozet || basic.title || basic.disclosureTitle || "").trim(),
+      time: fixedTime,
+      timestamp: numId,
+      kapUrl: `https://www.kap.org.tr/tr/Bildirim/${numId}`,
+    });
+  });
+
+  // En büyük ID = En yeni KAP bildirimi (b.id - a.id)
+  return results.sort((a, b) => b.id - a.id);
 };
 
-// 2. GÜNLÜK CANLI KAP API VE CACHE-BUSTING (Çoklu Proxy & WAF Aşımı):
-export const fetchTodayKapDisclosures = async (): Promise<KapItem[]> => {
+// 2. YENİ KAP BİLDİRİMLERİNİ ÇEKEN ÇOKLU MOTOR (WAF/CACHE ENGELİNİ AŞAR):
+export const fetchLiveKapFeed = async (): Promise<KapItem[]> => {
   checkAndResetKapDailyCache();
-  const now = new Date();
-  const todayStr = now.toISOString().split("T")[0];
-  const cacheBuster = Date.now();
-
-  // 1. Öncelik: Dahili API (/api/kap-disclosures varsa en hızlı ve WAF'sız)
-  try {
-    const sRes = await fetch(`/api/kap-disclosures?_t=${cacheBuster}`, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(4500),
-    });
-    if (sRes.ok) {
-      const sJson = await sRes.json();
-      const rawArr = Array.isArray(sJson) ? sJson : sJson?.data;
-      if (Array.isArray(rawArr) && rawArr.length > 0) {
-        const parsed = parseKapItems(rawArr);
-        if (parsed.length > 0) return parsed;
-      }
-    }
-  } catch {
-    // ignore
-  }
+  const bust = Date.now();
 
   const proxies = [
     (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
@@ -318,72 +317,123 @@ export const fetchTodayKapDisclosures = async (): Promise<KapItem[]> => {
     (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
   ];
 
-  // 2. Resmi KAP Günlük Uç Noktası
-  const kapUrl = `https://www.kap.org.tr/tr/api/disclosures?fromDate=${todayStr}&toDate=${todayStr}&_t=${cacheBuster}`;
+  // ADIM 0: Varsa sunucu tarafı dahili API (/api/kap-disclosures)
+  try {
+    const internalRes = await fetch(`/api/kap-disclosures?_t=${bust}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(4000),
+    });
+    if (internalRes.ok) {
+      const internalJson = await internalRes.json();
+      const rawArr = Array.isArray(internalJson) ? internalJson : internalJson?.data;
+      if (Array.isArray(rawArr) && rawArr.length > 0) {
+        const parsed = parseKapItems(rawArr);
+        if (parsed.length > 0) return parsed;
+      }
+    }
+  } catch {
+    // Dahili rota yoksa veya hata verdiyse dış kaynaklara geç
+  }
+
+  // KAYNAK 1: KAP Resmi Bildirim Servisi (CodeTabs / CORSProxy / AllOrigins)
   for (const makeProxy of proxies) {
     try {
-      const res = await fetch(makeProxy(kapUrl), {
+      const res = await fetch(makeProxy(`https://www.kap.org.tr/tr/api/disclosures?_t=${bust}`), {
         signal: AbortSignal.timeout(6000),
       });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
-          const items = parseKapItems(data);
-          if (items.length > 0) return items;
+          const parsed = parseKapItems(data);
+          if (parsed.length > 0) return parsed;
         }
       }
     } catch {
-      // Sonraki proxy'ye geç
+      // Sonraki proxy'yi dene
     }
   }
 
-  // 3. Alternatif Güvenilir Fallback: Mynet Finans Canlı KAP Akışı
-  const altUrl = `https://finans.mynet.com/api/kap/haberler?_t=${cacheBuster}`;
+  // KAYNAK 2: Mynet Finans Canlı KAP JSON Servisi
   for (const makeProxy of proxies) {
     try {
-      const altRes = await fetch(makeProxy(altUrl), { signal: AbortSignal.timeout(6000) });
-      if (altRes.ok) {
-        const altData = await altRes.json();
-        const rawList = Array.isArray(altData) ? altData : altData?.data || [];
-
+      const res = await fetch(makeProxy(`https://finans.mynet.com/api/kap/haberler?_t=${bust}`), {
+        signal: AbortSignal.timeout(5500),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const rawList = Array.isArray(json) ? json : json?.data || [];
         if (Array.isArray(rawList) && rawList.length > 0) {
-          const mynetItems = (rawList as Record<string, unknown>[])
-            .map((item) => {
-              const rawDate = item.tarih || item.publishDate || item.saat || "";
-              if (rawDate && !isTodayKap(String(rawDate))) return null;
-
-              const kapId = String(item.kapId || item.id || "");
-              const numId = Number(kapId.replace(/\D/g, "")) || 0;
-              return {
-                id: kapId,
-                code: String(item.hisseKodu || item.kod || "BIST").toUpperCase(),
-                type: String(item.tur || item.disclosureType || "ÖDA").toUpperCase(),
-                title: String(item.sirketAdi || item.title || "Şirket Bildirimi"),
-                subject: String(item.baslik || item.konu || "Açıklama"),
-                summary: String(item.ozet || item.baslik || ""),
-                time: extractFixedKapTime(item.saat || rawDate),
-                timestamp: numId,
-                kapUrl: kapId
-                  ? `https://www.kap.org.tr/tr/Bildirim/${kapId}`
-                  : "https://www.kap.org.tr",
-              };
-            })
-            .filter((item): item is KapItem => item !== null && Boolean(item.id))
-            .sort((a, b) => Number(b.id) - Number(a.id));
-
-          if (mynetItems.length > 0) return mynetItems;
+          const parsed = parseKapItems(rawList);
+          if (parsed.length > 0) return parsed;
         }
       }
     } catch {
-      // ignore
+      // Sonraki proxy'yi dene
+    }
+  }
+
+  // KAYNAK 3: Matriks / Bigpara Canlı KAP HTML Tablosu (DOMParser Yedek)
+  if (typeof window !== "undefined" && typeof DOMParser !== "undefined") {
+    for (const makeProxy of proxies) {
+      try {
+        const res = await fetch(
+          makeProxy(`https://bigpara.hurriyet.com.tr/kobi/kap-haberleri/?_t=${bust}`),
+          { signal: AbortSignal.timeout(6000) }
+        );
+        if (res.ok) {
+          const html = await res.text();
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, "text/html");
+          const rows = Array.from(doc.querySelectorAll(".tBody ul, table tr")).slice(0, 30);
+          const parsed: KapItem[] = [];
+
+          rows.forEach((row, idx) => {
+            const text = (row as HTMLElement).innerText || row.textContent || "";
+            const linkEl = row.querySelector('a[href*="kap"]') as HTMLAnchorElement | null;
+            const idMatch = linkEl?.href?.match(/(\d{7})/) || text.match(/(\d{7})/);
+            const timeStr = extractFixedKapTime(text);
+
+            if (timeStr !== "--:--") {
+              const id = idMatch ? Number(idMatch[1]) : 1689000 + (30 - idx);
+              const rawCode =
+                (row.querySelector(".cell02, td:nth-child(2)") as HTMLElement | null)?.innerText?.trim() ||
+                "BIST";
+              const rawTitle =
+                (row.querySelector(".cell03, td:nth-child(3)") as HTMLElement | null)?.innerText?.trim() ||
+                "Özel Durum Açıklaması";
+
+              parsed.push({
+                id,
+                code: rawCode.split(/\s+/)[0].toUpperCase(),
+                type: "ÖDA",
+                title: rawTitle,
+                subject: rawTitle,
+                summary: text.replace(/\s+/g, " ").trim(),
+                time: timeStr,
+                timestamp: id,
+                kapUrl: idMatch
+                  ? `https://www.kap.org.tr/tr/Bildirim/${idMatch[1]}`
+                  : "https://www.kap.org.tr/tr/bildirim-sorgu",
+              });
+            }
+          });
+
+          if (parsed.length > 0) {
+            return parsed.sort((a, b) => b.id - a.id);
+          }
+        }
+      } catch {
+        // ignore
+      }
     }
   }
 
   return [];
 };
 
-export const fetchLiveKapDisclosures = fetchTodayKapDisclosures;
-export const fetchKapDisclosures = fetchTodayKapDisclosures;
+export const fetchTodayKapDisclosures = fetchLiveKapFeed;
+export const fetchLiveKapDisclosures = fetchLiveKapFeed;
+export const fetchKapDisclosures = fetchLiveKapFeed;
 
 export interface RssFeedConfig {
   url: string;
@@ -416,7 +466,7 @@ const ACTIVE_RSS_SOURCES: RssFeedConfig[] = [
   },
 ];
 
-// HTML entity decode mekanizması (&ouml;, &uuml;, &ccedil;, &rsquo;, &#39; vb. temizliği)
+// HTML entity decode mekanizması
 export const decodeHtmlEntities = (str?: string | null): string => {
   if (!str) return "";
   const raw = String(str).replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, "$1");
@@ -456,12 +506,10 @@ export const decodeHtmlEntities = (str?: string | null): string => {
   }
 };
 
-// HTML ve özel karakterleri temizleyen yardımcı
 function cleanHtmlStr(str?: string | null): string {
   return decodeHtmlEntities(str);
 }
 
-// Description metninden ilk 2 paragrafı ayıklayan fonksiyon
 function extractTwoParagraphs(desc: string, title: string, badge: string): string[] {
   if (!desc || desc.length < 15) {
     return [
@@ -493,7 +541,6 @@ function extractTwoParagraphs(desc: string, title: string, badge: string): strin
   ];
 }
 
-// DOMParser ile RSS XML ayrıştırma
 function parseRssWithDomParser(
   xmlText: string,
   feed: RssFeedConfig
@@ -513,7 +560,6 @@ function parseRssWithDomParser(
     for (let i = 0; i < itemNodes.length; i++) {
       const node = itemNodes[i];
 
-      // Özel Filtre: Türkiye Gazetesi ve Dünya Gazetesi için sadece "Ekonomi" kategorisi
       if (feed.filterEconomyOnly) {
         const catNodes = node.getElementsByTagName("category");
         let isEconomy = false;
@@ -569,7 +615,6 @@ function parseRssWithDomParser(
       });
     }
   } catch {
-    // DOMParser istisna verirse regex ile dene
     const chunks = xmlText.split(/<item[\s>]/i).slice(1);
     chunks.forEach((chunk, i) => {
       if (feed.filterEconomyOnly) {
@@ -632,18 +677,15 @@ function parseRssWithDomParser(
   return items;
 }
 
-// 3. ÇEVİRİ MOTORUNU KESİN OLARAK GEMINI PROMPT'UNA BAĞLA (MyMemory tamamen kaldırıldı)
 export const translateGlobalFeed = async (text: string): Promise<string> => {
   if (!text) return "";
 
-  // 1. Regex temizliği (çöp karakterleri ve Telegram artıklarını sil)
   const clean = text
     .replace(/\$[A-Z]{1,6}\b/g, "")
     .replace(/^\[.*?\]\s*·?\s*/gi, "")
     .replace(/[•·]+$/, "")
     .trim();
 
-  // 2. Cache kontrolü (aynı haber tekrar çevrilmesin, eski hatalı grev veya / içeren önbellekleri geçersiz kıl)
   if (typeof window !== "undefined") {
     try {
       const cached = localStorage.getItem("tr_" + clean.slice(0, 25));
@@ -663,7 +705,6 @@ export const translateGlobalFeed = async (text: string): Promise<string> => {
     "";
 
   if (!apiKey) {
-    // API anahtarı yoksa saçmalamaktansa orijinal temiz metni bırak
     return clean;
   }
 
@@ -788,62 +829,20 @@ export default function TerminalWorkspace() {
 
   const [seciliHaber, setSeciliHaber] = useState<TerminalHaber | null>(null);
   const [selectedKap, setSelectedKap] = useState<KapItem | null>(null);
-  const [kapBildirimleri, setKapBildirimleri] = useState<KapItem[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const today = new Date();
-        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-        const lastDate = localStorage.getItem("bpt_kap_last_date");
-
-        if (lastDate !== todayStr) {
-          localStorage.removeItem("bpt_kap_cache");
-          localStorage.removeItem("bpt_kap_disclosures");
-          localStorage.setItem("bpt_kap_last_date", todayStr);
-          return [];
-        }
-
-        const cached = localStorage.getItem("bpt_kap_disclosures");
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed as KapItem[];
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-    return [];
-  });
-
-  const [loadingKap, setLoadingKap] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const today = new Date();
-        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-        const lastDate = localStorage.getItem("bpt_kap_last_date");
-        if (lastDate === todayStr) {
-          const cached = localStorage.getItem("bpt_kap_disclosures");
-          if (cached) return false;
-        }
-      } catch {
-        // ignore
-      }
-    }
-    return true;
-  });
-
+  const [kapBildirimleri, setKapBildirimleri] = useState<KapItem[]>([]);
+  const [loadingKap, setLoadingKap] = useState<boolean>(true);
   const [newlyArrivedIds, setNewlyArrivedIds] = useState<Set<string>>(new Set());
 
   const knownIdsRef = useRef<Set<string>>(new Set());
   const isInitialLoadRef = useRef<boolean>(true);
   const translationsCacheRef = useRef>(new Map());
+  // KAP bildirimlerinin saatlerini bir kez alındıktan sonra kilitleyen referans haritası
+  const lockedKapTimesRef = useRef>(new Map());
 
   const loadGlobalNews = useCallback(async () => {
     try {
       let items: { id: string; zaman: string; timestamp: number; rawText: string; baslik: string }[] = [];
 
-      // 1. Birincil Canlı İstek (Next.js server-side telegram rotası)
       try {
         const res = await fetch("/api/telegram-news", { cache: "no-store" });
         if (res.ok) {
@@ -853,10 +852,9 @@ export default function TerminalWorkspace() {
           }
         }
       } catch {
-        // Sunucu rotası geçici hata verirse ikincil adıma geç
+        // ignore
       }
 
-      // 2. İkincil İstemci Tarafı Fallback (allorigins proxy)
       if (items.length === 0) {
         try {
           const proxyUrl =
@@ -896,7 +894,7 @@ export default function TerminalWorkspace() {
             }
           }
         } catch {
-          // İkincil proxy hatası yoksayılır
+          // ignore
         }
       }
 
@@ -923,17 +921,16 @@ export default function TerminalWorkspace() {
         try {
           localStorage.setItem(CACHE_KEY_GLOBAL, JSON.stringify(translatedItems));
         } catch {
-          // Önbellek yazma hatası yoksayılır
+          // ignore
         }
       }
     } catch {
-      // Hata durumunda mevcut liste ekranda korunur
+      // ignore
     } finally {
       setLoadingGlobal(false);
     }
   }, []);
 
-  // 8 Kaynaklı Güçlü Çift/Çoklu Proxy Havuzu (AbortSignal.timeout(8000))
   const fetchRSS = async (url: string): Promise<string | null> => {
     const proxies = [
       (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
@@ -1027,7 +1024,7 @@ export default function TerminalWorkspace() {
             }
           }
         } catch {
-          // Sunucu isteği hatası yoksayılır
+          // ignore
         }
       }
 
@@ -1086,17 +1083,16 @@ export default function TerminalWorkspace() {
             localStorage.removeItem(CACHE_KEY_BIST);
           }
         } catch {
-          // LocalStorage hatası yoksayılır
+          // ignore
         }
       }
     } catch {
-      // Ağ veya proxy hatasında ekran asla boş kalmaz
+      // ignore
     } finally {
       setLoadingBist(false);
     }
   }, []);
 
-  // 15 saniyede bir BIST & Türkiye arka planda sessizce sorgula (polling)
   useEffect(() => {
     const initialTimer = setTimeout(() => {
       void loadNews();
@@ -1112,7 +1108,6 @@ export default function TerminalWorkspace() {
     };
   }, [loadNews]);
 
-  // 15 saniyede bir Telegram @trad_fin Global haber akışını arka planda sorgula (polling)
   useEffect(() => {
     try {
       const savedTrans = localStorage.getItem(CACHE_KEY_TRANSLATIONS);
@@ -1142,37 +1137,75 @@ export default function TerminalWorkspace() {
     };
   }, [loadGlobalNews]);
 
-  // 4. CANLI GÜNCELLEME: KAP bildirimlerini sayfa açılışında çek ve her 30 saniyede bir sessizce kontrol et
+  // 3. KAP CANLI GÜNCELLEME & SAAT KİLİTLEME MİMARİSİ (`b.id - a.id`)
   useEffect(() => {
     let isMounted = true;
+
+    // İlk açılışta eski bozuk önbellekleri sil ve sadece bugünün v3 önbelleğini yükle
+    checkAndResetKapDailyCache();
+    try {
+      const cached = localStorage.getItem(CACHE_KEY_KAP_V3);
+      if (cached) {
+        const parsed = JSON.parse(cached) as KapItem[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          parsed.forEach((item) => {
+            if (item.id && item.time && item.time !== "--:--") {
+              lockedKapTimesRef.current.set(Number(item.id), item.time);
+            }
+          });
+          setKapBildirimleri(parsed.sort((a, b) => Number(b.id) - Number(a.id)));
+          setLoadingKap(false);
+        }
+      }
+    } catch {
+      // ignore
+    }
+
     const loadKap = async () => {
       checkAndResetKapDailyCache();
-      const items = await fetchKapDisclosures();
+      const freshItems = await fetchLiveKapFeed();
       if (!isMounted) return;
 
-      if (items && items.length > 0) {
+      if (freshItems && freshItems.length > 0) {
         setKapBildirimleri((prev) => {
-          // Var olan bildirimlerin saatlerini dondurarak koru, asla güncelleme
-          const prevTimeMap = new Map<string, string>();
+          // Mevcut listedeki bildirimleri ID üzerinden kaydet
+          const existingMap = new Map<number, KapItem>();
           prev.forEach((p) => {
-            if (p.id && p.time && p.time !== "--:--:--") {
-              prevTimeMap.set(String(p.id), p.time);
+            const numId = Number(p.id);
+            existingMap.set(numId, p);
+            if (p.time && p.time !== "--:--") {
+              lockedKapTimesRef.current.set(numId, p.time);
             }
           });
 
-          const merged = items.map((it) => ({
-            ...it,
-            time: prevTimeMap.get(String(it.id)) || it.time,
-          }));
+          // Yeni gelenleri işle: Zaten listede olan bir bildirimin `time` değerini ASLA değiştirme!
+          freshItems.forEach((item) => {
+            const numId = Number(item.id);
+            const lockedTime = lockedKapTimesRef.current.get(numId);
+            const finalTime = lockedTime || item.time;
 
-          // Resmi 7 haneli KAP ID'sine göre büyükten küçüğe sırala
-          merged.sort((a, b) => Number(b.id) - Number(a.id));
+            if (finalTime && finalTime !== "--:--") {
+              lockedKapTimesRef.current.set(numId, finalTime);
+            }
+
+            existingMap.set(numId, {
+              ...item,
+              id: numId,
+              time: finalTime,
+            });
+          });
+
+          // Doğrudan bildirim ID'sine göre büyükten küçüğe (b.id - a.id) sırala!
+          const merged = Array.from(existingMap.values())
+            .sort((a, b) => Number(b.id) - Number(a.id))
+            .slice(0, 35);
 
           try {
-            localStorage.setItem("bpt_kap_disclosures", JSON.stringify(merged));
+            localStorage.setItem(CACHE_KEY_KAP_V3, JSON.stringify(merged));
           } catch {
             // ignore
           }
+
           return merged;
         });
       }
@@ -1190,7 +1223,6 @@ export default function TerminalWorkspace() {
     };
   }, []);
 
-  // Modal için ESC klavye tuşu dinleyicisi
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -1207,7 +1239,7 @@ export default function TerminalWorkspace() {
     <div className="terminal-workspace">
       {/* 3-SÜTUNLU KOMPAKT ENDÜSTRİYEL TERMİNAL DÜZENİ (ÜST SIRA) */}
       <div className="terminal-grid">
-        {/* SÜTUN 1: BIST & Türkiye (Canlı Çok Kaynaklı Akış) */}
+        {/* SÜTUN 1: BIST & Türkiye */}
         <section className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[520px] overflow-hidden">
           <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
             <div className="flex items-center">
@@ -1264,7 +1296,7 @@ export default function TerminalWorkspace() {
           </div>
         </section>
 
-        {/* SÜTUN 2: Global (Telegram @trad_fin Canlı Otomatik Çevrilen Akış) */}
+        {/* SÜTUN 2: Global */}
         <section className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[520px] overflow-hidden">
           <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
             <div className="flex items-center">
@@ -1275,7 +1307,6 @@ export default function TerminalWorkspace() {
             </div>
           </div>
 
-          {/* Ana Liste Kapsayıcısı */}
           <div className="flex flex-col gap-3 p-3 overflow-y-auto pane-scroll flex-1 min-h-0">
             {loadingGlobal ? (
               Array.from({ length: 6 }).map((_, i) => (
@@ -1393,7 +1424,7 @@ export default function TerminalWorkspace() {
             </div>
           </section>
 
-          {/* Alt: Resmi Kurumlar (Statik sahte veriler tamamen silindi, bekleme ekranı eklendi) */}
+          {/* Alt: Resmi Kurumlar */}
           <section className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[255px] overflow-hidden">
             <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
               <div className="flex items-center">
@@ -1412,12 +1443,12 @@ export default function TerminalWorkspace() {
         </div>
       </div>
 
-      {/* ALT SIRA: 3 KOLONLU GRID (/ BIST Sektör, / TAKVİM, / Bülten) */}
+      {/* ALT SIRA: 3 KOLONLU GRID */}
       <div className="w-full mt-4" style={{ marginTop: "16px" }}>
         <MarketIntelligence />
       </div>
 
-      {/* 3. HABER DETAY MODALI (PREMIUM TERMINAL TASARIMI) */}
+      {/* HABER DETAY MODALI */}
       {seciliHaber && (
         <div
           className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-fadeIn"
@@ -1504,7 +1535,7 @@ export default function TerminalWorkspace() {
         </div>
       )}
 
-      {/* 3. TIKLANINCA AÇILAN KAP DETAY MODALI */}
+      {/* KAP DETAY MODALI */}
       {selectedKap && (
         <div
           className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
@@ -1551,7 +1582,9 @@ export default function TerminalWorkspace() {
             </div>
 
             <div className="px-6 py-4 bg-[#080c14] border-t border-white/[0.06] flex items-center justify-between">
-              <span className="text-[11px] font-mono text-slate-500">Kaynak: Kamuyu Aydınlatma Platformu</span>
+              <span className="text-[11px] font-mono text-slate-500">
+                Kaynak: Kamuyu Aydınlatma Platformu (#{selectedKap.id})
+              </span>
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setSelectedKap(null)}
