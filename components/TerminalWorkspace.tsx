@@ -39,7 +39,6 @@ interface ApiNewsItemResponse {
   dateObj?: string | null;
 }
 
-
 export interface GlobalNewsItem {
   id: string;
   zaman: string;
@@ -145,9 +144,7 @@ export const isToday = (dateObj: Date | number | string | null | undefined): boo
 
 export function formatNaturalCase(text: string): string {
   if (!text) return "";
-  // Baştaki tüm /, *, tire ve boşluk artıklarını temizle
   let clean = text.replace(/^[\s\*\/\-]+/, "").trim();
-  // Cümle başı standart büyük harfle başlasın, metnin geri kalanı asla toLowerCase ile bozulmasın
   if (clean.length > 0) {
     clean = clean.charAt(0).toUpperCase() + clean.slice(1);
   }
@@ -158,8 +155,6 @@ export function cleanEnglishWire(text: string): string {
   const cleaned = cleanWireText(text);
   return cleaned ? formatNaturalCase(cleaned) : "Wire";
 }
-
-
 
 // Profesyonel Terminal Skeleton Loader (Haberler çekilirken gösterilen zarif animasyon)
 function TerminalSkeletonList({ count = 5 }: { count?: number }) {
@@ -196,11 +191,44 @@ export interface KapItem {
   kapUrl: string;
 }
 
+// Saat kilitleme yardımcı fonksiyonu (Asla Date.now() ile şimdiki zamanı uydurmaz)
+export const extractFixedKapTime = (rawDateStr: unknown): string => {
+  if (!rawDateStr) return "--:--:--";
+  const str = String(rawDateStr).trim();
+  // İçinde HH:mm:ss veya HH:mm varsa doğrudan onu al, Date objesine sokup bozma
+  const timeMatch = str.match(/\b([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?\b/);
+  if (timeMatch) {
+    return timeMatch[3]
+      ? `${timeMatch[1]}:${timeMatch[2]}:${timeMatch[3]}`
+      : `${timeMatch[1]}:${timeMatch[2]}:00`;
+  }
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    return new Intl.DateTimeFormat("tr-TR", {
+      timeZone: "Europe/Istanbul",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(d);
+  }
+  return "--:--:--";
+};
+
 // 1. HER GECE 00:00'DA GÜNLÜK SIFIRLAMA KONTROLÜ (DÜNÜN KAP'LARINI TEMİZLEME):
-export const isTodayKap = (timestamp: number | string | Date | null | undefined): boolean => {
-  if (!timestamp) return false;
-  const itemDate = new Date(timestamp);
-  if (isNaN(itemDate.getTime())) return false;
+export const isTodayKap = (timestampOrStr: number | string | Date | null | undefined): boolean => {
+  if (!timestampOrStr) return true;
+  if (typeof timestampOrStr === "string") {
+    const s = timestampOrStr.toLowerCase();
+    if (s.includes("bugün") || (!s.includes(".") && !s.includes("-") && !s.includes("/"))) {
+      return true;
+    }
+    const todayTr = new Date().toLocaleDateString("tr-TR");
+    const todayIso = new Date().toISOString().split("T")[0];
+    if (s.includes(todayTr) || s.includes(todayIso)) return true;
+  }
+  const itemDate = new Date(timestampOrStr);
+  if (isNaN(itemDate.getTime())) return true;
   const now = new Date();
   return (
     itemDate.getDate() === now.getDate() &&
@@ -229,111 +257,126 @@ export const checkAndResetKapDailyCache = (): void => {
 
 export const parseKapItems = (data: unknown[]): KapItem[] => {
   return (data as Record<string, unknown>[])
-    .map((item) => {
-      const disclosureId = String(item.disclosureIndex || item.id || item.disclosureId || "");
-      const d = new Date((item.publishDate || item.disclosureTime || Date.now()) as string | number);
+    .map((rawItem) => {
+      const item = (rawItem.basic as Record<string, unknown>) || rawItem;
+      const disclosureId = String(item.disclosureIndex || item.disclosureId || item.id || "");
+      const rawDate = item.publishDate || item.disclosureTime || item.date || item.time || "";
+
+      if (rawDate && !isTodayKap(String(rawDate))) {
+        return null;
+      }
+
+      const fixedTime = extractFixedKapTime(rawDate);
+      const numId = Number(disclosureId.replace(/\D/g, "")) || 0;
+
       return {
-        id: disclosureId,
+        id: disclosureId || String(numId),
         code: String(item.stockCodes || item.stockCode || item.relatedStocks || "KAP").toUpperCase(),
-        type: String(item.disclosureType || item.type || "ÖDA").toUpperCase(),
-        title: String(item.companyTitle || item.stockTitle || "Şirket Bildirimi"),
-        subject: String(item.disclosureTitle || item.title || item.subject || "Açıklama"),
+        type: String(item.disclosureClass || item.disclosureType || item.type || "ÖDA").toUpperCase(),
+        title: String(item.companyTitle || item.companyName || item.stockTitle || "Şirket Bildirimi"),
+        subject: String(item.title || item.disclosureTitle || item.subject || "Açıklama"),
         summary: String(item.summary || item.disclosureTitle || item.title || ""),
-        time: new Intl.DateTimeFormat("tr-TR", {
-          timeZone: "Europe/Istanbul",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: false,
-        }).format(d),
-        timestamp: d.getTime(),
-        kapUrl: `https://www.kap.org.tr/tr/Bildirim/${disclosureId}`,
+        time: fixedTime,
+        timestamp: numId, // Sıralama için 7 haneli resmi KAP ID'sini baz al (En büyük ID = En yeni KAP)
+        kapUrl: disclosureId
+          ? `https://www.kap.org.tr/tr/Bildirim/${disclosureId}`
+          : "https://www.kap.org.tr",
       };
     })
-    .filter((item) => isTodayKap(item.timestamp))
-    .sort((a, b) => b.timestamp - a.timestamp);
+    .filter((item): item is KapItem => item !== null && Boolean(item.id))
+    .sort((a, b) => Number(b.id) - Number(a.id));
 };
 
-// 2. GÜNLÜK CANLI KAP API VE CACHE-BUSTING:
+// 2. GÜNLÜK CANLI KAP API VE CACHE-BUSTING (Çoklu Proxy & WAF Aşımı):
 export const fetchTodayKapDisclosures = async (): Promise<KapItem[]> => {
   checkAndResetKapDailyCache();
   const now = new Date();
   const todayStr = now.toISOString().split("T")[0];
   const cacheBuster = Date.now();
 
-  // 1. Birincil Tercih: Resmi KAP Günlük Uç Noktası (Tarih filtreli ve cache-buster)
-  const targetUrl = `https://www.kap.org.tr/tr/api/disclosures?fromDate=${todayStr}&toDate=${todayStr}&_t=${cacheBuster}`;
-  const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`;
-
-  try {
-    const res = await fetch(proxyUrl, {
-      headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
-      signal: AbortSignal.timeout(7000),
-    });
-    const data = await res.json();
-
-    if (Array.isArray(data) && data.length > 0) {
-      const items = parseKapItems(data);
-      if (items.length > 0) return items;
-    }
-  } catch {
-    // 2. Alternatif Güvenilir Fallback: Mynet Finans Canlı KAP Akışı
-    try {
-      const altUrl = `https://finans.mynet.com/api/kap/haberler?_t=${cacheBuster}`;
-      const altProxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(altUrl)}`;
-      const altRes = await fetch(altProxy, { signal: AbortSignal.timeout(6000) });
-      const altData = await altRes.json();
-      const rawList = Array.isArray(altData) ? altData : altData?.data || [];
-
-      if (Array.isArray(rawList) && rawList.length > 0) {
-        const mynetItems = (rawList as Record<string, unknown>[])
-          .map((item) => {
-            const tDate = new Date((item.tarih || item.publishDate || Date.now()) as string | number);
-            const kapId = String(item.kapId || item.id || "");
-            return {
-              id: kapId,
-              code: String(item.hisseKodu || item.kod || "BIST").toUpperCase(),
-              type: String(item.tur || item.disclosureType || "ÖDA").toUpperCase(),
-              title: String(item.sirketAdi || item.title || "Şirket Bildirimi"),
-              subject: String(item.baslik || item.konu || "Açıklama"),
-              summary: String(item.ozet || item.baslik || ""),
-              time: new Intl.DateTimeFormat("tr-TR", {
-                timeZone: "Europe/Istanbul",
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-                hour12: false,
-              }).format(tDate),
-              timestamp: tDate.getTime(),
-              kapUrl: `https://www.kap.org.tr/tr/Bildirim/${kapId}`,
-            };
-          })
-          .filter((item: KapItem) => isTodayKap(item.timestamp))
-          .sort((a: KapItem, b: KapItem) => b.timestamp - a.timestamp);
-
-        if (mynetItems.length > 0) return mynetItems;
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  // 3. Kesintisiz Dahili API (/api/kap-disclosures - 7 haneli resmi KAP ID'leri ve dondurulmuş saat)
+  // 1. Öncelik: Dahili API (/api/kap-disclosures varsa en hızlı ve WAF'sız)
   try {
     const sRes = await fetch(`/api/kap-disclosures?_t=${cacheBuster}`, {
       cache: "no-store",
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(4500),
     });
     if (sRes.ok) {
       const sJson = await sRes.json();
-      if (sJson && Array.isArray(sJson.data) && sJson.data.length > 0) {
-        return (sJson.data as KapItem[])
-          .filter((item: KapItem) => isTodayKap(item.timestamp))
-          .sort((a, b) => b.timestamp - a.timestamp);
+      const rawArr = Array.isArray(sJson) ? sJson : sJson?.data;
+      if (Array.isArray(rawArr) && rawArr.length > 0) {
+        const parsed = parseKapItems(rawArr);
+        if (parsed.length > 0) return parsed;
       }
     }
   } catch {
     // ignore
+  }
+
+  const proxies = [
+    (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+    (url: string) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+    (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  ];
+
+  // 2. Resmi KAP Günlük Uç Noktası
+  const kapUrl = `https://www.kap.org.tr/tr/api/disclosures?fromDate=${todayStr}&toDate=${todayStr}&_t=${cacheBuster}`;
+  for (const makeProxy of proxies) {
+    try {
+      const res = await fetch(makeProxy(kapUrl), {
+        signal: AbortSignal.timeout(6000),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const items = parseKapItems(data);
+          if (items.length > 0) return items;
+        }
+      }
+    } catch {
+      // Sonraki proxy'ye geç
+    }
+  }
+
+  // 3. Alternatif Güvenilir Fallback: Mynet Finans Canlı KAP Akışı
+  const altUrl = `https://finans.mynet.com/api/kap/haberler?_t=${cacheBuster}`;
+  for (const makeProxy of proxies) {
+    try {
+      const altRes = await fetch(makeProxy(altUrl), { signal: AbortSignal.timeout(6000) });
+      if (altRes.ok) {
+        const altData = await altRes.json();
+        const rawList = Array.isArray(altData) ? altData : altData?.data || [];
+
+        if (Array.isArray(rawList) && rawList.length > 0) {
+          const mynetItems = (rawList as Record<string, unknown>[])
+            .map((item) => {
+              const rawDate = item.tarih || item.publishDate || item.saat || "";
+              if (rawDate && !isTodayKap(String(rawDate))) return null;
+
+              const kapId = String(item.kapId || item.id || "");
+              const numId = Number(kapId.replace(/\D/g, "")) || 0;
+              return {
+                id: kapId,
+                code: String(item.hisseKodu || item.kod || "BIST").toUpperCase(),
+                type: String(item.tur || item.disclosureType || "ÖDA").toUpperCase(),
+                title: String(item.sirketAdi || item.title || "Şirket Bildirimi"),
+                subject: String(item.baslik || item.konu || "Açıklama"),
+                summary: String(item.ozet || item.baslik || ""),
+                time: extractFixedKapTime(item.saat || rawDate),
+                timestamp: numId,
+                kapUrl: kapId
+                  ? `https://www.kap.org.tr/tr/Bildirim/${kapId}`
+                  : "https://www.kap.org.tr",
+              };
+            })
+            .filter((item): item is KapItem => item !== null && Boolean(item.id))
+            .sort((a, b) => Number(b.id) - Number(a.id));
+
+          if (mynetItems.length > 0) return mynetItems;
+        }
+      }
+    } catch {
+      // ignore
+    }
   }
 
   return [];
@@ -341,85 +384,6 @@ export const fetchTodayKapDisclosures = async (): Promise<KapItem[]> => {
 
 export const fetchLiveKapDisclosures = fetchTodayKapDisclosures;
 export const fetchKapDisclosures = fetchTodayKapDisclosures;
-
-// Statik Resmi Kurumlar
-const RESMI_HABERLER: TerminalHaber[] = [
-  {
-    id: "r1",
-    zaman: "16:22:00",
-    tarih: "Bugün",
-    kaynak: "TCMB",
-    kategori: "resmi",
-    resmiKurum: "TCMB",
-    baslik: "TCMB: Para Politikası Kurulu Toplantı Özeti yayımlandı",
-    detay: "Kurul, yurt içi talepteki dengelenmenin sürdüğünü ve TL likidite sterilizasyon araçlarının etkin kullanılacağını ifade etti.",
-    paragraflar: [
-      "Türkiye Cumhuriyet Merkez Bankası Para Politikası Kurulu Toplantı Özeti'nde, aylık enflasyonun ana eğiliminde belirgin ve kalıcı bir düşüş sağlanana kadar sıkı para politikası duruşunun sürdürüleceği teyit edildi.",
-      "Likidite fazlasının sterilizasyonunda zorunlu karşılıklar ve depo ihaleleri gibi araçların çeşitlendirilerek kararlılıkla kullanılacağı bildirildi."
-    ],
-    url: "https://www.tcmb.gov.tr",
-  },
-  {
-    id: "r2",
-    zaman: "16:01:15",
-    tarih: "Bugün",
-    kaynak: "SPK",
-    kategori: "resmi",
-    resmiKurum: "SPK",
-    baslik: "SPK Haftalık Bülteni: 2 şirketin sermaye piyasası ihracına onay verildi",
-    detay: "Halka arz gelirlerinin büyük kısmının işletme sermayesi ve kapasite artırım yatırımlarında kullanılacağı bildirildi.",
-    paragraflar: [
-      "Sermaye Piyasası Kurulu haftalık bülteninde iki sanayi kuruluşunun pay ihracı ve bedelsiz sermaye artırımı başvurularının onaylandığı duyuruldu.",
-      "Ayrıca borçlanma aracı ihraç limitlerine ilişkin değerlendirmeler neticesinde kurumsal tahvil ve finansman bonosu ihraç izinleri onaylandı."
-    ],
-    url: "https://spk.gov.tr",
-  },
-  {
-    id: "r3",
-    zaman: "15:40:00",
-    tarih: "Bugün",
-    kaynak: "BDDK",
-    kategori: "resmi",
-    resmiKurum: "BDDK",
-    baslik: "BDDK Haftalık Bankacılık Verileri: TL mevduat payı artışını koruyor",
-    detay: "TL mevduatın toplam mevduat içindeki payı %56.4'e yükselirken bankacılık sektörünün sermaye yeterlilik rasyosu %17.2 seviyesinde gerçekleşti.",
-    paragraflar: [
-      "Bankacılık Düzenleme ve Denetleme Kurumu (BDDK) haftalık bülteninde, sektörün toplam kredi hacminin dengeli büyüdüğü ve takipteki alacaklar rasyosunun %1.68 seviyesinde stabil kaldığı belirtildi.",
-      "Kur korumalı mevduat bakiyesindeki düşüş eğiliminin kesintisiz sürdüğü, standart TL vadeli mevduat hesaplarına geçişin hızlandığı kaydedildi."
-    ],
-    url: "https://www.bddk.org.tr",
-  },
-  {
-    id: "r4",
-    zaman: "15:15:00",
-    tarih: "Bugün",
-    kaynak: "HMB",
-    kategori: "resmi",
-    resmiKurum: "HMB",
-    baslik: "Hazine ve Maliye Bakanlığı: Merkezi Yönetim Bütçe Dengesi hedeflerle uyumlu",
-    detay: "Açıklamada, Hazine nakit rezervlerinin güçlü seviyesini koruduğu kaydedildi.",
-    paragraflar: [
-      "Hazine ve Maliye Bakanlığı bütçe gerçekleşmeleri raporunda, kamu harcamalarında tasarruf tedbirlerinin ve gelir artırıcı mali disiplin uygulamalarının sonuç verdiği belirtildi.",
-      "Hazine nakit rezervlerinin güçlü yapısı sayesinde borçlanma vadelerinin uzatıldığı ve borçlanma maliyetlerinde düşüş kaydedildiği bildirildi."
-    ],
-    url: "https://www.hmb.gov.tr",
-  },
-  {
-    id: "r5",
-    zaman: "10:00:00",
-    tarih: "Bugün",
-    kaynak: "TÜİK",
-    kategori: "resmi",
-    resmiKurum: "TÜİK",
-    baslik: "TÜİK: Yıllık Tüketici Fiyat Endeksi gerilemesini sürdürdü",
-    detay: "Çekirdek enflasyon göstergelerinde genele yayılan yavaşlama izlendi.",
-    paragraflar: [
-      "Türkiye İstatistik Kurumu verilerine göre tüketici fiyat endeksi yıllık bazda gerileme eğilimini sürdürdü. Temel mallar ve ulaştırma kalemleri düşüşe en yüksek katkıyı verdi.",
-      "Yurt içi üretici fiyat endeksi de (Yİ-ÜFE) aylık bazda sınırlı artış kaydederek maliyet yönlü baskıların azaldığını ortaya koydu."
-    ],
-    url: "https://www.tuik.gov.tr",
-  },
-];
 
 export interface RssFeedConfig {
   url: string;
@@ -756,7 +720,6 @@ export default function TerminalWorkspace() {
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Eğer hafızadaki kayıtlı son haberin tarihi dünden kalmaysa localStorage önbelleğini otomatik temizle
           const latestItem = parsed[0];
           const latestTime = latestItem?.timestamp || (latestItem?.dateObj ? new Date(latestItem.dateObj).getTime() : 0);
           if (latestTime && !isToday(latestTime)) {
@@ -833,7 +796,6 @@ export default function TerminalWorkspace() {
         const lastDate = localStorage.getItem("bpt_kap_last_date");
 
         if (lastDate !== todayStr) {
-          // Gece 00:00 geçilmişse dünün önbelleğini derhal temizle
           localStorage.removeItem("bpt_kap_cache");
           localStorage.removeItem("bpt_kap_disclosures");
           localStorage.setItem("bpt_kap_last_date", todayStr);
@@ -844,7 +806,7 @@ export default function TerminalWorkspace() {
         if (cached) {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            return (parsed as KapItem[]).filter((it) => isTodayKap(it.timestamp));
+            return parsed as KapItem[];
           }
         }
       } catch {
@@ -853,6 +815,7 @@ export default function TerminalWorkspace() {
     }
     return [];
   });
+
   const [loadingKap, setLoadingKap] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -869,17 +832,14 @@ export default function TerminalWorkspace() {
     }
     return true;
   });
+
   const [newlyArrivedIds, setNewlyArrivedIds] = useState<Set<string>>(new Set());
 
   const knownIdsRef = useRef<Set<string>>(new Set());
   const isInitialLoadRef = useRef<boolean>(true);
-  const translationsCacheRef = useRef<Map<string, string>>(new Map());
-
-
-
+  const translationsCacheRef = useRef>(new Map());
 
   const loadGlobalNews = useCallback(async () => {
-
     try {
       let items: { id: string; zaman: string; timestamp: number; rawText: string; baslik: string }[] = [];
 
@@ -941,10 +901,8 @@ export default function TerminalWorkspace() {
       }
 
       if (items.length > 0) {
-        // En yeni en üstte olacak şekilde sırala
         items.sort((a, b) => b.timestamp - a.timestamp);
 
-        // Telegram mesajlarını Gemini Flash API ile Türkçeye çevir
         const translatedItems: GlobalNewsItem[] = await Promise.all(
           items.slice(0, 30).map(async (item) => {
             const rawContent = item.rawText || item.baslik;
@@ -962,7 +920,6 @@ export default function TerminalWorkspace() {
 
         setGlobalHaberler(translatedItems);
 
-        // Başarılı akışı yerel hafızaya kaydet
         try {
           localStorage.setItem(CACHE_KEY_GLOBAL, JSON.stringify(translatedItems));
         } catch {
@@ -1005,13 +962,11 @@ export default function TerminalWorkspace() {
       const kaynakIsimleri: string[] = [];
       const allNews: TerminalHaber[] = [];
 
-      // Tüm kaynakları Promise.allSettled ile çek
       const results = await Promise.allSettled(
         ACTIVE_RSS_SOURCES.map(async (feed) => {
           try {
             let xml = await fetchRSS(feed.url);
 
-            // AA Finans ve diğer kaynaklar için: eğer yanıtta <item> bulunamazsa alternatif/fallback URL'e istek at
             if ((!xml || !xml.includes("<item")) && feed.fallbackUrls && feed.fallbackUrls.length > 0) {
               for (const fallbackUrl of feed.fallbackUrls) {
                 const altXml = await fetchRSS(fallbackUrl);
@@ -1036,19 +991,14 @@ export default function TerminalWorkspace() {
         })
       );
 
-      console.log("Çekilen kaynaklar:", kaynakIsimleri);
-
-      // Gelen her başarılı XML'deki haberleri ortak bir diziye push et
       results.forEach((res) => {
         if (res.status === "fulfilled" && Array.isArray(res.value?.items)) {
           allNews.push(...res.value.items);
         }
       });
 
-      // Tüm kaynaklardan gelen haberler birleştikten sonra sayısal sıralamayı kesin uygula:
       allNews.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
-      // Eğer dış proxy havuzu tamamen kapalıysa veya boşsa, sunucu tarafındaki /api/news rotasını dene
       if (allNews.length === 0) {
         try {
           const res = await fetch("/api/news", { cache: "no-store", signal: AbortSignal.timeout(8000) });
@@ -1082,18 +1032,13 @@ export default function TerminalWorkspace() {
       }
 
       if (allNews.length > 0) {
-        // Tüm kaynaklardan gelen haberleri kesin sırala
         allNews.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
-        // 2. GÜNLÜK AKIŞI SIFIRLAMA (23:59 Sonrası Yeni Gün Temizliği):
-        // Haber birikmesini engelle: Öncelikle bugünün haberleri listelensin
         const todaysNews = allNews.filter((item) => isToday(item.dateObj || item.timestamp));
         const listToProcess = todaysNews.length > 0 ? todaysNews : allNews;
 
-        // En güncelden eskiye doğru sırala
         listToProcess.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
-        // Mükerrer haberleri filtrele
         const seenTitles = new Set<string>();
         const deduplicated: TerminalHaber[] = [];
 
@@ -1105,12 +1050,8 @@ export default function TerminalWorkspace() {
           }
         }
 
-        // Kesin sayısal sıralama (En son yayınlanan haber her zaman 1. sırada / en üstte)
         deduplicated.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
-        deduplicated.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-        // Yeni haber tespiti (İlk yükleme sonrasında yeni düşen haberler için parlama/fade efekti)
         if (!isInitialLoadRef.current) {
           const yeniGelenler = deduplicated.filter(
             (h) => !knownIdsRef.current.has(h.id) && !knownIdsRef.current.has(h.baslik.slice(0, 30))
@@ -1120,7 +1061,6 @@ export default function TerminalWorkspace() {
             const yeniIdler = new Set(yeniGelenler.map((h) => h.id));
             setNewlyArrivedIds((prev) => new Set([...prev, ...yeniIdler]));
 
-            // 4 saniye sonra yeni efektini kaldır
             setTimeout(() => {
               setNewlyArrivedIds((prev) => {
                 const kopya = new Set(prev);
@@ -1131,7 +1071,6 @@ export default function TerminalWorkspace() {
           }
         }
 
-        // Bilinen ID ve başlık havuzunu güncelle
         deduplicated.forEach((h) => {
           knownIdsRef.current.add(h.id);
           knownIdsRef.current.add(h.baslik.slice(0, 30));
@@ -1140,7 +1079,6 @@ export default function TerminalWorkspace() {
         isInitialLoadRef.current = false;
         setBistHaberleri(deduplicated);
 
-        // Başarılı akışı anında yerel hafızaya (localStorage) kaydet, liste boşsa temizle
         try {
           if (deduplicated.length > 0) {
             localStorage.setItem(CACHE_KEY_BIST, JSON.stringify(deduplicated));
@@ -1152,7 +1090,7 @@ export default function TerminalWorkspace() {
         }
       }
     } catch {
-      // Ağ veya proxy hatasında ekran asla boş kalmaz; mevcut önbellek ekranda tutulur
+      // Ağ veya proxy hatasında ekran asla boş kalmaz
     } finally {
       setLoadingBist(false);
     }
@@ -1160,12 +1098,10 @@ export default function TerminalWorkspace() {
 
   // 15 saniyede bir BIST & Türkiye arka planda sessizce sorgula (polling)
   useEffect(() => {
-    // İlk sorguyu asenkron olarak tetikle
     const initialTimer = setTimeout(() => {
       void loadNews();
     }, 0);
 
-    // Her 15 saniyede bir periyodik canlı polling
     const interval = setInterval(() => {
       void loadNews();
     }, 15000);
@@ -1178,7 +1114,6 @@ export default function TerminalWorkspace() {
 
   // 15 saniyede bir Telegram @trad_fin Global haber akışını arka planda sorgula (polling)
   useEffect(() => {
-    // Önbellekten kaydedilmiş çevirileri yükle
     try {
       const savedTrans = localStorage.getItem(CACHE_KEY_TRANSLATIONS);
       if (savedTrans) {
@@ -1193,12 +1128,10 @@ export default function TerminalWorkspace() {
       // ignore
     }
 
-    // İlk sorgu
     const timer = setTimeout(() => {
       void loadGlobalNews();
     }, 50);
 
-    // Her 15 saniyede bir canlı polling
     const interval = setInterval(() => {
       void loadGlobalNews();
     }, 15000);
@@ -1217,29 +1150,33 @@ export default function TerminalWorkspace() {
       const items = await fetchKapDisclosures();
       if (!isMounted) return;
 
-      const todayItems = (items || []).filter((it) => isTodayKap(it.timestamp));
+      if (items && items.length > 0) {
+        setKapBildirimleri((prev) => {
+          // Var olan bildirimlerin saatlerini dondurarak koru, asla güncelleme
+          const prevTimeMap = new Map<string, string>();
+          prev.forEach((p) => {
+            if (p.id && p.time && p.time !== "--:--:--") {
+              prevTimeMap.set(String(p.id), p.time);
+            }
+          });
 
-      setKapBildirimleri((prev) => {
-        // Var olan bildirimlerin saatlerini dondurarak koru, asla Date.now() ile ileri kaydırma
-        const prevTimeMap = new Map<string, string>();
-        prev.forEach((p) => {
-          if (p.id) prevTimeMap.set(String(p.id), p.time);
+          const merged = items.map((it) => ({
+            ...it,
+            time: prevTimeMap.get(String(it.id)) || it.time,
+          }));
+
+          // Resmi 7 haneli KAP ID'sine göre büyükten küçüğe sırala
+          merged.sort((a, b) => Number(b.id) - Number(a.id));
+
+          try {
+            localStorage.setItem("bpt_kap_disclosures", JSON.stringify(merged));
+          } catch {
+            // ignore
+          }
+          return merged;
         });
-        return todayItems.map((it) => ({
-          ...it,
-          time: prevTimeMap.get(String(it.id)) || it.time,
-        }));
-      });
-      setLoadingKap(false);
-      try {
-        if (todayItems.length > 0) {
-          localStorage.setItem("bpt_kap_disclosures", JSON.stringify(todayItems));
-        } else {
-          localStorage.removeItem("bpt_kap_disclosures");
-        }
-      } catch {
-        // ignore
       }
+      setLoadingKap(false);
     };
 
     void loadKap();
@@ -1253,7 +1190,7 @@ export default function TerminalWorkspace() {
     };
   }, []);
 
-  // Modal için ESC klavye tuşu dinleyicisi (ESC tuşuna basıldığında modalın kapanması)
+  // Modal için ESC klavye tuşu dinleyicisi
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -1376,12 +1313,10 @@ export default function TerminalWorkspace() {
                     style={{ gap: "14px" }}
                     className="flex items-start pb-3 border-b border-slate-800/80 last:border-b-0 w-full"
                   >
-                    {/* 1. Sol Kolon: Sabit genişlikli saat */}
                     <span className="font-mono text-[11px] text-slate-500 shrink-0 select-none pt-0.5">
                       {itemTime}
                     </span>
 
-                    {/* 2. Sağ Kolon: Haber metni (Doğrudan ilk kelimeyle başlar, / işareti YOK) */}
                     <p className="text-[12px] text-slate-200 leading-relaxed font-normal m-0 p-0 flex-1">
                       <span>{itemText}</span>
                     </p>
@@ -1419,7 +1354,6 @@ export default function TerminalWorkspace() {
                     onClick={() => setSelectedKap(item)}
                     className="cursor-pointer group hover:bg-slate-900/50 transition border-b border-white/[0.04] pb-2 mb-2 last:border-b-0 last:pb-0 last:mb-0"
                   >
-                    {/* Üst satır: Solda code, yanında type, sağ uçta time ve doğrudan resmi link ikonu */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <span className="text-[#38bdf8] font-mono font-bold text-xs">
@@ -1450,7 +1384,6 @@ export default function TerminalWorkspace() {
                       </div>
                     </div>
 
-                    {/* Alt satır: Bildirim konusu/özeti */}
                     <p className="text-xs text-slate-200 line-clamp-2 leading-relaxed group-hover:text-white mt-1">
                       {item.subject}
                     </p>
@@ -1460,7 +1393,7 @@ export default function TerminalWorkspace() {
             </div>
           </section>
 
-          {/* Alt: Resmi Kurumlar */}
+          {/* Alt: Resmi Kurumlar (Statik sahte veriler tamamen silindi, bekleme ekranı eklendi) */}
           <section className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[255px] overflow-hidden">
             <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
               <div className="flex items-center">
@@ -1471,29 +1404,15 @@ export default function TerminalWorkspace() {
               </div>
             </div>
 
-            <div className="pane-scroll">
-              {RESMI_HABERLER.map((h) => (
-                <article
-                  key={h.id}
-                  onClick={() => setSeciliHaber(h)}
-                  className="terminal-row resmi-row group"
-                >
-                  <div className="row-meta font-mono">
-                    <span className="row-time tabular-nums text-slate-500">{h.zaman}</span>
-                    <span className="resmi-badge">@{h.resmiKurum || h.kaynak}</span>
-                  </div>
-
-                  <h3 className="row-headline font-medium text-slate-200 group-hover:text-[#38bdf8] transition text-xs leading-snug">
-                    {h.baslik}
-                  </h3>
-                </article>
-              ))}
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500 font-mono text-xs select-none">
+              <span className="text-[#38bdf8] font-bold mb-1">/</span>
+              <span>Resmi kurum duyuru akışı hazırlanıyor...</span>
             </div>
           </section>
         </div>
       </div>
 
-      {/* ALT SIRA: 3 KOLONLU GRID (/ BIST Hareketler, / TAKVİM, / Bülten) */}
+      {/* ALT SIRA: 3 KOLONLU GRID (/ BIST Sektör, / TAKVİM, / Bülten) */}
       <div className="w-full mt-4" style={{ marginTop: "16px" }}>
         <MarketIntelligence />
       </div>
@@ -1506,15 +1425,12 @@ export default function TerminalWorkspace() {
           role="dialog"
           aria-modal="true"
         >
-          {/* Modal Box */}
           <div
             className="w-full max-w-2xl bg-[#0b0f19] border border-[#2563eb]/40 rounded-xl shadow-[0_0_50px_rgba(37,99,235,0.15)] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Üst İnce Accent Çizgisi */}
             <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-[#2563eb] to-transparent" />
 
-            {/* Header */}
             <div className="px-6 pt-5 pb-4 border-b border-white/[0.06] flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="font-mono text-xs font-bold text-white bg-[#2563eb] px-2.5 py-1 rounded tracking-wider shadow-sm uppercase">
@@ -1533,7 +1449,6 @@ export default function TerminalWorkspace() {
               </button>
             </div>
 
-            {/* Body */}
             <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
               <h2 className="text-lg font-bold text-slate-100 leading-snug tracking-tight">
                 {decodeHtmlEntities(seciliHaber.baslik)}
@@ -1547,10 +1462,10 @@ export default function TerminalWorkspace() {
               </p>
             </div>
 
-            {/* Footer Bar */}
             <div className="px-6 py-4 bg-[#080c14] border-t border-white/[0.06] flex items-center justify-between gap-4">
               <div className="text-[11px] font-mono text-slate-500">
-                Kategori: <span className="text-slate-300">
+                Kategori:{" "}
+                <span className="text-slate-300">
                   {seciliHaber.kategori === "bist"
                     ? "Piyasa Özeti / BIST"
                     : seciliHaber.kategori === "kap"
@@ -1585,7 +1500,6 @@ export default function TerminalWorkspace() {
                 )}
               </div>
             </div>
-
           </div>
         </div>
       )}
@@ -1602,10 +1516,8 @@ export default function TerminalWorkspace() {
             className="w-full max-w-2xl bg-[#0b0f19] border border-[#2563eb]/40 rounded-xl shadow-[0_0_50px_rgba(37,99,235,0.15)] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Üst İnce Accent Çizgisi */}
             <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-[#38bdf8] to-transparent" />
 
-            {/* Header */}
             <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-xs font-bold text-white bg-[#2563eb] px-2.5 py-1 rounded tracking-wider">
@@ -1626,7 +1538,6 @@ export default function TerminalWorkspace() {
               </button>
             </div>
 
-            {/* Gövde */}
             <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
               <h2 className="text-base font-bold text-slate-100 leading-snug">
                 {selectedKap.title}
@@ -1639,7 +1550,6 @@ export default function TerminalWorkspace() {
               </p>
             </div>
 
-            {/* Footer */}
             <div className="px-6 py-4 bg-[#080c14] border-t border-white/[0.06] flex items-center justify-between">
               <span className="text-[11px] font-mono text-slate-500">Kaynak: Kamuyu Aydınlatma Platformu</span>
               <div className="flex items-center gap-3">
@@ -1662,7 +1572,6 @@ export default function TerminalWorkspace() {
                 </a>
               </div>
             </div>
-
           </div>
         </div>
       )}
