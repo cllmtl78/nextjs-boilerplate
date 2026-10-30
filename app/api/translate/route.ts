@@ -33,12 +33,18 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ translated: "" });
       }
 
-      if (!apiKey) {
-        return NextResponse.json({
-          translated: cleanText,
-          source: "original-fallback",
-        });
-      }
+    if (!apiKey) {
+      return NextResponse.json({
+        translated: cleanText,
+        source: "original-fallback",
+        debug: {
+          hasClientApiKey: !!clientApiKey,
+          hasEnvGemini: !!process.env.GEMINI_API_KEY,
+          hasPublicGemini: !!process.env.NEXT_PUBLIC_GEMINI_KEY,
+          envKeys: Object.keys(process.env).filter(k => k.includes("GEMINI")),
+        }
+      });
+    }
 
       try {
         const ai = new GoogleGenAI({
@@ -68,7 +74,9 @@ export async function POST(req: NextRequest) {
             .trim();
           return NextResponse.json({ translated: finalClean, source: "gemini-sdk" });
         }
-      } catch {
+      } catch (err: unknown) {
+        let restErrorMsg = "";
+        console.error("SDK generateContent error:", (err as Error)?.message || err);
         // SDK çağrısı başarısız olursa REST API fallback'i dene
         try {
           const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
@@ -100,13 +108,21 @@ export async function POST(req: NextRequest) {
                 .trim();
               return NextResponse.json({ translated: finalClean, source: "gemini-rest" });
             }
+          } else {
+            const errText = await restRes.text();
+            restErrorMsg = `Status ${restRes.status}: ${errText}`;
+            console.error("REST generateContent error status:", restRes.status, errText);
           }
-        } catch {
-          // REST fallback de başarısız
+        } catch (restErr: unknown) {
+          restErrorMsg = (restErr as Error)?.message || String(restErr);
+          console.error("REST fallback error:", restErrorMsg);
         }
 
         // Hata durumunda uydurma sözlük çevirisine düşme, orijinal temiz metni döndür
-        return NextResponse.json({ translated: cleanText, source: "original-fallback" });
+        return NextResponse.json({
+          translated: cleanText,
+          source: "original-fallback",
+        });
       }
     }
 

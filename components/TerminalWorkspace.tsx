@@ -603,17 +603,15 @@ export const translateGlobalFeed = async (text: string): Promise<string> => {
     .replace(/\$[A-Z]{1,6}\b/g, "")
     .replace(/^\[.*?\]\s*·?\s*/gi, "")
     .replace(/[•·]+$/, "")
-    .replace(/^[\s\*\/\-]+/, "")
     .trim();
 
-  if (!clean) return "";
-
-  // 2. Cache kontrolü (aynı haber tekrar çevrilmesin)
-  const cacheKey = "tr_" + clean.slice(0, 25);
+  // 2. Cache kontrolü (aynı haber tekrar çevrilmesin, eski hatalı grev veya / içeren önbellekleri geçersiz kıl)
   if (typeof window !== "undefined") {
     try {
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) return cached;
+      const cached = localStorage.getItem("tr_" + clean.slice(0, 25));
+      if (cached && !cached.toLowerCase().includes("grev") && !cached.startsWith("/")) {
+        return cached;
+      }
     } catch {
       // ignore
     }
@@ -626,37 +624,11 @@ export const translateGlobalFeed = async (text: string): Promise<string> => {
         localStorage.getItem("gemini_api_key"))) ||
     "";
 
-  // 3.a Öncelikli: Next.js Sunucu Proxy Rotası (/api/translate - process.env.GEMINI_API_KEY)
-  try {
-    const sRes = await fetch("/api/translate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: clean, apiKey }),
-    });
-    if (sRes.ok) {
-      const sData = await sRes.json();
-      if (sData.translated && typeof sData.translated === "string" && sData.translated !== clean) {
-        const finalTr = sData.translated.replace(/^[\s\*\/\-]+/, "").trim();
-        if (typeof window !== "undefined") {
-          try {
-            localStorage.setItem(cacheKey, finalTr);
-          } catch {
-            // ignore
-          }
-        }
-        return finalTr;
-      }
-    }
-  } catch {
-    // ignore
-  }
-
   if (!apiKey) {
-    // API anahtarı yoksa saçmalamaktansa orijinal temiz metni bırak (Sözlük motoruna DÜŞME)
+    // API anahtarı yoksa saçmalamaktansa orijinal temiz metni bırak
     return clean;
   }
 
-  // 3.b Doğrudan Gemini Flash REST API Çağrısı
   try {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
@@ -687,23 +659,15 @@ Metin: ${clean}`,
 
     const data = await res.json();
     const result = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || clean;
-    const finalClean = result
-      .replace(/^["'“”«»]+|["'“”«»]+$/g, "")
-      .replace(/^Metin:\s*/i, "")
-      .replace(/^Haber:\s*/i, "")
-      .replace(/^[\s\*\/\-]+/, "")
-      .trim();
-
     if (typeof window !== "undefined") {
       try {
-        localStorage.setItem(cacheKey, finalClean);
+        localStorage.setItem("tr_" + clean.slice(0, 25), result);
       } catch {
         // ignore
       }
     }
-    return finalClean;
+    return result;
   } catch {
-    // Hata durumunda saçma sözlük motorlarına DÜŞME, orijinal metni bırak
     return clean;
   }
 };
