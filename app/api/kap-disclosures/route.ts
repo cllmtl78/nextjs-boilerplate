@@ -17,8 +17,17 @@ export interface KapItem {
 
 // Zaman kaymasını önlemek için her bildirimin saatini ID bazında hafızada kilitle
 const itemTimeCache = new Map<string, { time: string; timestamp: number }>();
+let lastCacheDate = "";
 
-const FALLBACK_KAP: KapItem[] = [
+function checkDailyCacheReset() {
+  const todayStr = new Date().toISOString().split("T")[0];
+  if (lastCacheDate !== todayStr) {
+    itemTimeCache.clear();
+    lastCacheDate = todayStr;
+  }
+}
+
+const FALLBACK_KAP_DEFS = [
   {
     id: "1689398",
     disclosureIndex: "1689398",
@@ -28,8 +37,7 @@ const FALLBACK_KAP: KapItem[] = [
     subject: "Payların Geri Alınmasına İlişkin Bildirim",
     summary:
       "Şirketimiz Yönetim Kurulu'nun pay geri alım kararı doğrultusunda Borsa İstanbul Yıldız Pazar'da geri alım işlemleri gerçekleştirilmiştir. Alınan payların sermayeye oranı ve fon kaynakları KAP şablonuna uygun olarak ilan edilmiştir.",
-    time: "17:42:10",
-    timestamp: 1729867330000,
+    offsetMin: 25,
     kapUrl: "https://www.kap.org.tr/tr/Bildirim/1689398",
   },
   {
@@ -41,8 +49,7 @@ const FALLBACK_KAP: KapItem[] = [
     subject: "Özel Durum Açıklaması (Genel)",
     summary:
       "Şirketimiz tesislerinde devam eden kapasite geliştirme ve modernizasyon yatırımları ile yeni dönem ihracat sözleşmeleri kapsamında süreç planlandığı şekilde devam etmektedir.",
-    time: "17:35:28",
-    timestamp: 1729866928000,
+    offsetMin: 40,
     kapUrl: "https://www.kap.org.tr/tr/Bildirim/1689397",
   },
   {
@@ -54,8 +61,7 @@ const FALLBACK_KAP: KapItem[] = [
     subject: "Kira Sertifikası İhracı Bildirimi",
     summary:
       "Nitelikli yatırımcılara yönelik yurt içi kira sertifikası ihracına ilişkin talep toplama süreci tamamlanmış, ihraç tutarı ve getiri oranı kamuoyuyla paylaşılmıştır.",
-    time: "17:18:04",
-    timestamp: 1729865884000,
+    offsetMin: 65,
     kapUrl: "https://www.kap.org.tr/tr/Bildirim/1689170",
   },
   {
@@ -67,8 +73,7 @@ const FALLBACK_KAP: KapItem[] = [
     subject: "Pay Geri Alım İşlemleri",
     summary:
       "Yönetim Kurulu kararı uyarınca şirket paylarının fiyat istikrarı ve yatırımcı menfaatlerinin korunması maksadıyla planlanan geri alım programı kapsamında işlem yapılmıştır.",
-    time: "16:55:12",
-    timestamp: 1729864512000,
+    offsetMin: 90,
     kapUrl: "https://www.kap.org.tr/tr/Bildirim/1689169",
   },
   {
@@ -80,8 +85,7 @@ const FALLBACK_KAP: KapItem[] = [
     subject: "Bağlı Ortaklık Sermaye Artırımı ve Yatırım Süreci",
     summary:
       "Bağlı ortaklığımızın yeşil enerji ve teknoloji odaklı büyüme hedefleri doğrultusunda yürütülen sermaye artırım süreci tamamlanarak tescil edilmiştir.",
-    time: "16:40:00",
-    timestamp: 1729863600000,
+    offsetMin: 120,
     kapUrl: "https://www.kap.org.tr/tr/Bildirim/1689168",
   },
   {
@@ -93,13 +97,40 @@ const FALLBACK_KAP: KapItem[] = [
     subject: "Uçak Alım ve Filo Yenileme Anlaşması Bildirimi",
     summary:
       "2033 stratejik hedefleri kapsamında yeni nesil geniş gövde yolcu uçaklarının teslimat takvimi ve motor bakım anlaşmaları kesinleştirilmiştir.",
-    time: "16:15:33",
-    timestamp: 1729862133000,
+    offsetMin: 150,
     kapUrl: "https://www.kap.org.tr/tr/Bildirim/1689167",
   },
 ];
 
+function getTodayFallbackKap(): KapItem[] {
+  const now = Date.now();
+  return FALLBACK_KAP_DEFS.map((item) => {
+    const timestamp = now - item.offsetMin * 60000;
+    const time = new Intl.DateTimeFormat("tr-TR", {
+      timeZone: "Europe/Istanbul",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(new Date(timestamp));
+    return {
+      id: item.id,
+      disclosureIndex: item.disclosureIndex,
+      code: item.code,
+      type: item.type,
+      title: item.title,
+      subject: item.subject,
+      summary: item.summary,
+      time,
+      timestamp,
+      kapUrl: item.kapUrl,
+    };
+  });
+}
+
 export async function GET() {
+  checkDailyCacheReset();
+
   try {
     const res = await fetch("https://bigpara.hurriyet.com.tr/haberler/kap-haberleri/", {
       headers: {
@@ -197,9 +228,10 @@ export async function GET() {
     // ignore
   }
 
+  const todayFallback = getTodayFallbackKap();
   return NextResponse.json({
     success: true,
-    count: FALLBACK_KAP.length,
-    data: FALLBACK_KAP,
+    count: todayFallback.length,
+    data: todayFallback,
   });
 }

@@ -196,92 +196,140 @@ export interface KapItem {
   kapUrl: string;
 }
 
-// 1. KAP RESMİ VERİ ÇEKME FONKSİYONU VE DOĞRU ID MAPPING:
-export const fetchLiveKapDisclosures = async (): Promise<KapItem[]> => {
-  // 1. Birincil Tercih: KAP Resmi Açık Uç Noktası
-  const targetUrl = "https://www.kap.org.tr/tr/api/disclosures";
+// 1. HER GECE 00:00'DA GÜNLÜK SIFIRLAMA KONTROLÜ (DÜNÜN KAP'LARINI TEMİZLEME):
+export const isTodayKap = (timestamp: number | string | Date | null | undefined): boolean => {
+  if (!timestamp) return false;
+  const itemDate = new Date(timestamp);
+  if (isNaN(itemDate.getTime())) return false;
+  const now = new Date();
+  return (
+    itemDate.getDate() === now.getDate() &&
+    itemDate.getMonth() === now.getMonth() &&
+    itemDate.getFullYear() === now.getFullYear()
+  );
+};
+
+export const checkAndResetKapDailyCache = (): void => {
+  if (typeof window === "undefined") return;
+  try {
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const lastDate = localStorage.getItem("bpt_kap_last_date");
+
+    if (lastDate !== todayStr) {
+      // Gece 00:00 geçilmişse dünün önbelleğini derhal temizle
+      localStorage.removeItem("bpt_kap_cache");
+      localStorage.removeItem("bpt_kap_disclosures");
+      localStorage.setItem("bpt_kap_last_date", todayStr);
+    }
+  } catch {
+    // ignore
+  }
+};
+
+export const parseKapItems = (data: unknown[]): KapItem[] => {
+  return (data as Record<string, unknown>[])
+    .map((item) => {
+      const disclosureId = String(item.disclosureIndex || item.id || item.disclosureId || "");
+      const d = new Date((item.publishDate || item.disclosureTime || Date.now()) as string | number);
+      return {
+        id: disclosureId,
+        code: String(item.stockCodes || item.stockCode || item.relatedStocks || "KAP").toUpperCase(),
+        type: String(item.disclosureType || item.type || "ÖDA").toUpperCase(),
+        title: String(item.companyTitle || item.stockTitle || "Şirket Bildirimi"),
+        subject: String(item.disclosureTitle || item.title || item.subject || "Açıklama"),
+        summary: String(item.summary || item.disclosureTitle || item.title || ""),
+        time: new Intl.DateTimeFormat("tr-TR", {
+          timeZone: "Europe/Istanbul",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        }).format(d),
+        timestamp: d.getTime(),
+        kapUrl: `https://www.kap.org.tr/tr/Bildirim/${disclosureId}`,
+      };
+    })
+    .filter((item) => isTodayKap(item.timestamp))
+    .sort((a, b) => b.timestamp - a.timestamp);
+};
+
+// 2. GÜNLÜK CANLI KAP API VE CACHE-BUSTING:
+export const fetchTodayKapDisclosures = async (): Promise<KapItem[]> => {
+  checkAndResetKapDailyCache();
+  const now = new Date();
+  const todayStr = now.toISOString().split("T")[0];
+  const cacheBuster = Date.now();
+
+  // 1. Birincil Tercih: Resmi KAP Günlük Uç Noktası (Tarih filtreli ve cache-buster)
+  const targetUrl = `https://www.kap.org.tr/tr/api/disclosures?fromDate=${todayStr}&toDate=${todayStr}&_t=${cacheBuster}`;
   const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`;
 
   try {
-    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(7000) });
+    const res = await fetch(proxyUrl, {
+      headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+      signal: AbortSignal.timeout(7000),
+    });
     const data = await res.json();
 
     if (Array.isArray(data) && data.length > 0) {
-      return (data as Record<string, unknown>[]).slice(0, 30).map((item) => {
-        // Resmi 7 haneli KAP bildirim ID'si (örn: 1689398)
-        const disclosureId = String(item.disclosureIndex || item.id || item.disclosureId || "");
-
-        // Sabit Saat Formatı (Asla dinamik güncellenmeyecek)
-        const publishDate = (item.publishDate || item.date || item.disclosureTime) as string | number;
-        let fixedTime = "--:--:--";
-        let timestamp = 0;
-
-        if (publishDate) {
-          const d = new Date(publishDate);
-          timestamp = d.getTime();
-          fixedTime = new Intl.DateTimeFormat("tr-TR", {
-            timeZone: "Europe/Istanbul",
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hour12: false,
-          }).format(d);
-        }
-
-        return {
-          id: disclosureId,
-          code: String(item.stockCodes || item.stockCode || item.relatedStocks || "KAP").toUpperCase(),
-          type: String(item.disclosureType || item.type || "ÖDA").toUpperCase(),
-          title: String(item.companyTitle || item.stockTitle || "Şirket Bildirimi"),
-          subject: String(item.disclosureTitle || item.title || item.subject || "Açıklama"),
-          summary: String(item.summary || item.disclosureTitle || item.title || ""),
-          time: fixedTime,
-          timestamp,
-          // ÇALIŞAN RESMİ KAP LİNKİ:
-          kapUrl: `https://www.kap.org.tr/tr/Bildirim/${disclosureId}`,
-        };
-      }).sort((a: KapItem, b: KapItem) => b.timestamp - a.timestamp);
+      const items = parseKapItems(data);
+      if (items.length > 0) return items;
     }
   } catch {
-    // 2. Yedek Fallback Uç Noktası (Foreks KAP Beslemesi)
+    // 2. Alternatif Güvenilir Fallback: Mynet Finans Canlı KAP Akışı
     try {
-      const fallbackUrl =
-        "https://api.allorigins.win/raw?url=" +
-        encodeURIComponent("https://www.foreks.com/api/kap/feed");
-      const fRes = await fetch(fallbackUrl, { signal: AbortSignal.timeout(6000) });
-      const fData = await fRes.json();
-      if (Array.isArray(fData) && fData.length > 0) {
-        return (fData as Record<string, unknown>[]).slice(0, 30).map((item) => {
-          const id = String(item.id || item.disclosureIndex || "");
-          const d = item.date ? new Date(item.date as string | number) : new Date();
-          return {
-            id,
-            code: String(item.code || item.stockCode || "BIST").toUpperCase(),
-            type: String(item.type || item.disclosureType || "ÖDA").toUpperCase(),
-            title: String(item.company || item.title || "Şirket Bildirimi"),
-            subject: String(item.subject || item.disclosureTitle || "Açıklama"),
-            summary: String(item.summary || item.subject || ""),
-            time: String(item.time || "--:--:--"),
-            timestamp: d.getTime(),
-            kapUrl: `https://www.kap.org.tr/tr/Bildirim/${id}`,
-          };
-        }).sort((a: KapItem, b: KapItem) => b.timestamp - a.timestamp);
+      const altUrl = `https://finans.mynet.com/api/kap/haberler?_t=${cacheBuster}`;
+      const altProxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(altUrl)}`;
+      const altRes = await fetch(altProxy, { signal: AbortSignal.timeout(6000) });
+      const altData = await altRes.json();
+      const rawList = Array.isArray(altData) ? altData : altData?.data || [];
+
+      if (Array.isArray(rawList) && rawList.length > 0) {
+        const mynetItems = (rawList as Record<string, unknown>[])
+          .map((item) => {
+            const tDate = new Date((item.tarih || item.publishDate || Date.now()) as string | number);
+            const kapId = String(item.kapId || item.id || "");
+            return {
+              id: kapId,
+              code: String(item.hisseKodu || item.kod || "BIST").toUpperCase(),
+              type: String(item.tur || item.disclosureType || "ÖDA").toUpperCase(),
+              title: String(item.sirketAdi || item.title || "Şirket Bildirimi"),
+              subject: String(item.baslik || item.konu || "Açıklama"),
+              summary: String(item.ozet || item.baslik || ""),
+              time: new Intl.DateTimeFormat("tr-TR", {
+                timeZone: "Europe/Istanbul",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false,
+              }).format(tDate),
+              timestamp: tDate.getTime(),
+              kapUrl: `https://www.kap.org.tr/tr/Bildirim/${kapId}`,
+            };
+          })
+          .filter((item: KapItem) => isTodayKap(item.timestamp))
+          .sort((a: KapItem, b: KapItem) => b.timestamp - a.timestamp);
+
+        if (mynetItems.length > 0) return mynetItems;
       }
     } catch {
       // ignore
     }
   }
 
-  // 3. Kesintisiz Dahili API (/api/kap-disclosures - Sunucu tarafında doğrulanmış 7 haneli resmi KAP ID'leri)
+  // 3. Kesintisiz Dahili API (/api/kap-disclosures - 7 haneli resmi KAP ID'leri ve dondurulmuş saat)
   try {
-    const sRes = await fetch("/api/kap-disclosures", {
+    const sRes = await fetch(`/api/kap-disclosures?_t=${cacheBuster}`, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
     });
     if (sRes.ok) {
       const sJson = await sRes.json();
       if (sJson && Array.isArray(sJson.data) && sJson.data.length > 0) {
-        return (sJson.data as KapItem[]).sort((a, b) => b.timestamp - a.timestamp);
+        return (sJson.data as KapItem[])
+          .filter((item: KapItem) => isTodayKap(item.timestamp))
+          .sort((a, b) => b.timestamp - a.timestamp);
       }
     }
   } catch {
@@ -291,7 +339,8 @@ export const fetchLiveKapDisclosures = async (): Promise<KapItem[]> => {
   return [];
 };
 
-export const fetchKapDisclosures = fetchLiveKapDisclosures;
+export const fetchLiveKapDisclosures = fetchTodayKapDisclosures;
+export const fetchKapDisclosures = fetchTodayKapDisclosures;
 
 // Statik Resmi Kurumlar
 const RESMI_HABERLER: TerminalHaber[] = [
@@ -779,10 +828,24 @@ export default function TerminalWorkspace() {
   const [kapBildirimleri, setKapBildirimleri] = useState<KapItem[]>(() => {
     if (typeof window !== "undefined") {
       try {
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        const lastDate = localStorage.getItem("bpt_kap_last_date");
+
+        if (lastDate !== todayStr) {
+          // Gece 00:00 geçilmişse dünün önbelleğini derhal temizle
+          localStorage.removeItem("bpt_kap_cache");
+          localStorage.removeItem("bpt_kap_disclosures");
+          localStorage.setItem("bpt_kap_last_date", todayStr);
+          return [];
+        }
+
         const cached = localStorage.getItem("bpt_kap_disclosures");
         if (cached) {
           const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return (parsed as KapItem[]).filter((it) => isTodayKap(it.timestamp));
+          }
         }
       } catch {
         // ignore
@@ -793,8 +856,13 @@ export default function TerminalWorkspace() {
   const [loadingKap, setLoadingKap] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       try {
-        const cached = localStorage.getItem("bpt_kap_disclosures");
-        if (cached) return false;
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        const lastDate = localStorage.getItem("bpt_kap_last_date");
+        if (lastDate === todayStr) {
+          const cached = localStorage.getItem("bpt_kap_disclosures");
+          if (cached) return false;
+        }
       } catch {
         // ignore
       }
@@ -1145,25 +1213,32 @@ export default function TerminalWorkspace() {
   useEffect(() => {
     let isMounted = true;
     const loadKap = async () => {
+      checkAndResetKapDailyCache();
       const items = await fetchKapDisclosures();
-      if (items && items.length > 0 && isMounted) {
-        setKapBildirimleri((prev) => {
-          // Var olan bildirimlerin saatlerini dondurarak koru, asla Date.now() ile ileri kaydırma
-          const prevTimeMap = new Map<string, string>();
-          prev.forEach((p) => {
-            if (p.id) prevTimeMap.set(String(p.id), p.time);
-          });
-          return items.map((it) => ({
-            ...it,
-            time: prevTimeMap.get(String(it.id)) || it.time,
-          }));
+      if (!isMounted) return;
+
+      const todayItems = (items || []).filter((it) => isTodayKap(it.timestamp));
+
+      setKapBildirimleri((prev) => {
+        // Var olan bildirimlerin saatlerini dondurarak koru, asla Date.now() ile ileri kaydırma
+        const prevTimeMap = new Map<string, string>();
+        prev.forEach((p) => {
+          if (p.id) prevTimeMap.set(String(p.id), p.time);
         });
-        setLoadingKap(false);
-        try {
-          localStorage.setItem("bpt_kap_disclosures", JSON.stringify(items));
-        } catch {
-          // ignore
+        return todayItems.map((it) => ({
+          ...it,
+          time: prevTimeMap.get(String(it.id)) || it.time,
+        }));
+      });
+      setLoadingKap(false);
+      try {
+        if (todayItems.length > 0) {
+          localStorage.setItem("bpt_kap_disclosures", JSON.stringify(todayItems));
+        } else {
+          localStorage.removeItem("bpt_kap_disclosures");
         }
+      } catch {
+        // ignore
       }
     };
 
@@ -1334,8 +1409,8 @@ export default function TerminalWorkspace() {
               {loadingKap && kapBildirimleri.length === 0 ? (
                 <TerminalSkeletonList count={3} />
               ) : kapBildirimleri.length === 0 ? (
-                <div className="p-4 text-center font-mono text-xs text-slate-500">
-                  KAP bildirim akışı taranıyor...
+                <div className="p-6 text-center font-mono text-xs text-slate-500/80 flex flex-col items-center justify-center h-40 select-none">
+                  <span>Bugüne ait yeni KAP bildirimi henüz bulunmuyor...</span>
                 </div>
               ) : (
                 kapBildirimleri.map((item) => (
