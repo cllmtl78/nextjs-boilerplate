@@ -184,89 +184,96 @@ function TerminalSkeletonList({ count = 5 }: { count?: number }) {
   );
 }
 
-// Statik KAP Bildirimleri (Belirgin Cyan Hisse Kodu + İnce Bildirim Türü)
-const KAP_BILDIRIMLERI: TerminalHaber[] = [
-  {
-    id: "k1",
-    zaman: "16:27:04",
-    tarih: "Bugün",
-    kaynak: "KAP",
-    kategori: "kap",
-    hisseler: ["KCHOL"],
-    kapTuru: "PGO",
-    baslik: "Koç Holding A.Ş. — Pay Geri Alım İşlemlerine İlişkin Bildirim",
-    detay: "Şirketin sahip olduğu KCHOL payları sermayenin %0.84'üne ulaşmıştır. Program çerçevesinde fon kaynağı şirket iç kaynaklarından karşılanmaktadır.",
-    paragraflar: [
-      "Koç Holding A.Ş. Yönetim Kurulu kararıyla başlatılan hisse geri alım programı çerçevesinde, Borsa İstanbul pay piyasasında 184.50 TL ortalama fiyattan 250.000 adet pay geri alınmıştır.",
-      "İşlem sonucunda şirketin sahip olduğu kendi paylarının nominal tutarı 21.3 milyon TL'ye ve şirket sermayesine oranı %0.84 seviyesine ulaşmıştır."
-    ],
-    url: "https://www.kap.org.tr",
-  },
-  {
-    id: "k2",
-    zaman: "16:11:18",
-    tarih: "Bugün",
-    kaynak: "KAP",
-    kategori: "kap",
-    hisseler: ["SISE"],
-    kapTuru: "ÖDA",
-    baslik: "Türkiye Şişe ve Cam Fabrikaları A.Ş. — Kapasite Artışı ve Modernizasyon Kararı",
-    detay: "Yatırımın 2027 ilk çeyreğinde tamamlanmasıyla enerji tüketiminde verimlilik ve katma değerli kaplamalı cam üretiminde kapasite artışı hedeflenmektedir.",
-    paragraflar: [
-      "Şirketimiz Yönetim Kurulu, Mersin ve Yenişehir üretim tesislerindeki düzcam hatlarının fırın soğuk tamiri ve yeni teknoloji kaplama hattı entegrasyonu için 115 milyon euro bütçeli yatırım planını onaylamıştır.",
-      "Yatırımın 2027 ilk çeyreğinde devreye girmesiyle birlikte birim enerji tüketiminde %14 verimlilik ve yüksek katma değerli mimari cam üretim kapasitesinde yıllık 180 bin ton artış öngörülmektedir."
-    ],
-    url: "https://www.kap.org.tr",
-  },
-  {
-    id: "k3",
-    zaman: "15:50:30",
-    tarih: "Bugün",
-    kaynak: "KAP",
-    kategori: "kap",
-    hisseler: ["SASA"],
-    kapTuru: "FR",
-    baslik: "SASA Polyester Sanayi A.Ş. — Dönemsel Faaliyet ve Yatırım Raporu",
-    detay: "Tesisin ticari üretim takvimi ve ham madde tedarik sözleşmelerinin finansal tablolara yansıması paylaşıldı.",
-    paragraflar: [
-      "Adana Yumurtalık Özel Endüstri Bölgesi'nde sürdürülen PTA ve polimerizasyon tesisi inşaatında mekanik tamamlama oranı %94 seviyesine ulaşmıştır.",
-      "Deneme üretimlerinin planlandığı şekilde devam ettiği ve tesisin tam kapasite devreye alınmasıyla yıllık yaklaşık 1.2 milyar dolarlık ithal ikamesi sağlanacağı kamuoyuyla paylaşılmıştır."
-    ],
-    url: "https://www.kap.org.tr",
-  },
-  {
-    id: "k4",
-    zaman: "15:36:12",
-    tarih: "Bugün",
-    kaynak: "KAP",
-    kategori: "kap",
-    hisseler: ["FROTO"],
-    kapTuru: "SÖZ",
-    baslik: "Ford Otomotiv Sanayi A.Ş. — Yeni Model Batarya Montaj Tedarik Sözleşmesi",
-    detay: "Sözleşmenin şirketin ihracat hacmine yıllık yaklaşık 320 milyon euro katkı sağlaması öngörülmektedir.",
-    paragraflar: [
-      "Ford Otosan, Avrupa pazarına yönelik tam elektrikli ticari araç serisi için batarya paketleme ve modül montajına ilişkin çok yıllı tedarik anlaşmasını imzalamıştır.",
-      "Kocaeli fabrikalarında üretilecek yeni nesil batarya paketlerinin yıllık ciroya yaklaşık 320 milyon euro ilave ihracat geliri oluşturması beklenmektedir."
-    ],
-    url: "https://www.kap.org.tr",
-  },
-  {
-    id: "k5",
-    zaman: "15:14:09",
-    tarih: "Bugün",
-    kaynak: "KAP",
-    kategori: "kap",
-    hisseler: ["TUPRS"],
-    kapTuru: "ÖDA",
-    baslik: "Tüpraş — Rafineri Bakım Planı Güncellemesi Bildirildi",
-    detay: "Planlı duruş süresince nihai ürün satışları mevcut stoklardan karşılanacak olup satış hacminde kesinti öngörülmemektedir.",
-    paragraflar: [
-      "İzmit Rafinerisi Ham Petrol Ünitesi'nde planlı periyodik bakım çalışmalarının 3 hafta süreyle yürütüleceği, bakım süresince ürün satışlarının mevcut stok depolarından kesintisiz karşılanacağı bildirilmiştir.",
-      "Şirketin yıllık toplam üretim ve satış hedeflerinde herhangi bir revizyona ihtiyaç duyulmadığı belirtilmiştir."
-    ],
-    url: "https://www.kap.org.tr",
-  },
-];
+export interface KapItem {
+  id: string | number;
+  code: string;
+  type: string;
+  title: string;
+  subject: string;
+  summary: string;
+  time: string;
+  timestamp: number;
+  kapUrl: string;
+}
+
+// 1. KAP CANLI VERİ ÇEKME FONKSİYONU:
+export const fetchKapDisclosures = async (): Promise<KapItem[]> => {
+  const targetUrl = "https://bigpara.hurriyet.com.tr/api/v1/hisse/kap";
+  const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`;
+
+  try {
+    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(6000) });
+    const json = await res.json();
+
+    // Gelen JSON formatını terminal yapısına uyarla
+    if (json && json.data && Array.isArray(json.data) && json.data.length > 0) {
+      return json.data
+        .map((item: Record<string, unknown>) => ({
+          id: (item.id as string | number) || (item.disclosureIndex as string | number) || `kap_${Date.now()}`,
+          code: String(item.stockCode || item.kod || "BIST").toUpperCase(),
+          type: String(item.disclosureType || "ÖDA").toUpperCase(),
+          title: String(item.companyTitle || item.sirketAdi || `${item.stockCode || item.kod || "BIST"} Ortaklığı`),
+          subject: String(item.disclosureTitle || item.baslik || "Özel Durum Açıklaması"),
+          summary: String(item.summary || item.aciklama || item.disclosureTitle || "KAP açıklaması detayları ilan edilmiştir."),
+          time: item.publishDate
+            ? new Intl.DateTimeFormat("tr-TR", {
+                timeZone: "Europe/Istanbul",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false,
+              }).format(new Date(item.publishDate as string | number))
+            : "--:--:--",
+          timestamp: new Date((item.publishDate as string | number) || Date.now()).getTime(),
+          kapUrl: String(item.url || `https://www.kap.org.tr/tr/Bildirim/${item.id || item.disclosureIndex}`),
+        }))
+        .sort((a: KapItem, b: KapItem) => b.timestamp - a.timestamp);
+    }
+  } catch {
+    // Alternatif allorigins fallback
+    try {
+      const resAlt = await fetch(
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`
+      );
+      const jsonAlt = await resAlt.json();
+      if (jsonAlt?.data && Array.isArray(jsonAlt.data) && jsonAlt.data.length > 0) {
+        return jsonAlt.data
+          .map((item: Record<string, unknown>) => ({
+            id: (item.id as string | number) || `kap_alt_${Date.now()}`,
+            code: String(item.stockCode || "BIST").toUpperCase(),
+            type: String(item.disclosureType || "ÖDA").toUpperCase(),
+            title: String(item.companyTitle || `${item.stockCode || "BIST"} Ortaklığı`),
+            subject: String(item.disclosureTitle || "Özel Durum Açıklaması"),
+            summary: String(item.summary || item.disclosureTitle || "KAP açıklaması detayları ilan edilmiştir."),
+            time: new Date((item.publishDate as string | number) || Date.now()).toLocaleTimeString("tr-TR", {
+              hour12: false,
+              timeZone: "Europe/Istanbul",
+            }),
+            timestamp: new Date((item.publishDate as string | number) || Date.now()).getTime(),
+            kapUrl: String(`https://www.kap.org.tr/tr/Bildirim/${item.id}`),
+          }))
+          .sort((a: KapItem, b: KapItem) => b.timestamp - a.timestamp);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 3. Güvenilir Dahili API Fallback: /api/kap-disclosures (Kesintisiz canlı akış)
+  try {
+    const sRes = await fetch("/api/kap-disclosures", { cache: "no-store", signal: AbortSignal.timeout(5000) });
+    if (sRes.ok) {
+      const sJson = await sRes.json();
+      if (sJson && Array.isArray(sJson.data) && sJson.data.length > 0) {
+        return sJson.data;
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return [];
+};
 
 // Statik Resmi Kurumlar
 const RESMI_HABERLER: TerminalHaber[] = [
@@ -750,6 +757,32 @@ export default function TerminalWorkspace() {
   });
 
   const [seciliHaber, setSeciliHaber] = useState<TerminalHaber | null>(null);
+  const [selectedKap, setSelectedKap] = useState<KapItem | null>(null);
+  const [kapBildirimleri, setKapBildirimleri] = useState<KapItem[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("bpt_kap_disclosures");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return [];
+  });
+  const [loadingKap, setLoadingKap] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("bpt_kap_disclosures");
+        if (cached) return false;
+      } catch {
+        // ignore
+      }
+    }
+    return true;
+  });
   const [newlyArrivedIds, setNewlyArrivedIds] = useState<Set<string>>(new Set());
 
   const knownIdsRef = useRef<Set<string>>(new Set());
@@ -1090,19 +1123,45 @@ export default function TerminalWorkspace() {
     };
   }, [loadGlobalNews]);
 
-  // Modal için ESC klavye tuşu dinleyicisi
+  // 4. CANLI GÜNCELLEME: KAP bildirimlerini sayfa açılışında çek ve her 30 saniyede bir sessizce kontrol et
   useEffect(() => {
-    if (!seciliHaber) return;
+    let isMounted = true;
+    const loadKap = async () => {
+      const items = await fetchKapDisclosures();
+      if (items && items.length > 0 && isMounted) {
+        setKapBildirimleri(items);
+        setLoadingKap(false);
+        try {
+          localStorage.setItem("bpt_kap_disclosures", JSON.stringify(items));
+        } catch {
+          // ignore
+        }
+      }
+    };
 
+    void loadKap();
+    const kapInterval = setInterval(() => {
+      void loadKap();
+    }, 30000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(kapInterval);
+    };
+  }, []);
+
+  // Modal için ESC klavye tuşu dinleyicisi (ESC tuşuna basıldığında modalın kapanması)
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        setSelectedKap(null);
         setSeciliHaber(null);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [seciliHaber]);
+  }, []);
 
   return (
     <div className="terminal-workspace">
@@ -1243,36 +1302,42 @@ export default function TerminalWorkspace() {
               </div>
             </div>
 
-            <div className="pane-scroll">
-              {KAP_BILDIRIMLERI.map((h) => (
-                <article
-                  key={h.id}
-                  onClick={() => setSeciliHaber(h)}
-                  className="terminal-row kap-row group"
-                >
-                  <div className="kap-row-top">
-                    <div className="flex items-center gap-2">
-                      {h.hisseler?.map((s) => (
-                        <span key={s} className="text-[#38bdf8] font-mono font-bold text-[11px] tracking-tight">
-                          {s}
+            <div className="pane-scroll p-3">
+              {loadingKap && kapBildirimleri.length === 0 ? (
+                <TerminalSkeletonList count={3} />
+              ) : kapBildirimleri.length === 0 ? (
+                <div className="p-4 text-center font-mono text-xs text-slate-500">
+                  KAP bildirim akışı taranıyor...
+                </div>
+              ) : (
+                kapBildirimleri.map((item) => (
+                  <article
+                    key={item.id}
+                    onClick={() => setSelectedKap(item)}
+                    className="cursor-pointer group hover:bg-slate-900/50 transition border-b border-white/[0.04] pb-2 mb-2 last:border-b-0 last:pb-0 last:mb-0"
+                  >
+                    {/* Üst satır: Solda code, yanında type, sağ uçta time */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[#38bdf8] font-mono font-bold text-xs">
+                          {item.code}
                         </span>
-                      ))}
-                      {h.kapTuru && (
-                        <span className="kap-type-subtle font-mono">
-                          {h.kapTuru}
+                        <span className="text-[10px] font-mono text-slate-500 bg-slate-800/80 px-1 rounded">
+                          {item.type}
                         </span>
-                      )}
+                      </div>
+                      <span className="text-[11px] font-mono text-slate-500 tabular-nums">
+                        {item.time}
+                      </span>
                     </div>
-                    <span className="row-time font-mono tabular-nums text-slate-500 text-[11px]">
-                      {h.zaman}
-                    </span>
-                  </div>
 
-                  <h3 className="row-headline kap-headline group-hover:text-[#38bdf8] transition">
-                    {h.baslik}
-                  </h3>
-                </article>
-              ))}
+                    {/* Alt satır: Bildirim konusu/özeti */}
+                    <p className="text-xs text-slate-200 line-clamp-2 leading-relaxed group-hover:text-white mt-1">
+                      {item.subject}
+                    </p>
+                  </article>
+                ))
+              )}
             </div>
           </section>
 
@@ -1399,6 +1464,83 @@ export default function TerminalWorkspace() {
                 ) : (
                   <span className="text-xs text-slate-500 font-mono">Terminal Orijinal Kayıt</span>
                 )}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 3. TIKLANINCA AÇILAN KAP DETAY MODALI */}
+      {selectedKap && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
+          onClick={() => setSelectedKap(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="w-full max-w-2xl bg-[#0b0f19] border border-[#2563eb]/40 rounded-xl shadow-[0_0_50px_rgba(37,99,235,0.15)] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Üst İnce Accent Çizgisi */}
+            <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-[#38bdf8] to-transparent" />
+
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs font-bold text-white bg-[#2563eb] px-2.5 py-1 rounded tracking-wider">
+                  {selectedKap.code}
+                </span>
+                <span className="font-mono text-xs text-[#38bdf8] bg-[#38bdf8]/10 px-2 py-0.5 rounded border border-[#38bdf8]/20">
+                  {selectedKap.type}
+                </span>
+                <span className="font-mono text-xs text-slate-400 ml-2">
+                  {selectedKap.time}
+                </span>
+              </div>
+              <button
+                onClick={() => setSelectedKap(null)}
+                className="text-slate-400 hover:text-white text-sm font-mono px-2 py-1 rounded hover:bg-white/[0.06] transition"
+              >
+                ✕ ESC
+              </button>
+            </div>
+
+            {/* Gövde */}
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+              <h2 className="text-base font-bold text-slate-100 leading-snug">
+                {selectedKap.title}
+              </h2>
+              <div className="text-xs font-semibold text-[#38bdf8] bg-slate-900/80 p-2.5 rounded border border-white/[0.04]">
+                Konu: {selectedKap.subject}
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line font-normal">
+                {selectedKap.summary}
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-[#080c14] border-t border-white/[0.06] flex items-center justify-between">
+              <span className="text-[11px] font-mono text-slate-500">Kaynak: Kamuyu Aydınlatma Platformu</span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setSelectedKap(null)}
+                  className="text-xs text-slate-400 hover:text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition"
+                >
+                  Kapat
+                </button>
+                <a
+                  href={selectedKap.kapUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-xs font-semibold text-white bg-[#2563eb] hover:bg-blue-600 px-5 py-2.5 rounded-lg shadow-lg shadow-blue-500/20 transition active:scale-95"
+                >
+                  <span>KAP&apos;ta Görüntüle</span>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
               </div>
             </div>
 

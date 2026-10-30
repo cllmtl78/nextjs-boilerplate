@@ -301,10 +301,24 @@ function parseRawStock(raw: RawBistStock): (StockMover & { volumeNum: number }) 
   const parseNum = (val: unknown): number => {
     if (typeof val === "number") return isNaN(val) ? 0 : val;
     if (typeof val === "string") {
-      // 1.234,56 veya 1234.56 formatı temizliği
-      const clean = val.replace(/\s+/g, "").replace(/\./g, "").replace(",", ".");
-      const num = parseFloat(clean);
-      return isNaN(num) ? 0 : num;
+      const clean = val.replace(/\s+/g, "").trim();
+      if (!clean) return 0;
+      // Eğer hem nokta hem virgül varsa (örn: 1.234,56 veya 1,234.56)
+      if (clean.includes(".") && clean.includes(",")) {
+        if (clean.lastIndexOf(",") > clean.lastIndexOf(".")) {
+          // 1.234,56 (TR formatı)
+          return parseFloat(clean.replace(/\./g, "").replace(",", ".")) || 0;
+        } else {
+          // 1,234.56 (EN formatı)
+          return parseFloat(clean.replace(/,/g, "")) || 0;
+        }
+      }
+      // Sadece virgül varsa (örn: 12,34)
+      if (clean.includes(",")) {
+        return parseFloat(clean.replace(",", ".")) || 0;
+      }
+      // Sadece nokta varsa veya düz sayı (örn: 12.34)
+      return parseFloat(clean) || 0;
     }
     return 0;
   };
@@ -339,6 +353,7 @@ function parseRawStock(raw: RawBistStock): (StockMover & { volumeNum: number }) 
 // 1. CANLI VERİ ÇEKME MOTORU (BIST Canlı API):
 const fetchBistMarketData = async (): Promise<unknown[] | null> => {
   const targetUrl = "https://bigpara.hurriyet.com.tr/api/v1/hisse/canli";
+  // Mevcut proxy havuzundan geçir
   const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`;
 
   try {
@@ -351,25 +366,24 @@ const fetchBistMarketData = async (): Promise<unknown[] | null> => {
     // Alternatif proxy fallback: allorigins
     try {
       const resAlt = await fetch(
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-        { signal: AbortSignal.timeout(6000) }
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`
       );
       const jsonAlt = await resAlt.json();
       if (jsonAlt && Array.isArray(jsonAlt.data) && jsonAlt.data.length > 0) {
         return jsonAlt.data;
       }
     } catch {
-      // proxy fallback hatası
+      // proxy hatası
     }
   }
 
-  // 3. Fallback: Next.js sunucu proxy rotası (/api/bist-movers)
+  // 3. Dahili API Fallback: /api/bist-market-data (Mynet / Bigpara canlı borsa verisi)
   try {
-    const sRes = await fetch("/api/bist-movers", { cache: "no-store", signal: AbortSignal.timeout(5000) });
+    const sRes = await fetch("/api/bist-market-data", { cache: "no-store", signal: AbortSignal.timeout(5000) });
     if (sRes.ok) {
       const sJson = await sRes.json();
-      if (sJson && (Array.isArray(sJson.gainers) || Array.isArray(sJson.data))) {
-        return sJson.data || [...(sJson.gainers || []), ...(sJson.losers || []), ...(sJson.volume || [])];
+      if (sJson && Array.isArray(sJson.data) && sJson.data.length > 0) {
+        return sJson.data;
       }
     }
   } catch {
