@@ -196,63 +196,93 @@ export interface KapItem {
   kapUrl: string;
 }
 
-// 1. KAP CANLI VERİ ÇEKME FONKSİYONU:
-export const fetchKapDisclosures = async (): Promise<KapItem[]> => {
-  // 1. Birincil ve en güvenilir kaynak: Dahili /api/kap-disclosures (Sunucu tarafı kilitli saat ve resmi link)
+// 1. KAP RESMİ VERİ ÇEKME FONKSİYONU VE DOĞRU ID MAPPING:
+export const fetchLiveKapDisclosures = async (): Promise<KapItem[]> => {
+  // 1. Birincil Tercih: KAP Resmi Açık Uç Noktası
+  const targetUrl = "https://www.kap.org.tr/tr/api/disclosures";
+  const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`;
+
+  try {
+    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(7000) });
+    const data = await res.json();
+
+    if (Array.isArray(data) && data.length > 0) {
+      return (data as Record<string, unknown>[]).slice(0, 30).map((item) => {
+        // Resmi 7 haneli KAP bildirim ID'si (örn: 1689398)
+        const disclosureId = String(item.disclosureIndex || item.id || item.disclosureId || "");
+
+        // Sabit Saat Formatı (Asla dinamik güncellenmeyecek)
+        const publishDate = (item.publishDate || item.date || item.disclosureTime) as string | number;
+        let fixedTime = "--:--:--";
+        let timestamp = 0;
+
+        if (publishDate) {
+          const d = new Date(publishDate);
+          timestamp = d.getTime();
+          fixedTime = new Intl.DateTimeFormat("tr-TR", {
+            timeZone: "Europe/Istanbul",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+          }).format(d);
+        }
+
+        return {
+          id: disclosureId,
+          code: String(item.stockCodes || item.stockCode || item.relatedStocks || "KAP").toUpperCase(),
+          type: String(item.disclosureType || item.type || "ÖDA").toUpperCase(),
+          title: String(item.companyTitle || item.stockTitle || "Şirket Bildirimi"),
+          subject: String(item.disclosureTitle || item.title || item.subject || "Açıklama"),
+          summary: String(item.summary || item.disclosureTitle || item.title || ""),
+          time: fixedTime,
+          timestamp,
+          // ÇALIŞAN RESMİ KAP LİNKİ:
+          kapUrl: `https://www.kap.org.tr/tr/Bildirim/${disclosureId}`,
+        };
+      }).sort((a: KapItem, b: KapItem) => b.timestamp - a.timestamp);
+    }
+  } catch {
+    // 2. Yedek Fallback Uç Noktası (Foreks KAP Beslemesi)
+    try {
+      const fallbackUrl =
+        "https://api.allorigins.win/raw?url=" +
+        encodeURIComponent("https://www.foreks.com/api/kap/feed");
+      const fRes = await fetch(fallbackUrl, { signal: AbortSignal.timeout(6000) });
+      const fData = await fRes.json();
+      if (Array.isArray(fData) && fData.length > 0) {
+        return (fData as Record<string, unknown>[]).slice(0, 30).map((item) => {
+          const id = String(item.id || item.disclosureIndex || "");
+          const d = item.date ? new Date(item.date as string | number) : new Date();
+          return {
+            id,
+            code: String(item.code || item.stockCode || "BIST").toUpperCase(),
+            type: String(item.type || item.disclosureType || "ÖDA").toUpperCase(),
+            title: String(item.company || item.title || "Şirket Bildirimi"),
+            subject: String(item.subject || item.disclosureTitle || "Açıklama"),
+            summary: String(item.summary || item.subject || ""),
+            time: String(item.time || "--:--:--"),
+            timestamp: d.getTime(),
+            kapUrl: `https://www.kap.org.tr/tr/Bildirim/${id}`,
+          };
+        }).sort((a: KapItem, b: KapItem) => b.timestamp - a.timestamp);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 3. Kesintisiz Dahili API (/api/kap-disclosures - Sunucu tarafında doğrulanmış 7 haneli resmi KAP ID'leri)
   try {
     const sRes = await fetch("/api/kap-disclosures", {
       cache: "no-store",
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(5000),
     });
     if (sRes.ok) {
       const sJson = await sRes.json();
       if (sJson && Array.isArray(sJson.data) && sJson.data.length > 0) {
-        return sJson.data;
+        return (sJson.data as KapItem[]).sort((a, b) => b.timestamp - a.timestamp);
       }
-    }
-  } catch {
-    // ignore
-  }
-
-  // 2. Harici Bigpara KAP açık API fallback
-  const targetUrl = "https://bigpara.hurriyet.com.tr/api/v1/hisse/kap";
-  const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`;
-
-  try {
-    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(6000) });
-    const json = await res.json();
-
-    if (json && json.data && Array.isArray(json.data) && json.data.length > 0) {
-      return json.data
-        .map((item: Record<string, unknown>) => {
-          const idVal = (item.disclosureIndex as string | number) || (item.id as string | number) || `kap_${Date.now()}`;
-          const validKapUrl = (item.disclosureIndex || item.id)
-            ? `https://www.kap.org.tr/tr/Bildirim/${item.disclosureIndex || item.id}`
-            : "https://www.kap.org.tr";
-
-          const fixedTime = item.publishDate
-            ? new Intl.DateTimeFormat("tr-TR", {
-                timeZone: "Europe/Istanbul",
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-                hour12: false,
-              }).format(new Date(item.publishDate as string | number))
-            : String(item.time || item.saat || "--:--:--");
-
-          return {
-            id: idVal,
-            code: String(item.stockCode || item.kod || "BIST").toUpperCase(),
-            type: String(item.disclosureType || "ÖDA").toUpperCase(),
-            title: String(item.companyTitle || item.sirketAdi || `${item.stockCode || item.kod || "BIST"} Ortaklığı`),
-            subject: String(item.disclosureTitle || item.baslik || "Özel Durum Açıklaması"),
-            summary: String(item.summary || item.aciklama || item.disclosureTitle || "KAP açıklaması detayları ilan edilmiştir."),
-            time: fixedTime,
-            timestamp: item.publishDate ? new Date(item.publishDate as string | number).getTime() : Date.now(),
-            kapUrl: validKapUrl,
-          };
-        })
-        .sort((a: KapItem, b: KapItem) => b.timestamp - a.timestamp);
     }
   } catch {
     // ignore
@@ -260,6 +290,8 @@ export const fetchKapDisclosures = async (): Promise<KapItem[]> => {
 
   return [];
 };
+
+export const fetchKapDisclosures = fetchLiveKapDisclosures;
 
 // Statik Resmi Kurumlar
 const RESMI_HABERLER: TerminalHaber[] = [
@@ -1312,7 +1344,7 @@ export default function TerminalWorkspace() {
                     onClick={() => setSelectedKap(item)}
                     className="cursor-pointer group hover:bg-slate-900/50 transition border-b border-white/[0.04] pb-2 mb-2 last:border-b-0 last:pb-0 last:mb-0"
                   >
-                    {/* Üst satır: Solda code, yanında type, sağ uçta time */}
+                    {/* Üst satır: Solda code, yanında type, sağ uçta time ve doğrudan resmi link ikonu */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <span className="text-[#38bdf8] font-mono font-bold text-xs">
@@ -1322,9 +1354,25 @@ export default function TerminalWorkspace() {
                           {item.type}
                         </span>
                       </div>
-                      <span className="text-[11px] font-mono text-slate-500 tabular-nums">
-                        {item.time}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-mono text-slate-500 tabular-nums">
+                          {item.time}
+                        </span>
+                        {item.kapUrl && (
+                          <a
+                            href={item.kapUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            title="Resmi KAP Bildirimini Aç"
+                            className="text-slate-500 hover:text-[#38bdf8] transition p-0.5"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </a>
+                        )}
+                      </div>
                     </div>
 
                     {/* Alt satır: Bildirim konusu/özeti */}

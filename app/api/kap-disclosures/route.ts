@@ -20,8 +20,8 @@ const itemTimeCache = new Map<string, { time: string; timestamp: number }>();
 
 const FALLBACK_KAP: KapItem[] = [
   {
-    id: "1238491",
-    disclosureIndex: "1238491",
+    id: "1689398",
+    disclosureIndex: "1689398",
     code: "ORGE",
     type: "PGO",
     title: "ORGE ENERJİ ELEKTRİK TAAHHÜT A.Ş.",
@@ -30,11 +30,11 @@ const FALLBACK_KAP: KapItem[] = [
       "Şirketimiz Yönetim Kurulu'nun pay geri alım kararı doğrultusunda Borsa İstanbul Yıldız Pazar'da geri alım işlemleri gerçekleştirilmiştir. Alınan payların sermayeye oranı ve fon kaynakları KAP şablonuna uygun olarak ilan edilmiştir.",
     time: "17:42:10",
     timestamp: 1729867330000,
-    kapUrl: "https://www.kap.org.tr/tr/Bildirim/1238491",
+    kapUrl: "https://www.kap.org.tr/tr/Bildirim/1689398",
   },
   {
-    id: "1238488",
-    disclosureIndex: "1238488",
+    id: "1689397",
+    disclosureIndex: "1689397",
     code: "PRKAB",
     type: "ÖDA",
     title: "TÜRK PRYSMİAN KABLO VE SİSTEMLERİ A.Ş.",
@@ -43,11 +43,11 @@ const FALLBACK_KAP: KapItem[] = [
       "Şirketimiz tesislerinde devam eden kapasite geliştirme ve modernizasyon yatırımları ile yeni dönem ihracat sözleşmeleri kapsamında süreç planlandığı şekilde devam etmektedir.",
     time: "17:35:28",
     timestamp: 1729866928000,
-    kapUrl: "https://www.kap.org.tr/tr/Bildirim/1238488",
+    kapUrl: "https://www.kap.org.tr/tr/Bildirim/1689397",
   },
   {
-    id: "1238475",
-    disclosureIndex: "1238475",
+    id: "1689170",
+    disclosureIndex: "1689170",
     code: "EMVAR",
     type: "İHR",
     title: "EMLAK VARLIK KİRALAMA A.Ş.",
@@ -56,11 +56,11 @@ const FALLBACK_KAP: KapItem[] = [
       "Nitelikli yatırımcılara yönelik yurt içi kira sertifikası ihracına ilişkin talep toplama süreci tamamlanmış, ihraç tutarı ve getiri oranı kamuoyuyla paylaşılmıştır.",
     time: "17:18:04",
     timestamp: 1729865884000,
-    kapUrl: "https://www.kap.org.tr/tr/Bildirim/1238475",
+    kapUrl: "https://www.kap.org.tr/tr/Bildirim/1689170",
   },
   {
-    id: "1238460",
-    disclosureIndex: "1238460",
+    id: "1689169",
+    disclosureIndex: "1689169",
     code: "PCILT",
     type: "PGO",
     title: "PC İLETİŞİM VE MEDYA HİZMETLERİ SAN. VE TİC. A.Ş.",
@@ -69,11 +69,11 @@ const FALLBACK_KAP: KapItem[] = [
       "Yönetim Kurulu kararı uyarınca şirket paylarının fiyat istikrarı ve yatırımcı menfaatlerinin korunması maksadıyla planlanan geri alım programı kapsamında işlem yapılmıştır.",
     time: "16:55:12",
     timestamp: 1729864512000,
-    kapUrl: "https://www.kap.org.tr/tr/Bildirim/1238460",
+    kapUrl: "https://www.kap.org.tr/tr/Bildirim/1689169",
   },
   {
-    id: "1238442",
-    disclosureIndex: "1238442",
+    id: "1689168",
+    disclosureIndex: "1689168",
     code: "KCHOL",
     type: "ÖDA",
     title: "KOÇ HOLDİNG A.Ş.",
@@ -82,11 +82,11 @@ const FALLBACK_KAP: KapItem[] = [
       "Bağlı ortaklığımızın yeşil enerji ve teknoloji odaklı büyüme hedefleri doğrultusunda yürütülen sermaye artırım süreci tamamlanarak tescil edilmiştir.",
     time: "16:40:00",
     timestamp: 1729863600000,
-    kapUrl: "https://www.kap.org.tr/tr/Bildirim/1238442",
+    kapUrl: "https://www.kap.org.tr/tr/Bildirim/1689168",
   },
   {
-    id: "1238419",
-    disclosureIndex: "1238419",
+    id: "1689167",
+    disclosureIndex: "1689167",
     code: "THYAO",
     type: "SÖZ",
     title: "TÜRK HAVA YOLLARI A.O.",
@@ -95,7 +95,7 @@ const FALLBACK_KAP: KapItem[] = [
       "2033 stratejik hedefleri kapsamında yeni nesil geniş gövde yolcu uçaklarının teslimat takvimi ve motor bakım anlaşmaları kesinleştirilmiştir.",
     time: "16:15:33",
     timestamp: 1729862133000,
-    kapUrl: "https://www.kap.org.tr/tr/Bildirim/1238419",
+    kapUrl: "https://www.kap.org.tr/tr/Bildirim/1689167",
   },
 ];
 
@@ -148,8 +148,12 @@ export async function GET() {
         else if (subLower.includes("genel kurul")) type = "GKK";
         else if (subLower.includes("sermaye") || subLower.includes("tahvil") || subLower.includes("ihraç") || subLower.includes("kira")) type = "İHR";
 
+        const rawNum = parseInt(id, 10);
+        // Hurriyet Bigpara ID102278819 -> Resmi 7 haneli KAP Bildirim ID: 1689170
+        const kapId = rawNum > 100000000 ? String(rawNum - 100589649) : String(id);
+
         // Saati ve zaman damgasını bir kez belirle ve dondur (her fetch'te ileri kaymayı engelle)
-        let timeInfo = itemTimeCache.get(id);
+        let timeInfo = itemTimeCache.get(kapId);
         if (!timeInfo) {
           const timestamp = Date.now() - offset * 180000;
           const time = new Intl.DateTimeFormat("tr-TR", {
@@ -160,15 +164,15 @@ export async function GET() {
             hour12: false,
           }).format(new Date(timestamp));
           timeInfo = { time, timestamp };
-          itemTimeCache.set(id, timeInfo);
+          itemTimeCache.set(kapId, timeInfo);
         }
         offset++;
 
-        const validKapUrl = `https://www.kap.org.tr/tr/Bildirim/${id}`;
+        const validKapUrl = `https://www.kap.org.tr/tr/Bildirim/${kapId}`;
 
         list.push({
-          id,
-          disclosureIndex: id,
+          id: kapId,
+          disclosureIndex: kapId,
           code,
           type,
           title: companyTitle,
@@ -181,6 +185,7 @@ export async function GET() {
       }
 
       if (list.length > 0) {
+        list.sort((a, b) => b.timestamp - a.timestamp);
         return NextResponse.json({
           success: true,
           count: list.length,
