@@ -5,8 +5,22 @@ import { useEffect, useState } from "react";
 import Weather from "./Weather";
 import MarketBar from "./MarketBar";
 
+const getInitialTime = () => {
+  try {
+    return new Date().toLocaleTimeString("tr-TR", {
+      timeZone: "Europe/Istanbul",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+  } catch {
+    return "";
+  }
+};
+
 export default function Header() {
-  const [saat, setSaat] = useState<string>("");
+  const [saat, setSaat] = useState<string>(getInitialTime);
   const [bistDurum, setBistDurum] = useState<{ acik: boolean; metin: string }>({
     acik: true,
     metin: "Açık",
@@ -21,6 +35,7 @@ export default function Header() {
       // Format: HH:mm:ss (Canlı saat)
       setSaat(
         now.toLocaleTimeString("tr-TR", {
+          timeZone: "Europe/Istanbul",
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
@@ -120,7 +135,7 @@ export default function Header() {
           <div className="bg-[#0c1322] border border-white/[0.08] rounded px-2.5 py-1 flex items-center gap-3 text-xs text-slate-300 shadow-sm shrink-0">
             {/* Canlı Saat (Solundaki yeşil nokta kaldırıldı) */}
             <div className="font-mono tabular-nums text-slate-200 font-semibold tracking-wider text-xs">
-              {saat || "12:00:00"}
+              {saat || getInitialTime()}
             </div>
 
             {/* Dikey İnce Ayırıcı Çizgi */}

@@ -14,14 +14,12 @@ type Sehir = {
   ad: string;
   lat: number;
   lon: number;
-  varsayilanSicaklik: number;
-  varsayilanKod: number;
 };
 
 const SEHIRLER: Sehir[] = [
-  { ad: "Ankara", lat: 39.93, lon: 32.86, varsayilanSicaklik: 17, varsayilanKod: 1 },
-  { ad: "İstanbul", lat: 41.01, lon: 28.98, varsayilanSicaklik: 18, varsayilanKod: 2 },
-  { ad: "İzmir", lat: 38.42, lon: 27.14, varsayilanSicaklik: 22, varsayilanKod: 0 },
+  { ad: "Ankara", lat: 39.93, lon: 32.86 },
+  { ad: "İstanbul", lat: 41.01, lon: 28.98 },
+  { ad: "İzmir", lat: 38.42, lon: 27.14 },
 ];
 
 type SehirHavaVerisi = {
@@ -52,16 +50,13 @@ function renderWeatherIcon(kod: number) {
 }
 
 export default function Weather() {
-  const [havaVerileri, setHavaVerileri] = useState<SehirHavaVerisi[]>(() =>
-    SEHIRLER.map((s) => ({
-      sicaklik: s.varsayilanSicaklik,
-      kod: s.varsayilanKod,
-    }))
-  );
+  const [havaVerileri, setHavaVerileri] = useState<SehirHavaVerisi[] | null>(null);
   const [sira, setSira] = useState(0);
 
   // Open-Meteo API'den 3 şehir için hava durumu
   useEffect(() => {
+    let isMounted = true;
+
     async function havaGetir() {
       try {
         const url =
@@ -76,41 +71,54 @@ export default function Weather() {
         const json = await res.json();
         const liste = Array.isArray(json) ? json : [json];
 
-        setHavaVerileri(
-          liste.map((j, idx) => ({
+        if (isMounted) {
+          const parsed = liste.map((j) => ({
             sicaklik:
               j?.current?.temperature_2m !== undefined
                 ? Math.round(j.current.temperature_2m)
-                : SEHIRLER[idx].varsayilanSicaklik,
+                : 0,
             kod:
               j?.current?.weather_code !== undefined
                 ? j.current.weather_code
-                : SEHIRLER[idx].varsayilanKod,
-          }))
-        );
+                : 0,
+          }));
+          if (parsed.length > 0) {
+            setHavaVerileri(parsed);
+          }
+        }
       } catch {
-        // Hata durumunda mevcut/varsayılan değerleri koru
+        // Hata durumunda bekle
       }
     }
 
     havaGetir();
     const yenileme = setInterval(havaGetir, 10 * 60 * 1000);
-    return () => clearInterval(yenileme);
+    return () => {
+      isMounted = false;
+      clearInterval(yenileme);
+    };
   }, []);
 
-  // Her 5 saniyede bir sıradaki şehre yumuşak fade geçişi
+  // Her 5 saniyede bir sıradaki şehre yumuşak fade geçişi (sadece veri geldiyse)
   useEffect(() => {
+    if (!havaVerileri || havaVerileri.length === 0) return;
     const zamanlayici = setInterval(() => {
       setSira((prev) => (prev + 1) % SEHIRLER.length);
     }, 5000);
     return () => clearInterval(zamanlayici);
-  }, []);
+  }, [havaVerileri]);
+
+  // Veri yüklenene kadar skeleton göster (asla statik Ankara basılmaz)
+  if (!havaVerileri || !havaVerileri[sira]) {
+    return (
+      <div className="flex items-center min-w-[95px]">
+        <div className="h-4 w-16 bg-slate-800 animate-pulse rounded" />
+      </div>
+    );
+  }
 
   const aktifSehir = SEHIRLER[sira];
-  const aktifVeri = havaVerileri[sira] || {
-    sicaklik: aktifSehir.varsayilanSicaklik,
-    kod: aktifSehir.varsayilanKod,
-  };
+  const aktifVeri = havaVerileri[sira];
 
   return (
     <div className="flex items-center gap-1.5 overflow-hidden min-w-[95px]">
