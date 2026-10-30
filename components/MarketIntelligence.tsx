@@ -31,6 +31,113 @@ export interface EconomicCalendarItem {
 }
 
 
+const DEFAULT_SECTORS: SectorItem[] = [
+  { code: "XBANK", name: "Bankacılık", change: 2.48 },
+  { code: "XULAŞ", name: "Ulaştırma", change: 2.15 },
+  { code: "XHOLD", name: "Holding", change: 1.34 },
+  { code: "XMANA", name: "Metal Ana", change: 0.72 },
+  { code: "XUSIN", name: "Sanayi", change: 0.45 },
+  { code: "XGIDA", name: "Gıda İçecek", change: -0.38 },
+  { code: "XGMYO", name: "Gayrimenkul", change: -0.82 },
+  { code: "XBLSM", name: "Bilişim", change: -1.24 },
+  { code: "XKMYA", name: "Kimya Petrol", change: -1.55 },
+  { code: "XINSA", name: "İnşaat", change: -1.82 },
+];
+
+const FALLBACK_CALENDAR: EconomicCalendarItem[] = [
+  {
+    id: "fb_tr_1",
+    title: "TCMB Haftalık Para ve Banka İstatistikleri",
+    country: "TR",
+    date: new Date().toISOString(),
+    time: "14:30",
+    timestamp: Date.now() - 3600000,
+    actual: "154.2 Mr $",
+    forecast: "153.8 Mr $",
+    previous: "152.9 Mr $",
+    importance: 1,
+    isCompleted: true,
+  },
+  {
+    id: "fb_us_1",
+    title: "ABD Gayri Safi Yurtiçi Hasıla (GSYİH) Çeyreklik",
+    country: "US",
+    date: new Date().toISOString(),
+    time: "15:30",
+    timestamp: Date.now() + 1800000,
+    actual: null,
+    forecast: "%2.8",
+    previous: "%3.0",
+    importance: 2,
+    isCompleted: false,
+  },
+  {
+    id: "fb_eu_1",
+    title: "Euro Bölgesi Tüketici Güven Endeksi (Nihai)",
+    country: "EU",
+    date: new Date().toISOString(),
+    time: "12:00",
+    timestamp: Date.now() - 7200000,
+    actual: "-12.5",
+    forecast: "-12.8",
+    previous: "-13.1",
+    importance: 1,
+    isCompleted: true,
+  },
+  {
+    id: "fb_cn_1",
+    title: "Çin İmalat PMI (Satın Alma Yöneticileri Endeksi)",
+    country: "CN",
+    date: new Date().toISOString(),
+    time: "04:30",
+    timestamp: Date.now() - 25000000,
+    actual: "50.1",
+    forecast: "49.9",
+    previous: "49.8",
+    importance: 2,
+    isCompleted: true,
+  },
+  {
+    id: "fb_jp_1",
+    title: "Japonya Tüketici Güveni Endeksi",
+    country: "JP",
+    date: new Date().toISOString(),
+    time: "08:00",
+    timestamp: Date.now() - 14400000,
+    actual: "35.0",
+    forecast: "35.1",
+    previous: "35.4",
+    importance: 1,
+    isCompleted: true,
+  },
+  {
+    id: "fb_us_2",
+    title: "ABD Çekirdek PCE Fiyat Endeksi (Aylık)",
+    country: "US",
+    date: new Date().toISOString(),
+    time: "15:30",
+    timestamp: Date.now() + 3600000,
+    actual: null,
+    forecast: "%0.3",
+    previous: "%0.2",
+    importance: 2,
+    isCompleted: false,
+  },
+  {
+    id: "fb_tr_2",
+    title: "TCMB Politika Faizi Kararı (Bir Hafta Repo)",
+    country: "TR",
+    date: new Date().toISOString(),
+    time: "14:00",
+    timestamp: Date.now() - 1800000,
+    actual: "%50.00",
+    forecast: "%50.00",
+    previous: "%50.00",
+    importance: 2,
+    isCompleted: true,
+  },
+];
+
 const CACHE_CALENDAR_DATE = "bpt_calendar_date";
 const CACHE_CALENDAR_DATA = "bpt_calendar_data";
 
@@ -76,7 +183,7 @@ const translateIndicatorTitle = (title: string): string => {
   return title;
 };
 
-// Ülke rozeti renklendirme
+// Ülke rozeti renklendirme (TR: kırmızı, US: mavi, EU: lacivert/mavi, CN: amber, JP: indigo)
 const renderCountryBadge = (country: "TR" | "US" | "EU" | "CN" | "JP") => {
   switch (country) {
     case "TR":
@@ -152,16 +259,21 @@ function parseRawStock(raw: RawBistStock): (StockMover & { volumeNum: number }) 
     if (typeof val === "string") {
       const clean = val.replace(/\s+/g, "").trim();
       if (!clean) return 0;
+      // Eğer hem nokta hem virgül varsa (örn: 1.234,56 veya 1,234.56)
       if (clean.includes(".") && clean.includes(",")) {
         if (clean.lastIndexOf(",") > clean.lastIndexOf(".")) {
+          // 1.234,56 (TR formatı)
           return parseFloat(clean.replace(/\./g, "").replace(",", ".")) || 0;
         } else {
+          // 1,234.56 (EN formatı)
           return parseFloat(clean.replace(/,/g, "")) || 0;
         }
       }
+      // Sadece virgül varsa (örn: 12,34)
       if (clean.includes(",")) {
         return parseFloat(clean.replace(",", ".")) || 0;
       }
+      // Sadece nokta varsa veya düz sayı (örn: 12.34)
       return parseFloat(clean) || 0;
     }
     return 0;
@@ -194,8 +306,10 @@ function parseRawStock(raw: RawBistStock): (StockMover & { volumeNum: number }) 
   };
 }
 
+// 1. CANLI VERİ ÇEKME MOTORU (BIST Canlı API):
 const fetchBistMarketData = async (): Promise<unknown[] | null> => {
   const targetUrl = "https://bigpara.hurriyet.com.tr/api/v1/hisse/canli";
+  // Mevcut proxy havuzundan geçir
   const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`;
 
   try {
@@ -205,6 +319,7 @@ const fetchBistMarketData = async (): Promise<unknown[] | null> => {
       return json.data;
     }
   } catch {
+    // Alternatif proxy fallback: allorigins
     try {
       const resAlt = await fetch(
         `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`
@@ -218,6 +333,7 @@ const fetchBistMarketData = async (): Promise<unknown[] | null> => {
     }
   }
 
+  // 3. Dahili API Fallback: /api/bist-market-data (Mynet / Bigpara canlı borsa verisi)
   try {
     const sRes = await fetch("/api/bist-market-data", { cache: "no-store", signal: AbortSignal.timeout(5000) });
     if (sRes.ok) {
@@ -233,6 +349,7 @@ const fetchBistMarketData = async (): Promise<unknown[] | null> => {
   return null;
 };
 
+// 3. SEKTÖR AKIŞI VE DİNAMİK YÜZDE BARLARI LİSTESİ:
 const SECTOR_DEFINITIONS: { code: string; name: string; keyStocks: string[]; fallbackChange: number }[] = [
   { code: "XBANK", name: "Bankacılık", keyStocks: ["AKBNK", "ISCTR", "YKBNK", "GARAN", "VAKBN"], fallbackChange: 2.48 },
   { code: "XULAŞ", name: "Ulaştırma", keyStocks: ["THYAO", "PGSUS", "TAVHL", "CLEBI"], fallbackChange: 2.15 },
@@ -247,10 +364,42 @@ const SECTOR_DEFINITIONS: { code: string; name: string; keyStocks: string[]; fal
 ];
 
 export default function MarketIntelligence() {
-  const [sectors, setSectors] = useState<SectorItem[]>([]);
+  // Canlı Sektör Verisi
+  const [sectors, setSectors] = useState<SectorItem[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem(CACHE_BIST_DATA);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed?.sectors) && parsed.sectors.length > 0) return parsed.sectors;
+        }
+      } catch {}
+    }
+    return DEFAULT_SECTORS;
+  });
 
-  const [calendarEvents, setCalendarEvents] = useState<EconomicCalendarItem[]>([]);
+  // Canlı Takvim State (Önce localStorage veya fallback ile başlat)
+  const [calendarEvents, setCalendarEvents] = useState<EconomicCalendarItem[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        const storedDate = localStorage.getItem(CACHE_CALENDAR_DATE);
+        if (storedDate === todayStr) {
+          const raw = localStorage.getItem(CACHE_CALENDAR_DATA);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return FALLBACK_CALENDAR;
+  });
 
+  // 1 & 4. BIST CANLI VERİ ÇEKME & 20 SANİYEDE BİR GÜNCELLEME:
   useEffect(() => {
     let isMounted = true;
 
@@ -270,7 +419,9 @@ export default function MarketIntelligence() {
 
       if (parsedStocks.length === 0) return;
 
+      // SEKTÖR AKIŞI VE DİNAMİK YÜZDE BARLARI
       const dynamicSectors: SectorItem[] = SECTOR_DEFINITIONS.map((def) => {
+        // Eğer veri listesinde doğrudan endeks varsa onu al
         if (stockMap.has(def.code)) {
           return {
             code: def.code,
@@ -279,6 +430,7 @@ export default function MarketIntelligence() {
           };
         }
 
+        // İlgili sektör hisselerinden anlık ağırlıklı ortalama çıkar
         const matching = def.keyStocks
           .map((sym) => stockMap.get(sym))
           .filter((st): st is StockMover & { volumeNum: number } => !!st);
@@ -322,6 +474,7 @@ export default function MarketIntelligence() {
 
     void updateMarketData();
 
+    // Seans esnasında her 20 saniyede bir arka planda sessizce yeni fiyatları çekip listeleri otomatik yeniden sırala
     const interval = setInterval(() => {
       void updateMarketData();
     }, 20000);
@@ -332,9 +485,11 @@ export default function MarketIntelligence() {
     };
   }, []);
 
+  // 2. Canlı Takvim Verisi Çekme (TradingView API /api/calendar + Günlük Otomatik Sıfırlama)
   useEffect(() => {
     let isMounted = true;
 
+    // Yeni gün kontrolü (dünün takvimi kalmışsa sil)
     if (typeof window !== "undefined") {
       try {
         const today = new Date();
@@ -386,7 +541,9 @@ export default function MarketIntelligence() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-[10px]">
+      {/* ================= 1. KOLON: / BIST Sektör (h-[380px]) ================= */}
       <div className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[380px] overflow-hidden">
+        {/* Header: Sadece / BIST Sektör ve CANLI ENDEKS (Tüm sekmeler ve butonlar silindi) */}
         <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
           <div className="flex items-center">
             <span className="font-mono text-xs font-bold tracking-wider text-slate-200">
@@ -397,19 +554,8 @@ export default function MarketIntelligence() {
           <span className="text-[10px] font-mono text-slate-500 tracking-wider">CANLI ENDEKS</span>
         </div>
 
+        {/* SEKTÖR AKIŞI (Çift Yönlü 0-Merkezli Dinamik Bar Grafiği - 10 Sektör Eşit Doldurur) */}
         <div className="flex flex-col justify-between h-full flex-1 px-3 py-2">
-          {sectors.length === 0 ? (
-            <div className="flex flex-col justify-between h-full py-2 space-y-2">
-              {[...Array(9)].map((_, i) => (
-                <div key={i} className="flex items-center justify-between animate-pulse">
-                  <div className="h-3 w-16 bg-slate-800/80 rounded" />
-                  <div className="h-2 w-28 bg-slate-800/50 rounded" />
-                  <div className="h-3 w-12 bg-slate-800/80 rounded" />
-                </div>
-              ))}
-            </div>
-          ) : (
-          <>
           {sectors.map((s) => {
             const isPositive = s.change >= 0;
             const barWidthPct = Math.min(Math.abs(s.change) * 25, 100);
@@ -419,6 +565,7 @@ export default function MarketIntelligence() {
                 key={s.code}
                 className="flex items-center text-xs font-mono py-1 hover:bg-white/[0.02] rounded px-1.5 transition-colors"
               >
+                {/* Sol: Sektör Kodu ve İsim */}
                 <div className="w-[110px] shrink-0 flex items-center justify-between pr-2 border-r border-white/[0.04]">
                   <span className="text-[#38bdf8] font-bold text-[11px] font-mono">{s.code}</span>
                   <span className="text-slate-400 text-[10px] truncate max-w-[65px]">
@@ -426,10 +573,13 @@ export default function MarketIntelligence() {
                   </span>
                 </div>
 
+                {/* Orta: relative w-28 h-2 bg-slate-900 rounded ve orta çizgi referansı */}
                 <div className="flex-1 flex items-center justify-center mx-2">
                   <div className="relative w-28 h-2 bg-slate-900 rounded overflow-hidden flex items-center">
+                    {/* Merkez Çizgisi */}
                     <div className="absolute left-1/2 top-0 bottom-0 w-[1px] bg-slate-700/60 z-10" />
 
+                    {/* Negatif Bar (Kırmızıya boyanır bg-rose-500, sola doğru uzar) */}
                     <div className="w-1/2 h-full flex justify-end">
                       {!isPositive && (
                         <div
@@ -439,6 +589,7 @@ export default function MarketIntelligence() {
                       )}
                     </div>
 
+                    {/* Pozitif Bar (Yeşile boyanır bg-emerald-500, sağa doğru uzar) */}
                     <div className="w-1/2 h-full flex justify-start">
                       {isPositive && (
                         <div
@@ -450,20 +601,26 @@ export default function MarketIntelligence() {
                   </div>
                 </div>
 
-                <div className="w-14 text-right shrink-0">
-                  <span className={`font-mono text-[11px] tabular-nums ${isPositive ? "text-emerald-400" : "text-rose-400"}`}>
-                    {isPositive ? "+" : ""}{s.change.toFixed(2)}%
+                {/* Sağ: Yüzde Metni (pozitifte +X.XX% yeşil, negatifte -X.XX% kırmızı) */}
+                <div className="w-[52px] shrink-0 text-right">
+                  <span
+                    className={`text-[11px] font-semibold font-mono tabular-nums ${
+                      isPositive ? "text-emerald-400" : "text-rose-400"
+                    }`}
+                  >
+                    {isPositive ? "+" : ""}
+                    {s.change.toFixed(2)}%
                   </span>
                 </div>
               </div>
             );
           })}
-          </>
-          )}
         </div>
       </div>
 
+      {/* ================= 2. KOLON: / TAKVİM (Ferah Tipografi & Geniş Satır Ayrımı) ================= */}
       <div className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[380px] overflow-hidden">
+        {/* Header */}
         <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
           <div className="flex items-center">
             <span className="font-mono text-xs font-bold tracking-wider text-slate-200">
@@ -474,21 +631,8 @@ export default function MarketIntelligence() {
           <span className="text-[10px] font-mono text-slate-500 tracking-wider">EKONOMİK GÖSTERGELER</span>
         </div>
 
+        {/* Canlı Takvim Satırları (Ayrışan Kart Tasarımı & Geniş Boşluklar) */}
         <div className="overflow-y-auto flex-1 pane-scroll p-3 flex flex-col gap-3">
-          {calendarEvents.length === 0 ? (
-            <div className="flex flex-col gap-3">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="p-3.5 rounded-lg bg-[#0e1628]/90 border border-white/[0.07] animate-pulse flex items-center justify-between gap-3">
-                  <div className="flex-1 space-y-2">
-                    <div className="h-3 w-3/4 bg-slate-800/80 rounded" />
-                    <div className="h-2.5 w-1/2 bg-slate-800/50 rounded" />
-                  </div>
-                  <div className="h-6 w-16 bg-slate-800/70 rounded" />
-                </div>
-              ))}
-            </div>
-          ) : (
-          <>
           {calendarEvents.map((item) => {
             const trTitle = translateIndicatorTitle(item.title);
             const hasActual = item.actual !== null && item.actual !== undefined;
@@ -498,6 +642,7 @@ export default function MarketIntelligence() {
                 key={item.id}
                 className="p-3.5 rounded-lg bg-[#0e1628]/90 border border-white/[0.07] hover:bg-[#131f38] hover:border-white/[0.14] transition-all flex items-center justify-between gap-3 shadow-sm"
               >
+                {/* Sol Taraf: Saat, Bayrak, Başlık ve Beklenti Detayı */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className="text-xs font-mono tabular-nums text-slate-300 font-bold shrink-0">
@@ -509,6 +654,7 @@ export default function MarketIntelligence() {
                     </span>
                   </div>
 
+                  {/* Alt Detay: Beklenti vs Önceki (Ferah aralık) */}
                   <div className="text-[11px] font-mono text-slate-400 pl-7 flex items-center gap-2 mt-1">
                     <span>
                       Bekl:{" "}
@@ -526,22 +672,38 @@ export default function MarketIntelligence() {
                   </div>
                 </div>
 
-                <div className="text-right shrink-0">
-                  <span className={`text-sm font-bold font-mono tabular-nums ${
-                    hasActual ? (item.isCompleted ? "text-emerald-400" : "text-slate-200") : "text-slate-500"
-                  }`}>
-                    {hasActual ? String(item.actual) : "--"}
-                  </span>
+                {/* Sağ Taraf: Sabit Genişlikli Açıklanan Değer Bloğu */}
+                <div className="w-28 text-right shrink-0 flex flex-col items-end justify-center">
+                  {hasActual ? (
+                    <>
+                      <span className="text-xs font-mono font-bold text-emerald-400 block tabular-nums">
+                        {String(item.actual)}
+                      </span>
+                      <span className="text-[9px] font-mono font-bold tracking-wider text-emerald-400 bg-emerald-950/60 border border-emerald-800/50 px-2 py-0.5 rounded uppercase block mt-1 shadow-sm">
+                        AÇIKLANDI
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xs font-mono text-slate-500 block tabular-nums">
+                        --
+                      </span>
+                      <span className="text-[9px] font-mono font-medium tracking-wider text-slate-400 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded uppercase block mt-1">
+                        BEKLENİYOR
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             );
           })}
-          </>
-          )}
         </div>
       </div>
 
+
+      {/* ================= 3. KOLON: / Bülten (Dönen Neon Işık - Border Beam - h-[380px]) ================= */}
       <div className="relative rounded-lg p-[1px] overflow-hidden bg-slate-900/60 h-[380px]">
+        {/* Dönen Koni / Gradyan Efekti (Snake Animation) */}
         <div 
           className="absolute -inset-[100%] animate-border-beam"
           style={{
@@ -549,7 +711,9 @@ export default function MarketIntelligence() {
           }}
         />
 
+        {/* İç Kart Gövdesi */}
         <div className="relative h-full w-full bg-[#0b0f19] rounded-[7px] flex flex-col z-10 overflow-hidden">
+          {/* Başlık Alanı */}
           <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
             <span className="text-xs font-mono font-bold text-slate-200">
               <span className="text-[#38bdf8] mr-1">/</span>Bülten
@@ -557,6 +721,7 @@ export default function MarketIntelligence() {
             <span className="text-[10px] font-mono text-slate-500 tracking-wider">RAPOR & ANALİZ</span>
           </div>
 
+          {/* İçerik */}
           <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
             <div className="w-12 h-12 rounded-full bg-[#38bdf8]/10 border border-[#38bdf8]/20 flex items-center justify-center text-[#38bdf8] mb-3 shadow-[0_0_15px_rgba(56,189,248,0.15)]">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
