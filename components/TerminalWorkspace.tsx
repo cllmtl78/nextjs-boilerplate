@@ -833,11 +833,11 @@ export default function TerminalWorkspace() {
   const [loadingKap, setLoadingKap] = useState<boolean>(true);
   const [newlyArrivedIds, setNewlyArrivedIds] = useState<Set<string>>(new Set());
 
-  const knownIdsRef = useRef<Set<string>>(new Set());
-  const isInitialLoadRef = useRef<boolean>(true);
-  const translationsCacheRef = useRef>(new Map());
+  const knownIdsRef = useRef(new Set<string>());
+  const isInitialLoadRef = useRef(true);
+  const translationsCacheRef = useRef(new Map<string, string>());
   // KAP bildirimlerinin saatlerini bir kez alındıktan sonra kilitleyen referans haritası
-  const lockedKapTimesRef = useRef>(new Map());
+  const lockedKapTimesRef = useRef(new Map<number, string>());
 
   const loadGlobalNews = useCallback(async () => {
     try {
