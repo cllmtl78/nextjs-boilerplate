@@ -198,6 +198,23 @@ export interface KapItem {
 
 // 1. KAP CANLI VERİ ÇEKME FONKSİYONU:
 export const fetchKapDisclosures = async (): Promise<KapItem[]> => {
+  // 1. Birincil ve en güvenilir kaynak: Dahili /api/kap-disclosures (Sunucu tarafı kilitli saat ve resmi link)
+  try {
+    const sRes = await fetch("/api/kap-disclosures", {
+      cache: "no-store",
+      signal: AbortSignal.timeout(6000),
+    });
+    if (sRes.ok) {
+      const sJson = await sRes.json();
+      if (sJson && Array.isArray(sJson.data) && sJson.data.length > 0) {
+        return sJson.data;
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // 2. Harici Bigpara KAP açık API fallback
   const targetUrl = "https://bigpara.hurriyet.com.tr/api/v1/hisse/kap";
   const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`;
 
@@ -205,17 +222,15 @@ export const fetchKapDisclosures = async (): Promise<KapItem[]> => {
     const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(6000) });
     const json = await res.json();
 
-    // Gelen JSON formatını terminal yapısına uyarla
     if (json && json.data && Array.isArray(json.data) && json.data.length > 0) {
       return json.data
-        .map((item: Record<string, unknown>) => ({
-          id: (item.id as string | number) || (item.disclosureIndex as string | number) || `kap_${Date.now()}`,
-          code: String(item.stockCode || item.kod || "BIST").toUpperCase(),
-          type: String(item.disclosureType || "ÖDA").toUpperCase(),
-          title: String(item.companyTitle || item.sirketAdi || `${item.stockCode || item.kod || "BIST"} Ortaklığı`),
-          subject: String(item.disclosureTitle || item.baslik || "Özel Durum Açıklaması"),
-          summary: String(item.summary || item.aciklama || item.disclosureTitle || "KAP açıklaması detayları ilan edilmiştir."),
-          time: item.publishDate
+        .map((item: Record<string, unknown>) => {
+          const idVal = (item.disclosureIndex as string | number) || (item.id as string | number) || `kap_${Date.now()}`;
+          const validKapUrl = (item.disclosureIndex || item.id)
+            ? `https://www.kap.org.tr/tr/Bildirim/${item.disclosureIndex || item.id}`
+            : "https://www.kap.org.tr";
+
+          const fixedTime = item.publishDate
             ? new Intl.DateTimeFormat("tr-TR", {
                 timeZone: "Europe/Istanbul",
                 hour: "2-digit",
@@ -223,50 +238,21 @@ export const fetchKapDisclosures = async (): Promise<KapItem[]> => {
                 second: "2-digit",
                 hour12: false,
               }).format(new Date(item.publishDate as string | number))
-            : "--:--:--",
-          timestamp: new Date((item.publishDate as string | number) || Date.now()).getTime(),
-          kapUrl: String(item.url || `https://www.kap.org.tr/tr/Bildirim/${item.id || item.disclosureIndex}`),
-        }))
-        .sort((a: KapItem, b: KapItem) => b.timestamp - a.timestamp);
-    }
-  } catch {
-    // Alternatif allorigins fallback
-    try {
-      const resAlt = await fetch(
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`
-      );
-      const jsonAlt = await resAlt.json();
-      if (jsonAlt?.data && Array.isArray(jsonAlt.data) && jsonAlt.data.length > 0) {
-        return jsonAlt.data
-          .map((item: Record<string, unknown>) => ({
-            id: (item.id as string | number) || `kap_alt_${Date.now()}`,
-            code: String(item.stockCode || "BIST").toUpperCase(),
-            type: String(item.disclosureType || "ÖDA").toUpperCase(),
-            title: String(item.companyTitle || `${item.stockCode || "BIST"} Ortaklığı`),
-            subject: String(item.disclosureTitle || "Özel Durum Açıklaması"),
-            summary: String(item.summary || item.disclosureTitle || "KAP açıklaması detayları ilan edilmiştir."),
-            time: new Date((item.publishDate as string | number) || Date.now()).toLocaleTimeString("tr-TR", {
-              hour12: false,
-              timeZone: "Europe/Istanbul",
-            }),
-            timestamp: new Date((item.publishDate as string | number) || Date.now()).getTime(),
-            kapUrl: String(`https://www.kap.org.tr/tr/Bildirim/${item.id}`),
-          }))
-          .sort((a: KapItem, b: KapItem) => b.timestamp - a.timestamp);
-      }
-    } catch {
-      // ignore
-    }
-  }
+            : String(item.time || item.saat || "--:--:--");
 
-  // 3. Güvenilir Dahili API Fallback: /api/kap-disclosures (Kesintisiz canlı akış)
-  try {
-    const sRes = await fetch("/api/kap-disclosures", { cache: "no-store", signal: AbortSignal.timeout(5000) });
-    if (sRes.ok) {
-      const sJson = await sRes.json();
-      if (sJson && Array.isArray(sJson.data) && sJson.data.length > 0) {
-        return sJson.data;
-      }
+          return {
+            id: idVal,
+            code: String(item.stockCode || item.kod || "BIST").toUpperCase(),
+            type: String(item.disclosureType || "ÖDA").toUpperCase(),
+            title: String(item.companyTitle || item.sirketAdi || `${item.stockCode || item.kod || "BIST"} Ortaklığı`),
+            subject: String(item.disclosureTitle || item.baslik || "Özel Durum Açıklaması"),
+            summary: String(item.summary || item.aciklama || item.disclosureTitle || "KAP açıklaması detayları ilan edilmiştir."),
+            time: fixedTime,
+            timestamp: item.publishDate ? new Date(item.publishDate as string | number).getTime() : Date.now(),
+            kapUrl: validKapUrl,
+          };
+        })
+        .sort((a: KapItem, b: KapItem) => b.timestamp - a.timestamp);
     }
   } catch {
     // ignore
@@ -1129,7 +1115,17 @@ export default function TerminalWorkspace() {
     const loadKap = async () => {
       const items = await fetchKapDisclosures();
       if (items && items.length > 0 && isMounted) {
-        setKapBildirimleri(items);
+        setKapBildirimleri((prev) => {
+          // Var olan bildirimlerin saatlerini dondurarak koru, asla Date.now() ile ileri kaydırma
+          const prevTimeMap = new Map<string, string>();
+          prev.forEach((p) => {
+            if (p.id) prevTimeMap.set(String(p.id), p.time);
+          });
+          return items.map((it) => ({
+            ...it,
+            time: prevTimeMap.get(String(it.id)) || it.time,
+          }));
+        });
         setLoadingKap(false);
         try {
           localStorage.setItem("bpt_kap_disclosures", JSON.stringify(items));

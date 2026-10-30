@@ -1,12 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  ArrowUpRight,
-  ArrowDownRight,
-} from "lucide-react";
-
-type MoverTab = "sectors" | "gainers" | "losers" | "volume";
 
 interface StockMover {
   symbol: string;
@@ -36,44 +30,6 @@ export interface EconomicCalendarItem {
   isCompleted: boolean;
 }
 
-const DEFAULT_GAINERS: StockMover[] = [
-  { symbol: "ASELS", price: 89.20, changePercent: 6.85, volumeStr: "8.42 Mr TL", isUp: true },
-  { symbol: "THYAO", price: 326.00, changePercent: 4.92, volumeStr: "14.28 Mr TL", isUp: true },
-  { symbol: "AKBNK", price: 63.40, changePercent: 3.88, volumeStr: "7.95 Mr TL", isUp: true },
-  { symbol: "KCHOL", price: 215.80, changePercent: 3.65, volumeStr: "5.64 Mr TL", isUp: true },
-  { symbol: "TUPRS", price: 185.50, changePercent: 3.24, volumeStr: "6.12 Mr TL", isUp: true },
-  { symbol: "BIMAS", price: 514.50, changePercent: 2.90, volumeStr: "4.81 Mr TL", isUp: true },
-  { symbol: "EREGL", price: 47.80, changePercent: 2.58, volumeStr: "5.10 Mr TL", isUp: true },
-  { symbol: "ISCTR", price: 14.95, changePercent: 2.40, volumeStr: "9.85 Mr TL", isUp: true },
-  { symbol: "SAHOL", price: 92.15, changePercent: 2.16, volumeStr: "4.20 Mr TL", isUp: true },
-  { symbol: "YKBNK", price: 31.60, changePercent: 1.94, volumeStr: "6.82 Mr TL", isUp: true },
-];
-
-const DEFAULT_LOSERS: StockMover[] = [
-  { symbol: "HEKTS", price: 3.80, changePercent: -4.74, volumeStr: "1.12 Mr TL", isUp: false },
-  { symbol: "SASA", price: 4.46, changePercent: -3.66, volumeStr: "2.35 Mr TL", isUp: false },
-  { symbol: "KONTR", price: 48.70, changePercent: -3.18, volumeStr: "1.85 Mr TL", isUp: false },
-  { symbol: "GUBRF", price: 182.10, changePercent: -2.93, volumeStr: "1.78 Mr TL", isUp: false },
-  { symbol: "EUPWR", price: 43.15, changePercent: -2.80, volumeStr: "1.42 Mr TL", isUp: false },
-  { symbol: "ASTOR", price: 94.25, changePercent: -2.44, volumeStr: "2.65 Mr TL", isUp: false },
-  { symbol: "ENKAI", price: 45.10, changePercent: -2.17, volumeStr: "1.94 Mr TL", isUp: false },
-  { symbol: "ALARK", price: 96.80, changePercent: -1.92, volumeStr: "1.60 Mr TL", isUp: false },
-  { symbol: "KOZAL", price: 23.35, changePercent: -1.85, volumeStr: "2.05 Mr TL", isUp: false },
-  { symbol: "PETKM", price: 19.82, changePercent: -1.68, volumeStr: "2.41 Mr TL", isUp: false },
-];
-
-const DEFAULT_VOLUME: StockMover[] = [
-  { symbol: "THYAO", price: 326.00, changePercent: 4.92, volumeStr: "14.28 Mr TL", isUp: true },
-  { symbol: "ISCTR", price: 14.95, changePercent: 2.40, volumeStr: "9.85 Mr TL", isUp: true },
-  { symbol: "ASELS", price: 89.20, changePercent: 6.85, volumeStr: "8.42 Mr TL", isUp: true },
-  { symbol: "AKBNK", price: 63.40, changePercent: 3.88, volumeStr: "7.95 Mr TL", isUp: true },
-  { symbol: "YKBNK", price: 31.60, changePercent: 1.94, volumeStr: "6.82 Mr TL", isUp: true },
-  { symbol: "TUPRS", price: 185.50, changePercent: 3.24, volumeStr: "6.12 Mr TL", isUp: true },
-  { symbol: "KCHOL", price: 215.80, changePercent: 3.65, volumeStr: "5.64 Mr TL", isUp: true },
-  { symbol: "EREGL", price: 47.80, changePercent: 2.58, volumeStr: "5.10 Mr TL", isUp: true },
-  { symbol: "BIMAS", price: 514.50, changePercent: 2.90, volumeStr: "4.81 Mr TL", isUp: true },
-  { symbol: "SAHOL", price: 92.15, changePercent: 2.16, volumeStr: "4.20 Mr TL", isUp: true },
-];
 
 const DEFAULT_SECTORS: SectorItem[] = [
   { code: "XBANK", name: "Bankacılık", change: 2.48 },
@@ -408,49 +364,7 @@ const SECTOR_DEFINITIONS: { code: string; name: string; keyStocks: string[]; fal
 ];
 
 export default function MarketIntelligence() {
-  // Varsayılan olarak (ilk açılışta) Sektör sekmesi aktif
-  const [activeTab, setActiveTab] = useState<MoverTab>("sectors");
-
-  // Sayfa ilk açıldığında localStorage'daki son veriyi hemen ekrana bas
-  const [gainers, setGainers] = useState<StockMover[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const cached = localStorage.getItem(CACHE_BIST_DATA);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed?.gainers) && parsed.gainers.length > 0) return parsed.gainers;
-        }
-      } catch {}
-    }
-    return DEFAULT_GAINERS;
-  });
-
-  const [losers, setLosers] = useState<StockMover[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const cached = localStorage.getItem(CACHE_BIST_DATA);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed?.losers) && parsed.losers.length > 0) return parsed.losers;
-        }
-      } catch {}
-    }
-    return DEFAULT_LOSERS;
-  });
-
-  const [volume, setVolume] = useState<StockMover[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const cached = localStorage.getItem(CACHE_BIST_DATA);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed?.volume) && parsed.volume.length > 0) return parsed.volume;
-        }
-      } catch {}
-    }
-    return DEFAULT_VOLUME;
-  });
-
+  // Canlı Sektör Verisi
   const [sectors, setSectors] = useState<SectorItem[]>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -463,8 +377,6 @@ export default function MarketIntelligence() {
     }
     return DEFAULT_SECTORS;
   });
-
-  const [tickingSymbol, setTickingSymbol] = useState<string | null>(null);
 
   // Canlı Takvim State (Önce localStorage veya fallback ile başlat)
   const [calendarEvents, setCalendarEvents] = useState<EconomicCalendarItem[]>(() => {
@@ -507,44 +419,7 @@ export default function MarketIntelligence() {
 
       if (parsedStocks.length === 0) return;
 
-      // 2. DİNAMİK LİSTE HESAPLAMA (Artanlar, Düşenler, Hacim):
-      // Artanlar: list.sort((a, b) => b.changePercent - a.changePercent).slice(0, 10)
-      const sortedGainers: StockMover[] = [...parsedStocks]
-        .sort((a, b) => b.changePercent - a.changePercent)
-        .slice(0, 10)
-        .map(({ symbol, price, changePercent, volumeStr, isUp }) => ({
-          symbol,
-          price,
-          changePercent,
-          volumeStr,
-          isUp,
-        }));
-
-      // Düşenler: list.sort((a, b) => a.changePercent - b.changePercent).slice(0, 10)
-      const sortedLosers: StockMover[] = [...parsedStocks]
-        .sort((a, b) => a.changePercent - b.changePercent)
-        .slice(0, 10)
-        .map(({ symbol, price, changePercent, volumeStr, isUp }) => ({
-          symbol,
-          price,
-          changePercent,
-          volumeStr,
-          isUp,
-        }));
-
-      // Hacim: list.sort((a, b) => b.volume - a.volume).slice(0, 10)
-      const sortedVolume: StockMover[] = [...parsedStocks]
-        .sort((a, b) => b.volumeNum - a.volumeNum)
-        .slice(0, 10)
-        .map(({ symbol, price, changePercent, volumeStr, isUp }) => ({
-          symbol,
-          price,
-          changePercent,
-          volumeStr,
-          isUp,
-        }));
-
-      // 3. SEKTÖR AKIŞI VE DİNAMİK YÜZDE BARLARI
+      // SEKTÖR AKIŞI VE DİNAMİK YÜZDE BARLARI
       const dynamicSectors: SectorItem[] = SECTOR_DEFINITIONS.map((def) => {
         // Eğer veri listesinde doğrudan endeks varsa onu al
         if (stockMap.has(def.code)) {
@@ -574,18 +449,12 @@ export default function MarketIntelligence() {
       });
 
       if (isMounted) {
-        setGainers(sortedGainers);
-        setLosers(sortedLosers);
-        setVolume(sortedVolume);
         setSectors(dynamicSectors);
 
         try {
           localStorage.setItem(
             CACHE_BIST_DATA,
             JSON.stringify({
-              gainers: sortedGainers,
-              losers: sortedLosers,
-              volume: sortedVolume,
               sectors: dynamicSectors,
               timestamp: Date.now(),
             })
@@ -670,223 +539,86 @@ export default function MarketIntelligence() {
     };
   }, []);
 
-  // 3. Canlı terminal hissi için mikro dalgalanma (Fiyat/oran titremesi)
-  useEffect(() => {
-    const tickInterval = setInterval(() => {
-      const activeList =
-        activeTab === "gainers" ? gainers : activeTab === "losers" ? losers : volume;
-
-      if (!activeList || activeList.length === 0) return;
-
-      const randomIdx = Math.floor(Math.random() * activeList.length);
-      const chosen = activeList[randomIdx];
-      if (!chosen) return;
-
-      const deltaPercent = (Math.random() * 0.12 - 0.06);
-      const newPct = Math.round((chosen.changePercent + deltaPercent) * 100) / 100;
-      const newPrice = Math.round((chosen.price * (1 + deltaPercent / 100)) * 100) / 100;
-
-      const updateList = (prev: StockMover[]) =>
-        prev.map((item, idx) =>
-          idx === randomIdx
-            ? {
-                ...item,
-                price: newPrice,
-                changePercent: newPct,
-                isUp: newPct >= 0,
-              }
-            : item
-        );
-
-      if (activeTab === "gainers") setGainers(updateList);
-      else if (activeTab === "losers") setLosers(updateList);
-      else if (activeTab === "volume") setVolume(updateList);
-
-      setTickingSymbol(chosen.symbol);
-      setTimeout(() => setTickingSymbol(null), 1200);
-    }, 4500);
-
-    return () => clearInterval(tickInterval);
-  }, [activeTab, gainers, losers, volume]);
-
-  const currentStocks: StockMover[] =
-    activeTab === "gainers"
-      ? gainers.slice(0, 10)
-      : activeTab === "losers"
-      ? losers.slice(0, 10)
-      : volume.slice(0, 10);
-
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-[10px]">
-      {/* ================= 1. KOLON: / BIST Hareketler (h-[380px]) ================= */}
+      {/* ================= 1. KOLON: / BIST Sektör (h-[380px]) ================= */}
       <div className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[380px] overflow-hidden">
-        {/* Header: Başlık ve Entegre Segment Sekmeleri */}
-        <div className="h-10 px-3 sm:px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
+        {/* Header: Sadece / BIST Sektör ve CANLI ENDEKS (Tüm sekmeler ve butonlar silindi) */}
+        <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
           <div className="flex items-center">
             <span className="font-mono text-xs font-bold tracking-wider text-slate-200">
               <span className="text-[#38bdf8] mr-1.5 font-bold">/</span>
-              BIST Hareketler
+              BIST Sektör
             </span>
           </div>
-
-          {/* Entegre Segment Sekmeleri: Sektör | Artanlar | Düşenler | Hacim */}
-          <div className="flex items-center gap-1 bg-slate-950/60 p-1 rounded-md border border-white/[0.06]">
-            {[
-              { id: "sectors" as const, label: "Sektör" },
-              { id: "gainers" as const, label: "Artanlar" },
-              { id: "losers" as const, label: "Düşenler" },
-              { id: "volume" as const, label: "Hacim" },
-            ].map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-3 py-1 text-xs font-mono rounded transition-all select-none ${
-                    isActive
-                      ? "bg-[#2563eb] text-white font-semibold shadow-sm"
-                      : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
+          <span className="text-[10px] font-mono text-slate-500 tracking-wider">CANLI ENDEKS</span>
         </div>
 
-        {/* Sekme 1: SEKTÖR AKIŞI (Çift Yönlü 0-Merkezli Dinamik Bar Grafiği) */}
-        {activeTab === "sectors" ? (
-          <div className="flex flex-col justify-between h-full flex-1 px-3 py-1">
-            {sectors.map((s) => {
-              const isPositive = s.change >= 0;
-              const barWidthPct = Math.min(Math.abs(s.change) * 25, 100);
+        {/* SEKTÖR AKIŞI (Çift Yönlü 0-Merkezli Dinamik Bar Grafiği - 10 Sektör Eşit Doldurur) */}
+        <div className="flex flex-col justify-between h-full flex-1 px-3 py-2">
+          {sectors.map((s) => {
+            const isPositive = s.change >= 0;
+            const barWidthPct = Math.min(Math.abs(s.change) * 25, 100);
 
-              return (
-                <div
-                  key={s.code}
-                  className="flex items-center text-xs font-mono py-1 hover:bg-white/[0.02] rounded px-1.5 transition-colors"
-                >
-                  {/* Sol: Sektör Kodu ve İsim */}
-                  <div className="w-[110px] shrink-0 flex items-center justify-between pr-2 border-r border-white/[0.04]">
-                    <span className="text-[#38bdf8] font-bold text-[11px] font-mono">{s.code}</span>
-                    <span className="text-slate-400 text-[10px] truncate max-w-[65px]">
-                      {s.name}
-                    </span>
-                  </div>
-
-                  {/* Orta: relative w-28 h-2 bg-slate-900 rounded ve orta çizgi referansı */}
-                  <div className="flex-1 flex items-center justify-center mx-2">
-                    <div className="relative w-28 h-2 bg-slate-900 rounded overflow-hidden flex items-center">
-                      {/* Merkez Çizgisi */}
-                      <div className="absolute left-1/2 top-0 bottom-0 w-[1px] bg-slate-700/60 z-10" />
-
-                      {/* Negatif Bar (Kırmızıya boyanır bg-rose-500, sola doğru uzar) */}
-                      <div className="w-1/2 h-full flex justify-end">
-                        {!isPositive && (
-                          <div
-                            className="h-full bg-rose-500 rounded-l transition-all duration-500"
-                            style={{ width: `${barWidthPct}%` }}
-                          />
-                        )}
-                      </div>
-
-                      {/* Pozitif Bar (Yeşile boyanır bg-emerald-500, sağa doğru uzar) */}
-                      <div className="w-1/2 h-full flex justify-start">
-                        {isPositive && (
-                          <div
-                            className="h-full bg-emerald-500 rounded-r transition-all duration-500"
-                            style={{ width: `${barWidthPct}%` }}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Sağ: Yüzde Metni (pozitifte +X.XX% yeşil, negatifte -X.XX% kırmızı) */}
-                  <div className="w-[52px] shrink-0 text-right">
-                    <span
-                      className={`text-[11px] font-semibold font-mono tabular-nums ${
-                        isPositive ? "text-emerald-400" : "text-rose-400"
-                      }`}
-                    >
-                      {isPositive ? "+" : ""}
-                      {s.change.toFixed(2)}%
-                    </span>
-                  </div>
+            return (
+              <div
+                key={s.code}
+                className="flex items-center text-xs font-mono py-1 hover:bg-white/[0.02] rounded px-1.5 transition-colors"
+              >
+                {/* Sol: Sektör Kodu ve İsim */}
+                <div className="w-[110px] shrink-0 flex items-center justify-between pr-2 border-r border-white/[0.04]">
+                  <span className="text-[#38bdf8] font-bold text-[11px] font-mono">{s.code}</span>
+                  <span className="text-slate-400 text-[10px] truncate max-w-[65px]">
+                    {s.name}
+                  </span>
                 </div>
-              );
-            })}
-          </div>
-        ) : (
-          /* Sekme 2, 3, 4: Artanlar / Düşenler / Hacim (İlk 10 Hisse) */
-          <div className="flex-1 flex flex-col h-full overflow-hidden">
-            {/* Tablo Başlıkları */}
-            <div className="grid grid-cols-12 px-3.5 py-1.5 text-[10.5px] font-mono text-slate-500 border-b border-white/[0.04] bg-slate-900/30 shrink-0">
-              <span className="col-span-3">SEMBOL</span>
-              <span className="col-span-3 text-right">SON (TL)</span>
-              <span className="col-span-3 text-right">HACİM</span>
-              <span className="col-span-3 text-right">FARK %</span>
-            </div>
 
-            {/* Hisse Satırları (Maksimum 10) */}
-            <div className="flex flex-col justify-between h-full flex-1 py-1 divide-y divide-white/[0.03]">
-              {currentStocks.map((stock) => {
-                const isPositive = stock.changePercent >= 0;
-                const isTicking = tickingSymbol === stock.symbol;
+                {/* Orta: relative w-28 h-2 bg-slate-900 rounded ve orta çizgi referansı */}
+                <div className="flex-1 flex items-center justify-center mx-2">
+                  <div className="relative w-28 h-2 bg-slate-900 rounded overflow-hidden flex items-center">
+                    {/* Merkez Çizgisi */}
+                    <div className="absolute left-1/2 top-0 bottom-0 w-[1px] bg-slate-700/60 z-10" />
 
-                return (
-                  <div
-                    key={stock.symbol}
-                    className={`grid grid-cols-12 px-3.5 py-1 text-xs font-mono items-center hover:bg-[#111a2e]/60 transition-colors ${
-                      isTicking ? (isPositive ? "bg-emerald-950/20" : "bg-rose-950/20") : ""
-                    }`}
-                  >
-                    {/* Sembol (Sadece kalın #38bdf8 kodu) */}
-                    <div className="col-span-3 flex items-center gap-1.5">
-                      <span className="text-[#38bdf8] font-bold text-[12px] tracking-wide">
-                        {stock.symbol}
-                      </span>
-                      {isPositive ? (
-                        <ArrowUpRight className="w-3 h-3 text-emerald-400 shrink-0" />
-                      ) : (
-                        <ArrowDownRight className="w-3 h-3 text-rose-400 shrink-0" />
+                    {/* Negatif Bar (Kırmızıya boyanır bg-rose-500, sola doğru uzar) */}
+                    <div className="w-1/2 h-full flex justify-end">
+                      {!isPositive && (
+                        <div
+                          className="h-full bg-rose-500 rounded-l transition-all duration-500"
+                          style={{ width: `${barWidthPct}%` }}
+                        />
                       )}
                     </div>
 
-                    {/* Son Fiyat */}
-                    <div className="col-span-3 text-right tabular-nums text-slate-200 font-semibold text-[11.5px]">
-                      {stock.price.toFixed(2)}
-                    </div>
-
-                    {/* Hacim */}
-                    <div className="col-span-3 text-right tabular-nums text-slate-400 text-[10.5px]">
-                      {stock.volumeStr}
-                    </div>
-
-                    {/* Fark % */}
-                    <div className="col-span-3 text-right">
-                      <span
-                        className={`inline-block px-1.5 py-0.5 rounded text-[10.5px] font-bold tabular-nums border ${
-                          isPositive
-                            ? "text-emerald-400 bg-emerald-950/60 border-emerald-800/40"
-                            : "text-rose-400 bg-rose-950/60 border-rose-800/40"
-                        }`}
-                      >
-                        {isPositive ? "+" : ""}
-                        {stock.changePercent.toFixed(2)}%
-                      </span>
+                    {/* Pozitif Bar (Yeşile boyanır bg-emerald-500, sağa doğru uzar) */}
+                    <div className="w-1/2 h-full flex justify-start">
+                      {isPositive && (
+                        <div
+                          className="h-full bg-emerald-500 rounded-r transition-all duration-500"
+                          style={{ width: `${barWidthPct}%` }}
+                        />
+                      )}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                </div>
+
+                {/* Sağ: Yüzde Metni (pozitifte +X.XX% yeşil, negatifte -X.XX% kırmızı) */}
+                <div className="w-[52px] shrink-0 text-right">
+                  <span
+                    className={`text-[11px] font-semibold font-mono tabular-nums ${
+                      isPositive ? "text-emerald-400" : "text-rose-400"
+                    }`}
+                  >
+                    {isPositive ? "+" : ""}
+                    {s.change.toFixed(2)}%
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* ================= 2. KOLON: / TAKVİM (Ferah Tipografi & h-[380px]) ================= */}
+      {/* ================= 2. KOLON: / TAKVİM (Ferah Tipografi & Geniş Satır Ayrımı) ================= */}
       <div className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[380px] overflow-hidden">
         {/* Header */}
         <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
@@ -896,10 +628,11 @@ export default function MarketIntelligence() {
               TAKVİM
             </span>
           </div>
+          <span className="text-[10px] font-mono text-slate-500 tracking-wider">EKONOMİK GÖSTERGELER</span>
         </div>
 
-        {/* Canlı Takvim Satırları (Ferah Boşluk ve Net Ayrışan Satırlar) */}
-        <div className="overflow-y-auto flex-1 pane-scroll divide-y divide-white/[0.08] px-1">
+        {/* Canlı Takvim Satırları (Ayrışan Kart Tasarımı & Geniş Boşluklar) */}
+        <div className="overflow-y-auto flex-1 pane-scroll p-3 flex flex-col gap-3">
           {calendarEvents.map((item) => {
             const trTitle = translateIndicatorTitle(item.title);
             const hasActual = item.actual !== null && item.actual !== undefined;
@@ -907,12 +640,11 @@ export default function MarketIntelligence() {
             return (
               <div
                 key={item.id}
-                style={{ paddingTop: "15px", paddingBottom: "15px", paddingLeft: "14px", paddingRight: "14px" }}
-                className="flex items-center justify-between gap-4 hover:bg-[#111a2e]/60 transition-colors border-b border-white/[0.08] last:border-b-0"
+                className="p-3.5 rounded-lg bg-[#0e1628]/90 border border-white/[0.07] hover:bg-[#131f38] hover:border-white/[0.14] transition-all flex items-center justify-between gap-3 shadow-sm"
               >
                 {/* Sol Taraf: Saat, Bayrak, Başlık ve Beklenti Detayı */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 mb-1.5">
                     <span className="text-xs font-mono tabular-nums text-slate-300 font-bold shrink-0">
                       {item.time}
                     </span>
@@ -923,14 +655,14 @@ export default function MarketIntelligence() {
                   </div>
 
                   {/* Alt Detay: Beklenti vs Önceki (Ferah aralık) */}
-                  <div className="text-[11px] font-mono text-slate-400 pl-7 flex items-center gap-2.5 mt-1.5">
+                  <div className="text-[11px] font-mono text-slate-400 pl-7 flex items-center gap-2 mt-1">
                     <span>
                       Bekl:{" "}
                       <span className="text-slate-200 font-medium tabular-nums">
                         {item.forecast !== null && item.forecast !== undefined ? String(item.forecast) : "--"}
                       </span>
                     </span>
-                    <span className="text-slate-700">|</span>
+                    <span className="text-slate-600">|</span>
                     <span>
                       Önceki:{" "}
                       <span className="text-slate-300 tabular-nums">
@@ -947,7 +679,7 @@ export default function MarketIntelligence() {
                       <span className="text-xs font-mono font-bold text-emerald-400 block tabular-nums">
                         {String(item.actual)}
                       </span>
-                      <span className="text-[9px] font-mono font-bold tracking-wider text-emerald-400 bg-emerald-950/60 border border-emerald-800/50 px-2 py-0.5 rounded uppercase block mt-1.5 shadow-sm">
+                      <span className="text-[9px] font-mono font-bold tracking-wider text-emerald-400 bg-emerald-950/60 border border-emerald-800/50 px-2 py-0.5 rounded uppercase block mt-1 shadow-sm">
                         AÇIKLANDI
                       </span>
                     </>
@@ -956,7 +688,7 @@ export default function MarketIntelligence() {
                       <span className="text-xs font-mono text-slate-500 block tabular-nums">
                         --
                       </span>
-                      <span className="text-[9px] font-mono font-medium tracking-wider text-slate-400 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded uppercase block mt-1.5">
+                      <span className="text-[9px] font-mono font-medium tracking-wider text-slate-400 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded uppercase block mt-1">
                         BEKLENİYOR
                       </span>
                     </>
@@ -967,6 +699,7 @@ export default function MarketIntelligence() {
           })}
         </div>
       </div>
+
 
       {/* ================= 3. KOLON: / Bülten (Dönen Neon Işık - Border Beam - h-[380px]) ================= */}
       <div className="relative rounded-lg p-[1px] overflow-hidden bg-slate-900/60 h-[380px]">
