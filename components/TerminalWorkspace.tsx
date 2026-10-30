@@ -145,58 +145,18 @@ export const isToday = (dateObj: Date | number | string | null | undefined): boo
 
 export function formatNaturalCase(text: string): string {
   if (!text) return "";
-  let prefix = "";
-  let clean = text.trim();
-  if (clean.startsWith("/ ")) {
-    prefix = "/ ";
-    clean = clean.slice(2).trim();
-  } else if (clean.startsWith("/")) {
-    prefix = "/ ";
-    clean = clean.slice(1).trim();
+  // Baştaki tüm /, *, tire ve boşluk artıklarını temizle
+  let clean = text.replace(/^[\s\*\/\-]+/, "").trim();
+  // Cümle başı standart büyük harfle başlasın, metnin geri kalanı asla toLowerCase ile bozulmasın
+  if (clean.length > 0) {
+    clean = clean.charAt(0).toUpperCase() + clean.slice(1);
   }
-
-  const letters = clean.replace(/[^a-zA-ZğüşıöçĞÜŞİÖÇ]/g, "");
-  const upperCount = (letters.match(/[A-ZĞÜŞİÖÇ]/g) || []).length;
-  const isAllOrMostlyCaps = letters.length > 4 && upperCount / letters.length > 0.55;
-
-  if (!isAllOrMostlyCaps) {
-    return prefix + clean;
-  }
-
-  const hasTrChars = /[ğüşıöçĞÜŞİÖÇ]/i.test(clean);
-  let lowered = hasTrChars ? clean.toLocaleLowerCase("tr-TR") : clean.toLowerCase();
-
-  lowered = lowered.replace(/(^\s*|[.:!?·\n-]\s+)([a-zğüşıöç])/gi, (m, p1, p2) => {
-    return p1 + p2.toUpperCase();
-  });
-
-  const ACRONYMS = [
-    "FED", "ECB", "TCMB", "SPK", "BDDK", "TÜİK", "FOMC", "AI", "EPS", "REV", "EST", "ADJ",
-    "Q1", "Q2", "Q3", "Q4", "1Ç", "2Ç", "3Ç", "4Ç", "USD", "EUR", "TL", "BIST",
-    "CPI", "PPI", "PMI", "PCE", "GDP", "DOJ", "SEC", "NFP", "OPEC", "IMF", "NATO", "AB", "ABD"
-  ];
-  for (const ac of ACRONYMS) {
-    const re = new RegExp("\\b" + ac + "\\b", "gi");
-    lowered = lowered.replace(re, ac);
-  }
-
-  const PROPER_NAMES = [
-    "Warsh", "Powell", "Yellen", "Bessent", "Trump", "Biden", "Lagarde", "Bailey",
-    "Microsoft", "Google", "Alphabet", "Nvidia", "Apple", "Amazon", "Tesla", "Meta",
-    "OpenAI", "Hugging Face"
-  ];
-  for (const name of PROPER_NAMES) {
-    const re = new RegExp("\\b" + name + "\\b", "gi");
-    lowered = lowered.replace(re, name);
-  }
-
-  const firstLetter = lowered.charAt(0).toUpperCase();
-  return prefix + firstLetter + lowered.slice(1);
+  return clean;
 }
 
 export function cleanEnglishWire(text: string): string {
   const cleaned = cleanWireText(text);
-  return cleaned ? formatNaturalCase("/ " + cleaned) : "/ Wire";
+  return cleaned ? formatNaturalCase(cleaned) : "Wire";
 }
 
 
@@ -634,49 +594,36 @@ function parseRssWithDomParser(
   return items;
 }
 
-// Çevrilen haberleri hafızada tutarak gereksiz API çağrısını engelle
-const getTranslationCache = (): Record<string, string> => {
-  if (typeof window === "undefined") return {};
-  try {
-    return JSON.parse(localStorage.getItem("bpt_global_translations") || "{}");
-  } catch {
-    return {};
-  }
-};
+// 3. ÇEVİRİ MOTORUNU KESİN OLARAK GEMINI PROMPT'UNA BAĞLA (MyMemory tamamen kaldırıldı)
+export const translateGlobalFeed = async (text: string): Promise<string> => {
+  if (!text) return "";
 
-const saveTranslationCache = (hash: string, text: string) => {
-  if (typeof window === "undefined") return;
-  try {
-    const cache = getTranslationCache();
-    cache[hash] = text;
-    localStorage.setItem("bpt_global_translations", JSON.stringify(cache));
-  } catch {
-    // ignore
-  }
-};
-
-// Google Gemini Flash ile Profesyonel Finans Çevirisi Motoru
-export const translateFinancialWithGemini = async (rawText: string): Promise<string> => {
-  if (!rawText) return "";
-
-  // 1. Temizlik
-  const clean = rawText
-    .replace(/\$[A-Z]{1,6}\b/g, "") // $ borsa kodlarını temizle
-    .replace(/^\[.*?\]\s*·?\s*/gi, "") // Süre artıklarını temizle
+  // 1. Regex temizliği (çöp karakterleri ve Telegram artıklarını sil)
+  const clean = text
+    .replace(/\$[A-Z]{1,6}\b/g, "")
+    .replace(/^\[.*?\]\s*·?\s*/gi, "")
     .replace(/[•·]+$/, "")
+    .replace(/^[\s\*\/\-]+/, "")
     .trim();
 
   if (!clean) return "";
 
-  // 2. Cache Kontrolü (Daha önce çevrildiyse doğrudan getir)
-  const textHash = clean.slice(0, 30);
-  const cache = getTranslationCache();
-  if (cache[textHash]) return cache[textHash];
+  // 2. Cache kontrolü (aynı haber tekrar çevrilmesin)
+  const cacheKey = "tr_" + clean.slice(0, 25);
+  if (typeof window !== "undefined") {
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) return cached;
+    } catch {
+      // ignore
+    }
+  }
 
-  // 3. Gemini Flash Çağrısı (API Key env veya değişken üzerinden)
-  const API_KEY =
+  const apiKey =
     process.env.NEXT_PUBLIC_GEMINI_KEY ||
-    (typeof window !== "undefined" && ((window as unknown as { __GEMINI_KEY__?: string }).__GEMINI_KEY__ || localStorage.getItem("gemini_api_key"))) ||
+    (typeof window !== "undefined" &&
+      ((window as unknown as { __GEMINI_KEY__?: string }).__GEMINI_KEY__ ||
+        localStorage.getItem("gemini_api_key"))) ||
     "";
 
   // 3.a Öncelikli: Next.js Sunucu Proxy Rotası (/api/translate - process.env.GEMINI_API_KEY)
@@ -684,38 +631,35 @@ export const translateFinancialWithGemini = async (rawText: string): Promise<str
     const sRes = await fetch("/api/translate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: clean, apiKey: API_KEY }),
+      body: JSON.stringify({ text: clean, apiKey }),
     });
     if (sRes.ok) {
       const sData = await sRes.json();
       if (sData.translated && typeof sData.translated === "string" && sData.translated !== clean) {
-        saveTranslationCache(textHash, sData.translated);
-        return sData.translated;
+        const finalTr = sData.translated.replace(/^[\s\*\/\-]+/, "").trim();
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(cacheKey, finalTr);
+          } catch {
+            // ignore
+          }
+        }
+        return finalTr;
       }
     }
   } catch {
-    // Sunucu rotası geçici hata verirse REST veya MyMemory'e geç
+    // ignore
   }
 
-  // 3.b API Key girilmediyse fallback olarak MyMemory üzerinden hızlı çevir
-  if (!API_KEY) {
-    try {
-      const res = await fetch(
-        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(clean)}&langpair=en|tr`
-      );
-      const d = await res.json();
-      const resText = d?.responseData?.translatedText || clean;
-      saveTranslationCache(textHash, resText);
-      return resText;
-    } catch {
-      return clean;
-    }
+  if (!apiKey) {
+    // API anahtarı yoksa saçmalamaktansa orijinal temiz metni bırak (Sözlük motoruna DÜŞME)
+    return clean;
   }
 
-  // 3.c Doğrudan Google Gemini REST Çağrısı
+  // 3.b Doğrudan Gemini Flash REST API Çağrısı
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -724,13 +668,15 @@ export const translateFinancialWithGemini = async (rawText: string): Promise<str
             {
               parts: [
                 {
-                  text: `Sen Bloomberg ve TradFi için çalışan kıdemli bir borsa bülteni editörüsün. Aşağıdaki Wall Street haberini Türkçeye çevir.
-Kurallar:
-- Özel isimleri ve şirketleri ASLA çevirme (Binance, Coinbase, Intel, Reddit, Amazon, Sandisk, Brian Armstrong aynen kalsın).
-- Finans terimlerini koru: EPS, Revenue (Hasılat), Q1, Q2, Q3, Q4, Capex, Devops, Private key, Stock split (Hisse bölünmesi).
-- Sadece tek satır Türkçe çeviriyi ver, tırnak veya açıklama ekleme.
+                  text: `Sen Bloomberg terminali için çalışan kıdemli bir borsa bülteni editörüsün. Aşağıdaki metni akıcı ve profesyonel finans Türkçesine çevir.
+KESİN KURALLAR:
+1. 'Strikes' kelimesi bağlama göre 'saldırılar / operasyonlar'dır, asla 'grev' olarak çevirme!
+2. Şirket isimlerini ve borsa kodlarını koru: Binance, Intel, Sandisk, Reddit, Amazon, WSJ, Fed.
+3. Kısaltmaları koru: Q1, Q2, Q3, Q4, EPS, Capex, Devops, Private key, Stock split (Hisse bölünmesi).
+4. Cümle başları ve özel isimler BÜYÜK harfle başlasın, asla metni komple küçük harfe çevirme.
+5. Sadece Türkçe çeviriyi tek satır olarak ver. Başına veya sonuna hiçbir işaret/açıklama koyma.
 
-Haber: ${clean}`,
+Metin: ${clean}`,
                 },
               ],
             },
@@ -741,24 +687,28 @@ Haber: ${clean}`,
 
     const data = await res.json();
     const result = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || clean;
-    const finalClean = result.replace(/^["'“”«»]+|["'“”«»]+$/g, "").replace(/^Haber:\s*/i, "").trim();
-    saveTranslationCache(textHash, finalClean);
+    const finalClean = result
+      .replace(/^["'“”«»]+|["'“”«»]+$/g, "")
+      .replace(/^Metin:\s*/i, "")
+      .replace(/^Haber:\s*/i, "")
+      .replace(/^[\s\*\/\-]+/, "")
+      .trim();
+
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(cacheKey, finalClean);
+      } catch {
+        // ignore
+      }
+    }
     return finalClean;
   } catch {
-    // Fallback olarak MyMemory
-    try {
-      const fb = await fetch(
-        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(clean)}&langpair=en|tr`
-      );
-      const d = await fb.json();
-      const resText = d?.responseData?.translatedText || clean;
-      saveTranslationCache(textHash, resText);
-      return resText;
-    } catch {
-      return clean;
-    }
+    // Hata durumunda saçma sözlük motorlarına DÜŞME, orijinal metni bırak
+    return clean;
   }
 };
+
+export const translateFinancialWithGemini = translateGlobalFeed;
 
 export default function TerminalWorkspace() {
   const [bistHaberleri, setBistHaberleri] = useState<TerminalHaber[]>(() => {
@@ -897,7 +847,7 @@ export default function TerminalWorkspace() {
                   zaman: zStr,
                   timestamp,
                   rawText: raw,
-                  baslik: "/ " + cleanText,
+                  baslik: cleanText,
                 });
               }
             }
@@ -915,14 +865,14 @@ export default function TerminalWorkspace() {
         const translatedItems: GlobalNewsItem[] = await Promise.all(
           items.slice(0, 30).map(async (item) => {
             const rawContent = item.rawText || item.baslik;
-            const trTitle = await translateFinancialWithGemini(rawContent);
+            const trTitle = await translateGlobalFeed(rawContent);
             return {
               id: item.id,
               zaman: item.zaman,
               timestamp: item.timestamp,
               baslik: trTitle,
               rawText: item.rawText,
-              rawClean: "/ " + rawContent,
+              rawClean: rawContent,
             };
           })
         );
@@ -1290,8 +1240,9 @@ export default function TerminalWorkspace() {
             ) : (
               globalHaberler.map((item, index) => {
                 const itemTime = item.zaman || parseNewsTime(item.timestamp);
-                const rawTitle = formatNaturalCase(item.baslik || "");
-                const itemText = rawTitle.replace(/^[\s\*\/\-]+/, "").trim() || rawTitle;
+                const itemText = (item.baslik || "")
+                  .replace(/^[\s\*\/\-]+/, "")
+                  .trim();
 
                 return (
                   <div
@@ -1304,10 +1255,9 @@ export default function TerminalWorkspace() {
                       {itemTime}
                     </span>
 
-                    {/* 2. Sağ Kolon: Haber metni */}
+                    {/* 2. Sağ Kolon: Haber metni (Doğrudan ilk kelimeyle başlar, / işareti YOK) */}
                     <p className="text-[12px] text-slate-200 leading-relaxed font-normal m-0 p-0 flex-1">
-                      <span className="text-[#38bdf8] font-bold mr-1">/</span>
-                      {itemText}
+                      <span>{itemText}</span>
                     </p>
                   </div>
                 );

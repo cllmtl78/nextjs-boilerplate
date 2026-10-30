@@ -885,7 +885,7 @@ export default function MarketIntelligence() {
         </div>
 
         {/* Canlı Takvim Satırları (Ferah Boşluk ve Net Ayrışan Satırlar) */}
-        <div className="overflow-y-auto flex-1 pane-scroll divide-y divide-white/[0.09]">
+        <div className="overflow-y-auto flex-1 pane-scroll divide-y divide-white/[0.08] px-1">
           {calendarEvents.map((item) => {
             const trTitle = translateIndicatorTitle(item.title);
             const hasActual = item.actual !== null && item.actual !== undefined;
@@ -893,22 +893,23 @@ export default function MarketIntelligence() {
             return (
               <div
                 key={item.id}
-                className="py-4 px-4 flex items-center justify-between gap-4 hover:bg-[#111a2e]/60 transition-colors"
+                style={{ paddingTop: "15px", paddingBottom: "15px", paddingLeft: "14px", paddingRight: "14px" }}
+                className="flex items-center justify-between gap-4 hover:bg-[#111a2e]/60 transition-colors border-b border-white/[0.08] last:border-b-0"
               >
                 {/* Sol Taraf: Saat, Bayrak, Başlık ve Beklenti Detayı */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-xs font-mono tabular-nums text-slate-400 font-semibold shrink-0">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-mono tabular-nums text-slate-300 font-bold shrink-0">
                       {item.time}
                     </span>
                     {renderCountryBadge(item.country)}
-                    <span className="text-xs font-medium text-slate-100 truncate leading-tight">
+                    <span className="text-xs font-semibold text-slate-100 truncate leading-snug">
                       {trTitle}
                     </span>
                   </div>
 
-                  {/* Alt Detay: Beklenti vs Önceki */}
-                  <div className="text-[11px] font-mono text-slate-400 pl-7 flex items-center gap-2">
+                  {/* Alt Detay: Beklenti vs Önceki (Ferah aralık) */}
+                  <div className="text-[11px] font-mono text-slate-400 pl-7 flex items-center gap-2.5 mt-1.5">
                     <span>
                       Bekl:{" "}
                       <span className="text-slate-200 font-medium tabular-nums">
@@ -926,22 +927,22 @@ export default function MarketIntelligence() {
                 </div>
 
                 {/* Sağ Taraf: Sabit Genişlikli Açıklanan Değer Bloğu */}
-                <div className="w-24 text-right shrink-0">
+                <div className="w-28 text-right shrink-0 flex flex-col items-end justify-center">
                   {hasActual ? (
                     <>
                       <span className="text-xs font-mono font-bold text-emerald-400 block tabular-nums">
                         {String(item.actual)}
                       </span>
-                      <span className="text-[9px] font-mono tracking-wider text-emerald-500/80 uppercase block mt-1">
+                      <span className="text-[9px] font-mono font-bold tracking-wider text-emerald-400 bg-emerald-950/60 border border-emerald-800/50 px-2 py-0.5 rounded uppercase block mt-1.5 shadow-sm">
                         AÇIKLANDI
                       </span>
                     </>
                   ) : (
                     <>
-                      <span className="text-xs font-mono text-slate-600 block tabular-nums">
+                      <span className="text-xs font-mono text-slate-500 block tabular-nums">
                         --
                       </span>
-                      <span className="text-[9px] font-mono tracking-wider text-slate-600 uppercase block mt-1">
+                      <span className="text-[9px] font-mono font-medium tracking-wider text-slate-400 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded uppercase block mt-1.5">
                         BEKLENİYOR
                       </span>
                     </>

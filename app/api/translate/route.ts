@@ -1,30 +1,13 @@
 import { GoogleGenAI } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 
-const SYSTEM_INSTRUCTION = `Sen Bloomberg ve TradFi için çalışan kıdemli bir borsa bülteni editörüsün. Aşağıdaki Wall Street haberini Türkçeye çevir.
-Kurallar:
-- Özel isimleri ve şirketleri ASLA çevirme (Binance, Coinbase, Intel, Reddit, Amazon, Sandisk, Brian Armstrong aynen kalsın).
-- Finans terimlerini koru: EPS, Revenue (Hasılat), Q1, Q2, Q3, Q4, Capex, Devops, Private key, Stock split (Hisse bölünmesi).
-- Sadece tek satır Türkçe çeviriyi ver, tırnak veya açıklama ekleme.`;
-
-async function fetchMyMemoryFallback(text: string): Promise<string> {
-  try {
-    const res = await fetch(
-      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|tr`,
-      { signal: AbortSignal.timeout(5000) }
-    );
-    if (res.ok) {
-      const data = await res.json();
-      const tr = data?.responseData?.translatedText;
-      if (tr && typeof tr === "string" && !tr.includes("MYMEMORY WARNING")) {
-        return tr.trim();
-      }
-    }
-  } catch {
-    // fallback error ignored
-  }
-  return text;
-}
+const SYSTEM_INSTRUCTION = `Sen Bloomberg terminali için çalışan kıdemli bir borsa bülteni editörüsün. Aşağıdaki metni akıcı ve profesyonel finans Türkçesine çevir.
+KESİN KURALLAR:
+1. 'Strikes' kelimesi bağlama göre 'saldırılar / operasyonlar'dır, asla 'grev' olarak çevirme!
+2. Şirket isimlerini ve borsa kodlarını koru: Binance, Intel, Sandisk, Reddit, Amazon, WSJ, Fed.
+3. Kısaltmaları koru: Q1, Q2, Q3, Q4, EPS, Capex, Devops, Private key, Stock split (Hisse bölünmesi).
+4. Cümle başları ve özel isimler BÜYÜK harfle başlasın, asla metni komple küçük harfe çevirme.
+5. Sadece Türkçe çeviriyi tek satır olarak ver. Başına veya sonuna hiçbir işaret/açıklama koyma.`;
 
 export async function POST(req: NextRequest) {
   try {
@@ -51,10 +34,9 @@ export async function POST(req: NextRequest) {
       }
 
       if (!apiKey) {
-        const fallbackTranslation = await fetchMyMemoryFallback(cleanText);
         return NextResponse.json({
-          translated: fallbackTranslation,
-          source: "mymemory-fallback",
+          translated: cleanText,
+          source: "original-fallback",
         });
       }
 
@@ -70,7 +52,7 @@ export async function POST(req: NextRequest) {
 
         const response = await ai.models.generateContent({
           model: "gemini-2.5-flash",
-          contents: `Haber: ${cleanText}`,
+          contents: `Metin: ${cleanText}`,
           config: {
             systemInstruction: SYSTEM_INSTRUCTION,
             temperature: 0.1,
@@ -81,6 +63,7 @@ export async function POST(req: NextRequest) {
         if (translated) {
           const finalClean = translated
             .replace(/^["'“”«»]+|["'“”«»]+$/g, "")
+            .replace(/^Metin:\s*/i, "")
             .replace(/^Haber:\s*/i, "")
             .trim();
           return NextResponse.json({ translated: finalClean, source: "gemini-sdk" });
@@ -97,7 +80,7 @@ export async function POST(req: NextRequest) {
                 {
                   parts: [
                     {
-                      text: `${SYSTEM_INSTRUCTION}\n\nHaber: ${cleanText}`,
+                      text: `${SYSTEM_INSTRUCTION}\n\nMetin: ${cleanText}`,
                     },
                   ],
                 },
@@ -112,6 +95,7 @@ export async function POST(req: NextRequest) {
             if (candidateText) {
               const finalClean = candidateText
                 .replace(/^["'“”«»]+|["'“”«»]+$/g, "")
+                .replace(/^Metin:\s*/i, "")
                 .replace(/^Haber:\s*/i, "")
                 .trim();
               return NextResponse.json({ translated: finalClean, source: "gemini-rest" });
@@ -121,9 +105,8 @@ export async function POST(req: NextRequest) {
           // REST fallback de başarısız
         }
 
-        // Gemini erişilemediyse MyMemory ile çevir
-        const fallbackText = await fetchMyMemoryFallback(cleanText);
-        return NextResponse.json({ translated: fallbackText, source: "mymemory-fallback" });
+        // Hata durumunda uydurma sözlük çevirisine düşme, orijinal temiz metni döndür
+        return NextResponse.json({ translated: cleanText, source: "original-fallback" });
       }
     }
 
