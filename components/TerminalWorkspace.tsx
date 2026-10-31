@@ -260,50 +260,56 @@ export const checkAndResetKapDailyCache = (): void => {
 
 export const parseKapItems = (data: unknown[]): KapItem[] => {
   if (!Array.isArray(data)) return [];
-  const results: KapItem[] = [];
 
-  data.slice(0, 40).forEach((rawItem) => {
-    if (!rawItem || typeof rawItem !== "object") return;
-    const obj = rawItem as Record<string, unknown>;
-    const basic = (obj.basic as Record<string, unknown>) || obj;
+  const parseWithFilter = (enforceToday: boolean): KapItem[] => {
+    const results: KapItem[] = [];
 
-    const rawId = basic.disclosureIndex || basic.disclosureId || basic.id || basic.kapId;
-    const numId = Number(String(rawId || "").replace(/\D/g, ""));
-    if (!numId || numId < 1000) return;
+    data.slice(0, 40).forEach((rawItem) => {
+      if (!rawItem || typeof rawItem !== "object") return;
+      const obj = rawItem as Record<string, unknown>;
+      const basic = (obj.basic as Record<string, unknown>) || obj;
 
-    const rawTime =
-      basic.publishDate ||
-      basic.disclosureTime ||
-      basic.time ||
-      basic.saat ||
-      basic.tarih ||
-      "";
+      const rawId = basic.disclosureIndex || basic.disclosureId || basic.id || basic.kapId;
+      const numId = Number(String(rawId || "").replace(/\D/g, ""));
+      if (!numId || numId < 1000) return;
 
-    if (!isTodayKapString(rawTime)) return;
+      const rawTime =
+        basic.time ||
+        basic.saat ||
+        basic.publishDate ||
+        basic.disclosureTime ||
+        basic.tarih ||
+        "";
 
-    const fixedTime = extractFixedKapTime(rawTime);
-    const rawCode = String(
-      basic.stockCodes || basic.stockCode || basic.relatedStocks || basic.hisseKodu || basic.kod || "KAP"
-    )
-      .split(",")[0]
-      .trim()
-      .toUpperCase();
+      if (enforceToday && !isTodayKapString(rawTime)) return;
 
-    results.push({
-      id: numId,
-      code: rawCode || "KAP",
-      type: String(basic.disclosureClass || basic.disclosureType || basic.tur || basic.type || "ÖDA").toUpperCase(),
-      title: String(basic.companyTitle || basic.companyName || basic.sirketAdi || basic.title || "KAP Bildirimi").trim(),
-      subject: String(basic.title || basic.disclosureTitle || basic.baslik || basic.subject || "Özel Durum Açıklaması").trim(),
-      summary: String(basic.summary || basic.ozet || basic.title || basic.disclosureTitle || "").trim(),
-      time: fixedTime,
-      timestamp: numId,
-      kapUrl: `https://www.kap.org.tr/tr/Bildirim/${numId}`,
+      const fixedTime = extractFixedKapTime(rawTime);
+      const rawCode = String(
+        basic.stockCodes || basic.stockCode || basic.relatedStocks || basic.hisseKodu || basic.kod || "KAP"
+      )
+        .split(",")[0]
+        .trim()
+        .toUpperCase();
+
+      results.push({
+        id: numId,
+        code: rawCode || "KAP",
+        type: String(basic.disclosureClass || basic.disclosureType || basic.tur || basic.type || "ÖDA").toUpperCase(),
+        title: String(basic.companyTitle || basic.companyName || basic.sirketAdi || basic.title || "KAP Bildirimi").trim(),
+        subject: String(basic.title || basic.disclosureTitle || basic.baslik || basic.subject || "Özel Durum Açıklaması").trim(),
+        summary: String(basic.summary || basic.ozet || basic.title || basic.disclosureTitle || "").trim(),
+        time: fixedTime,
+        timestamp: numId,
+        kapUrl: `https://www.kap.org.tr/tr/Bildirim/${numId}`,
+      });
     });
-  });
 
-  // En büyük ID = En yeni KAP bildirimi (b.id - a.id)
-  return results.sort((a, b) => b.id - a.id);
+    return results.sort((a, b) => b.id - a.id);
+  };
+
+  const todayList = parseWithFilter(true);
+  if (todayList.length > 0) return todayList;
+  return parseWithFilter(false);
 };
 
 // 2. YENİ KAP BİLDİRİMLERİNİ ÇEKEN ÇOKLU MOTOR (WAF/CACHE ENGELİNİ AŞAR):
