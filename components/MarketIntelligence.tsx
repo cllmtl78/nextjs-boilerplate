@@ -244,27 +244,26 @@ const SECTOR_DEFINITIONS: { code: string; name: string; keyStocks: string[] }[] 
 ];
 
 export default function MarketIntelligence() {
-  // Canlı Sektör Verisi (Sahte başlangıç verisi YOK, boş dizi ile başlar)
-  const [sectors, setSectors] = useState<SectorItem[]>([]);
-
-  // Canlı Takvim State (Sahte başlangıç verisi YOK, boş dizi ile başlar)
-  const [calendarEvents, setCalendarEvents] = useState<EconomicCalendarItem[]>([]);
-  const [loadingCalendar, setLoadingCalendar] = useState<boolean>(true);
-
-  // İlk mount anında localStorage'da gerçek önbellek varsa hemen yükle (FOUC önleme)
-  useEffect(() => {
+  // Canlı Sektör Verisi (Önbellek varsa anında başlat, FOUC önle)
+  const [sectors, setSectors] = useState<SectorItem[]>(() => {
+    if (typeof window === "undefined") return [];
     try {
       const cachedBist = localStorage.getItem(CACHE_BIST_DATA);
       if (cachedBist) {
         const parsed = JSON.parse(cachedBist);
         if (Array.isArray(parsed?.sectors) && parsed.sectors.length > 0) {
-          setSectors(parsed.sectors);
+          return parsed.sectors;
         }
       }
     } catch {
       // ignore
     }
+    return [];
+  });
 
+  // Canlı Takvim State (Önbellek varsa anında başlat)
+  const [calendarEvents, setCalendarEvents] = useState<EconomicCalendarItem[]>(() => {
+    if (typeof window === "undefined") return [];
     try {
       const today = new Date();
       const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
@@ -273,10 +272,7 @@ export default function MarketIntelligence() {
         const raw = localStorage.getItem(CACHE_CALENDAR_DATA);
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setCalendarEvents(parsed);
-            setLoadingCalendar(false);
-          }
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
         }
       } else if (storedDate && storedDate !== todayStr) {
         localStorage.removeItem(CACHE_CALENDAR_DATA);
@@ -285,7 +281,27 @@ export default function MarketIntelligence() {
     } catch {
       // ignore
     }
-  }, []);
+    return [];
+  });
+
+  const [loadingCalendar, setLoadingCalendar] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      const storedDate = localStorage.getItem(CACHE_CALENDAR_DATE);
+      if (storedDate === todayStr) {
+        const raw = localStorage.getItem(CACHE_CALENDAR_DATA);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) return false;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return true;
+  });
 
   // 1 & 4. BIST CANLI VERİ ÇEKME & 20 SANİYEDE BİR GÜNCELLEME:
   useEffect(() => {

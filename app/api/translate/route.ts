@@ -9,6 +9,44 @@ KESİN KURALLAR:
 4. Cümle başları ve özel isimler BÜYÜK harfle başlasın, asla metni komple küçük harfe çevirme.
 5. Sadece Türkçe çeviriyi tek satır olarak ver. Başına veya sonuna hiçbir işaret/açıklama koyma.`;
 
+async function freeGoogleTranslate(text: string): Promise<string> {
+  if (!text) return "";
+  try {
+    const preText = text
+      .replace(/\bstrikes\b/gi, "military operations")
+      .replace(/\bstrike\b/gi, "military operation");
+
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=tr&dt=t&q=${encodeURIComponent(preText)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && Array.isArray(data[0])) {
+        const parts = data[0].map((chunk: [string, string]) => chunk[0]).filter(Boolean);
+        let joined = parts.join("").trim();
+        joined = joined
+          .replace(/\bgrevlere\b/gi, "saldırılara")
+          .replace(/\bgrevleri\b/gi, "saldırıları")
+          .replace(/\bgrevler\b/gi, "saldırılar")
+          .replace(/\bgreve\b/gi, "saldırıya")
+          .replace(/\bgrevi\b/gi, "saldırıyı")
+          .replace(/\bgrev\b/gi, "saldırı")
+          .replace(/\bs&p 500\b/gi, "S&P 500")
+          .replace(/ABD Savunma Bakanlığı\s*\([^)]*\)/gi, "ABD Savunma Bakanlığı (DoD)")
+          .replace(/\bdod\b/gi, "ABD Savunma Bakanlığı (DoD)")
+          .replace(/(?:ABD Savunma Bakanlığı\s*\()?ABD Savunma Bakanlığı \(DoD\)\)?/gi, "ABD Savunma Bakanlığı (DoD)")
+          .replace(/\bfed\b/gi, "Fed")
+          .replace(/\bsec\b/gi, "SEC")
+          .replace(/^["'“”«»]+|["'“”«»]+$/g, "")
+          .trim();
+        return joined || text;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return text;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -34,15 +72,10 @@ export async function POST(req: NextRequest) {
       }
 
     if (!apiKey) {
+      const freeTr = await freeGoogleTranslate(cleanText);
       return NextResponse.json({
-        translated: cleanText,
-        source: "original-fallback",
-        debug: {
-          hasClientApiKey: !!clientApiKey,
-          hasEnvGemini: !!process.env.GEMINI_API_KEY,
-          hasPublicGemini: !!process.env.NEXT_PUBLIC_GEMINI_KEY,
-          envKeys: Object.keys(process.env).filter(k => k.includes("GEMINI")),
-        }
+        translated: freeTr || cleanText,
+        source: "google-translate-direct",
       });
     }
 
@@ -118,10 +151,10 @@ export async function POST(req: NextRequest) {
           console.error("REST fallback error:", restErrorMsg);
         }
 
-        // Hata durumunda uydurma sözlük çevirisine düşme, orijinal temiz metni döndür
+        const fallbackTr = await freeGoogleTranslate(cleanText);
         return NextResponse.json({
-          translated: cleanText,
-          source: "original-fallback",
+          translated: fallbackTr || cleanText,
+          source: "google-translate-fallback",
         });
       }
     }
@@ -129,9 +162,12 @@ export async function POST(req: NextRequest) {
     // Çoklu/Toplu metin çevirisi (Hız ve kota tasarrufu için toplu çeviri desteği)
     if (Array.isArray(texts) && texts.length > 0) {
       if (!apiKey) {
+        const translations = await Promise.all(
+          texts.map((t: string) => freeGoogleTranslate(t))
+        );
         return NextResponse.json({
-          translations: texts.map((t: string) => t),
-          warning: "GEMINI_API_KEY bulunamadı.",
+          translations,
+          source: "google-translate-batch",
         });
       }
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveBistTicker, isStrictlyTodayKap } from "@/components/TerminalWorkspace";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,9 @@ export async function GET() {
 
   // 15 saniyeden kısa aralıklarla çağrılırsa önbellekteki taze veriyi <1ms sürede dön
   if (now - lastFetchTimestamp < 15000 && cachedKapItems.size > 0) {
-    const list = Array.from(cachedKapItems.values()).sort((a, b) => b.id - a.id);
+    const list = Array.from(cachedKapItems.values())
+      .filter((it) => isStrictlyTodayKap(it.timestamp || it.time, it.time))
+      .sort((a, b) => b.id - a.id);
     return NextResponse.json({
       success: true,
       count: list.length,
@@ -39,7 +42,7 @@ export async function GET() {
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(6000),
     });
 
     if (res.ok) {
@@ -58,25 +61,20 @@ export async function GET() {
 
       // Her kart için resmi KAP ID'si ve kesin yayın saatini al
       const enrichedResults = await Promise.allSettled(
-        cards.map(async (card) => {
-          const bpIdNum = Number(card.bigparaId);
-          // Eğer zaten hafızada varsa doğrudan döndür
-          const existing = Array.from(cachedKapItems.values()).find((it) => it.id === bpIdNum);
-          if (existing) return existing;
-
+        cards.slice(0, 10).map(async (card) => {
           try {
             const artRes = await fetch("https://bigpara.hurriyet.com.tr" + card.href, {
               headers: {
                 "User-Agent":
                   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
               },
-              signal: AbortSignal.timeout(4500),
+              signal: AbortSignal.timeout(6000),
             });
 
             if (artRes.ok) {
               const artHtml = await artRes.text();
               const kapIdMatch = artHtml.match(/kap\.org\.tr\/Bildirim\/(\d+)/i);
-              const dateMatch = artHtml.match(/"datePublished":\s*"(\d{4}-\d{2}-\d{2}T(\d{2}:\d{2}:\d{2})[^"]*)"/);
+              const dateMatch = artHtml.match(/(?:name="datePublished"\s*content="|datePublished":\s*")(\d{4}-\d{2}-\d{2}T(\d{2}:\d{2}:\d{2})[^"]*)/i);
 
               const officialId = kapIdMatch ? Number(kapIdMatch[1]) : Number(card.bigparaId);
               const exactTime = dateMatch ? dateMatch[2] : "--:--";
@@ -86,8 +84,6 @@ export async function GET() {
               // Hisse kodu ve başlık ayrıştır
               const rawTitle = card.fullTitle;
               const codeMatch = rawTitle.match(/\*\*\*([A-Z0-9]+)\*\*\*/i);
-              const code = codeMatch ? codeMatch[1].toUpperCase() : "BIST";
-
               const remainder = rawTitle.replace(/\*\*\*([A-Z0-9]+)\*\*\*/i, "").trim();
               const firstParen = remainder.indexOf("(");
               let companyTitle = remainder;
@@ -98,6 +94,7 @@ export async function GET() {
                 subject = remainder.slice(firstParen).replace(/^\(|\)$/g, "").trim();
               }
 
+              const code = resolveBistTicker(companyTitle, codeMatch ? codeMatch[1] : undefined);
               if (!companyTitle) companyTitle = `${code} Ortaklığı`;
 
               let type = "ÖDA";
@@ -130,9 +127,9 @@ export async function GET() {
           // Fallback parsing from card title without subpage
           const rawTitle = card.fullTitle;
           const codeMatch = rawTitle.match(/\*\*\*([A-Z0-9]+)\*\*\*/i);
-          const code = codeMatch ? codeMatch[1].toUpperCase() : "BIST";
           const rawNum = parseInt(card.bigparaId, 10);
           const officialId = rawNum > 100000000 ? rawNum - 100589669 : rawNum;
+          const code = resolveBistTicker(rawTitle, codeMatch ? codeMatch[1] : undefined);
 
           const item: KapItem = {
             id: officialId,
@@ -157,12 +154,16 @@ export async function GET() {
       });
 
       lastFetchTimestamp = now;
+    } else {
+      console.error("Bigpara fetch failed with status:", res.status);
     }
-  } catch {
-    // ignore
+  } catch (err) {
+    console.error("KAP route error:", err);
   }
 
-  const list = Array.from(cachedKapItems.values()).sort((a, b) => b.id - a.id);
+  const list = Array.from(cachedKapItems.values())
+    .filter((it) => isStrictlyTodayKap(it.timestamp || it.time, it.time))
+    .sort((a, b) => b.id - a.id);
 
   return NextResponse.json({
     success: true,
