@@ -1,3 +1,4 @@
+from kap_bot import start_kap_worker, get_latest_kap
 import os
 import re
 import time
