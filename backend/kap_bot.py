@@ -2,136 +2,120 @@ import re
 import time
 import threading
 from datetime import datetime, timezone, timedelta
-import feedparser
 import requests
-from bs4 import BeautifulSoup
 
 KAP_CACHE = []
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept": "application/json, text/plain, */*",
+    "Origin": "https://tr.tradingview.com",
+    "Referer": "https://tr.tradingview.com/",
 }
 
-def clean_html(text: str) -> str:
-    if not text:
-        return ""
-    soup = BeautifulSoup(text, "html.parser")
-    cleaned = soup.get_text(separator=" ").strip()
-    return re.sub(r"\s+", " ", cleaned)
-
-def extract_code(text: str) -> str:
-    # Metin içindeki [KOD], (KOD) veya büyük harfli hisse kodunu bulur
-    m = re.search(r"\[([A-Z0-9]{3,6})\]|\(([A-Z0-9]{3,6})\)", text)
-    if m:
-        c = m.group(1) or m.group(2)
-        if c not in ["KAP", "BIST", "ÖDA", "SON"]:
-            return c
-    parts = text.split()
-    if parts:
-        first = parts[0].replace(":", "").replace("-", "").strip()
-        if 3 <= len(first) <= 6 and first.isupper() and first not in ["KAP", "BIST"]:
-            return first
-    return "BIST"
-
 def fetch_kap_disclosures():
-    items = []
     tz_tr = timezone(timedelta(hours=3))
+    results = []
 
-    # 1. Kaynak: Foreks Finans Canlı KAP Akışı (Veri merkezlerine açık, engelsiz)
+    # DOĞRUDAN RESMİ KAP VERİ SAĞLAYICISI (Yurt dışı sunucu / Render IP engeli yoktur, haber içermez)
+    url = f"https://news-headlines.tradingview.com/v2/view/headlines/symbol?client=web&lang=tr&market=TR&provider=kap&_={int(time.time()*1000)}"
+
     try:
-        url = "https://www.foreks.com/rss/kap-haberleri"
-        feed = feedparser.parse(url, request_headers=HEADERS)
-        if feed.entries:
-            for entry in feed.entries[:30]:
-                title = clean_html(getattr(entry, "title", ""))
-                if not title:
-                    continue
-                
-                link = getattr(entry, "link", "#")
-                summary = clean_html(getattr(entry, "summary", "") or getattr(entry, "description", ""))
-                
-                # Tarih ve saat
-                p_parsed = getattr(entry, "published_parsed", None)
-                if p_parsed:
-                    utc_ts = time.mktime(p_parsed)
-                    dt = datetime.fromtimestamp(utc_ts, tz=timezone.utc).astimezone(tz_tr)
-                    time_str = dt.strftime("%H:%M:%S")
-                    ts = int(dt.timestamp() * 1000)
-                else:
-                    now = datetime.now(tz=tz_tr)
-                    time_str = now.strftime("%H:%M:%S")
-                    ts = int(now.timestamp() * 1000)
-
-                # KAP ID yakalama (varsa linkten, yoksa timestamp'ten)
-                id_match = re.search(r"/(\d{6,8})", link)
-                disc_id = int(id_match.group(1)) if id_match else ts
-
-                code = extract_code(title)
-
-                items.append({
-                    "id": disc_id,
-                    "code": code.upper(),
-                    "type": "ÖDA",
-                    "title": title.split(" - ")[0] if " - " in title else title,
-                    "subject": title,
-                    "summary": summary[:250] if summary else title,
-                    "time": time_str,
-                    "url": link,
-                    "timestamp": ts,
-                })
-            if items:
-                return items
-    except Exception as e:
-        print("[KAP Bot] Foreks denemesi:", e)
-
-    # 2. Kaynak (Yedek): Mynet Finans Doğrudan HTML Scrape
-    try:
-        url_my = "https://finans.mynet.com/borsa/kap-haberleri/"
-        res = requests.get(url_my, headers=HEADERS, timeout=8)
+        res = requests.get(url, headers=HEADERS, timeout=10)
         if res.status_code == 200:
-            soup = BeautifulSoup(res.text, "html.parser")
-            rows = soup.find_all("tr", class_=re.compile(r"kap|row|item", re.I)) or soup.find_all("li", class_=re.compile(r"kap", re.I))
-            for r in rows[:25]:
-                txt = clean_html(r.get_text(separator=" "))
-                link_el = r.find("a")
-                link = link_el["href"] if link_el and link_el.has_attr("href") else "#"
-                if not link.startswith("http"):
-                    link = "https://finans.mynet.com" + link
-                
-                t_match = re.search(r"(\d{2}:\d{2}(?::\d{2})?)", txt)
-                time_str = t_match.group(1) if t_match else "--:--"
-                
-                code = extract_code(txt)
-                disc_id = int(time.time() * 1000) + hash(txt) % 10000
+            data = res.json()
+            items = data.get("items", [])
 
-                items.append({
+            for it in items[:45]:
+                raw_title = it.get("title", "").strip()
+                if not raw_title:
+                    continue
+
+                # Bildirim zamanı (Türkiye saati)
+                ts = it.get("published", int(time.time()))
+                dt = datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(tz_tr)
+                time_str = dt.strftime("%H:%M:%S")
+
+                # 1. Hisse kodunu sembol listesinden al (Örn: BIST:THYAO -> THYAO)
+                code = ""
+                related = it.get("relatedSymbols", [])
+                if related and isinstance(related, list):
+                    sym = related[0].get("symbol", "")
+                    code = sym.split(":")[-1].strip().upper()
+
+                # 2. Başlığı ayrıştır -> Format: "KAP: THYAO [TÜRK HAVA YOLLARI A.O.] ÖZEL DURUM AÇIKLAMASI (GENEL)"
+                clean_str = re.sub(r"^KAP:\s*", "", raw_title).strip()
+
+                # Şirket unvanı köşeli parantez içindedir: [TÜRK HAVA YOLLARI A.O.]
+                m_comp = re.search(r"\[(.*?)\]", clean_str)
+                if m_comp:
+                    company = m_comp.group(1).strip()
+                    before_bracket = clean_str[:m_comp.start()].strip()
+                    after_bracket = clean_str[m_comp.end():].strip()
+
+                    if not code and before_bracket:
+                        code = before_bracket.split(",")[0].replace(":", "").strip().upper()
+                    subject = after_bracket if after_bracket else "Özel Durum Açıklaması"
+                else:
+                    company = clean_str
+                    subject = clean_str
+
+                if not code:
+                    if "BORSA İSTANBUL" in company.upper() or "BIST" in company.upper():
+                        code = "BIST"
+                    elif "MERKEZİ KAYIT" in company.upper():
+                        code = "MKK"
+                    elif "SERMAYE PİYASASI" in company.upper():
+                        code = "SPK"
+                    else:
+                        first_token = clean_str.split()[0].replace(":", "").strip().upper()
+                        code = first_token if 3 <= len(first_token) <= 6 else "KAP"
+
+                # Bildirim tipi (ÖDA, FR, DG vb.)
+                disc_type = "ÖDA"
+                if "FİNANSAL RAPOR" in subject.upper() or "FINANSAL RAPOR" in subject.upper():
+                    disc_type = "FR"
+                elif "DEVRE KESİCİ" in subject.upper() or "DEVRE KESICI" in subject.upper():
+                    disc_type = "DK"
+                elif "PAY ALIM" in subject.upper():
+                    disc_type = "PAY"
+
+                # Benzersiz bildirim ID'si ve bildirim detayı linki
+                raw_id = str(it.get("id", ""))
+                digits = re.sub(r"\D", "", raw_id)
+                disc_id = int(digits[:9]) if digits else int(ts)
+
+                story_path = it.get("storyPath", "")
+                detail_url = f"https://tr.tradingview.com{story_path}" if story_path else "https://www.kap.org.tr/tr/"
+
+                results.append({
                     "id": disc_id,
-                    "code": code.upper(),
-                    "type": "ÖDA",
-                    "title": txt[:60],
-                    "subject": txt,
-                    "summary": txt,
-                    "time": time_str if len(time_str) == 8 else f"{time_str}:00",
-                    "url": link,
-                    "timestamp": int(time.time() * 1000),
+                    "code": code,
+                    "type": disc_type,
+                    "title": company if company else code,
+                    "subject": subject,
+                    "summary": f"{company} — {subject}" if company != subject else subject,
+                    "time": time_str,
+                    "url": detail_url,
+                    "timestamp": ts
                 })
-            if items:
-                return items
-    except Exception as e:
-        print("[KAP Bot] Mynet HTML denemesi:", e)
 
-    return items
+            results.sort(key=lambda x: x["timestamp"], reverse=True)
+            return results
+
+    except Exception as e:
+        print("[KAP Bot] Veri çekme hatası:", e)
+
+    return []
 
 def run_kap_worker():
     global KAP_CACHE
     while True:
         try:
-            results = fetch_kap_disclosures()
-            if results:
-                results.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
-                KAP_CACHE = results
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] [KAP Bot] {len(KAP_CACHE)} bildirim hafızaya alındı.")
+            data = fetch_kap_disclosures()
+            if data and len(data) > 0:
+                KAP_CACHE = data
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] [KAP Bot] {len(KAP_CACHE)} resmi KAP bildirimi çekildi.")
         except Exception as e:
             print("[KAP Bot] Worker hatası:", e)
         time.sleep(15)
