@@ -1,4 +1,3 @@
-from kap_bot import start_kap_worker, get_latest_kap
 import os
 import re
 import time
@@ -6,10 +5,11 @@ import threading
 from datetime import datetime, timezone, timedelta
 import feedparser
 from bs4 import BeautifulSoup
+import requests
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="BPT BIST & TR News Engine")
+app = FastAPI(title="BPT Terminal Engine")
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,10 +19,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Canlı haber havuzu
-NEWS_CACHE = []
+# ----------------------------------------------------
+# 1. BELLEK ALANLARI (BİRBİRİNDEN TAMAMEN AYRI HAVUZLAR)
+# ----------------------------------------------------
+NEWS_CACHE = []  # Sadece BIST Türkçe Ekonomi Haberleri
+KAP_CACHE = []   # Sadece Resmi KAP Bildirimleri
 
-# Taranacak Türkçe Ekonomi Kaynakları
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+}
+
+# ----------------------------------------------------
+# 2. TÜRKÇE EKONOMİ HABERLERİ BOTU
+# ----------------------------------------------------
 SOURCES = [
     {"badge": "AA FİNANS", "url": "https://www.aa.com.tr/tr/rss/default?cat=ekonomi"},
     {"badge": "EKONOMİM", "url": "https://www.ekonomim.com/rss"},
@@ -34,10 +43,6 @@ SOURCES = [
     {"badge": "TÜRKİYE GAZETESİ", "url": "https://www.turkiyegazetesi.com.tr/rss", "filter_eco": True},
 ]
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-}
-
 def clean_html(raw_html):
     if not raw_html:
         return ""
@@ -46,23 +51,18 @@ def clean_html(raw_html):
     return re.sub(r"\s+", " ", text)
 
 def parse_entry_time(entry):
-    # feedparser'ın parse ettiği published_parsed struct'ını al
     p_parsed = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
     tz_tr = timezone(timedelta(hours=3))
-    
     if p_parsed:
-        # UTC epoch'a çevir
         utc_ts = time.mktime(p_parsed)
         dt = datetime.fromtimestamp(utc_ts, tz=timezone.utc).astimezone(tz_tr)
         return dt.strftime("%H:%M:%S"), int(dt.timestamp() * 1000), dt
-    
     now = datetime.now(tz=tz_tr)
     return now.strftime("%H:%M:%S"), int(now.timestamp() * 1000), now
 
 def fetch_feed(source):
     items = []
     try:
-        # Sunucu doğrudan bağlandığı için proxy engeli yok
         feed = feedparser.parse(source["url"], request_headers=HEADERS)
         if not feed.entries:
             return items
@@ -75,7 +75,6 @@ def fetch_feed(source):
             if not title or len(title) < 6:
                 continue
 
-            # Özel Kategori Filtresi (Dünya / Türkiye gazetesi için)
             if source.get("filter_eco"):
                 cats = [c.get("term", "").lower() for c in getattr(entry, "tags", []) if isinstance(c, dict)]
                 link = getattr(entry, "link", "").lower()
@@ -84,8 +83,6 @@ def fetch_feed(source):
                     continue
 
             time_str, ts, dt_obj = parse_entry_time(entry)
-
-            # Sadece bugünün haberlerini filtrele
             if dt_obj.date() != today_date:
                 continue
 
@@ -110,6 +107,7 @@ def fetch_feed(source):
     return items
 
 def news_worker():
+    """Arka planda 20 saniyede bir Türkçe haberleri çeker"""
     global NEWS_CACHE
     while True:
         try:
@@ -117,7 +115,6 @@ def news_worker():
             threads = []
             results = [[] for _ in SOURCES]
 
-            # Tüm haber kaynaklarını aynı anda paralel iş parçacığıyla (Thread) çek
             def worker(idx, src):
                 results[idx] = fetch_feed(src)
 
@@ -133,7 +130,6 @@ def news_worker():
                 all_collected.extend(r)
 
             if all_collected:
-                # Başlığa göre mükerrerleri temizle
                 seen = set()
                 unique_news = []
                 for n in all_collected:
@@ -142,29 +138,108 @@ def news_worker():
                         seen.add(key)
                         unique_news.append(n)
 
-                # En yeniden eskiye doğru kesin sayısal sıralama
                 unique_news.sort(key=lambda x: x["timestamp"], reverse=True)
                 NEWS_CACHE = unique_news
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] Türkçe haberler güncellendi: {len(NEWS_CACHE)} haber hazır.")
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Türkçe Haberler Güncellendi: {len(NEWS_CACHE)} adet")
         except Exception as e:
-            print("Worker Ana Hatası:", e)
+            print("News Worker Hatası:", e)
+        time.sleep(20)
+
+# ----------------------------------------------------
+# 3. KAP BİLDİRİMLERİ BOTU
+# ----------------------------------------------------
+def extract_kap_time(raw_time):
+    if not raw_time:
+        return "--:--"
+    raw_str = str(raw_time).strip()
+    if "T" in raw_str:
+        return raw_str.split("T")[-1][:8]
+    if len(raw_str) >= 8:
+        return raw_str[-8:]
+    return "--:--"
+
+def kap_worker():
+    """Arka planda 15 saniyede bir KAP bildirimlerini çeker"""
+    global KAP_CACHE
+    while True:
+        try:
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            url = f"https://www.kap.org.tr/tr/api/disclosures?fromDate={today_str}&toDate={today_str}&_t={int(time.time()*1000)}"
+            res = requests.get(url, headers=HEADERS, timeout=8)
             
-        time.sleep(20)  # Her 20 saniyede bir sessizce yenile
+            if res.status_code == 200:
+                raw_data = res.json()
+                if isinstance(raw_data, list):
+                    parsed = []
+                    for item in raw_data[:40]:
+                        basic = item.get("basic", item)
+                        disc_id = basic.get("disclosureIndex") or basic.get("id") or basic.get("disclosureId")
+                        if not disc_id:
+                            continue
 
-# Botu arka planda başlat
-threading.Thread(target=news_worker, daemon=True).start()
+                        raw_time = basic.get("publishDate") or basic.get("disclosureTime") or ""
+                        time_str = extract_kap_time(raw_time)
 
-# --- API ENDPOINT'LERİ ---
+                        code = basic.get("stockCodes") or basic.get("stockCode") or basic.get("relatedStocks") or "BIST"
+                        if "," in code:
+                            code = code.split(",")[0].strip()
+
+                        title = basic.get("companyTitle") or basic.get("companyName") or "KAP Bildirimi"
+                        subject = basic.get("title") or basic.get("disclosureTitle") or "Özel Durum Açıklaması"
+                        summary = basic.get("summary") or subject
+
+                        parsed.append({
+                            "id": int(disc_id),
+                            "code": code.strip().upper(),
+                            "type": (basic.get("disclosureClass") or basic.get("disclosureType") or "ÖDA").upper(),
+                            "title": title.strip(),
+                            "subject": subject.strip(),
+                            "summary": summary.strip(),
+                            "time": time_str,
+                            "url": f"https://www.kap.org.tr/tr/Bildirim/{disc_id}"
+                        })
+
+                    # En büyük ID = En yeni KAP
+                    parsed.sort(key=lambda x: x["id"], reverse=True)
+                    KAP_CACHE = parsed
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] KAP Bildirimleri Güncellendi: {len(KAP_CACHE)} adet")
+        except Exception as e:
+            print("KAP Worker Hatası:", e)
+        time.sleep(15)
+
+# ----------------------------------------------------
+# 4. WORKER'LARIN BAŞLATILDIĞI YER (İŞTE BURASI!)
+# ----------------------------------------------------
+threading.Thread(target=news_worker, daemon=True).start()  # Türkçe haber döngüsü başlar
+threading.Thread(target=kap_worker, daemon=True).start()   # KAP bildirim döngüsü başlar
+
+# ----------------------------------------------------
+# 5. FRONTEND İÇİN AYRI AYRI API UÇ NOKTALARI
+# ----------------------------------------------------
 @app.get("/")
 def health():
-    return {"status": "ok", "service": "BIST News Engine", "count": len(NEWS_CACHE)}
+    return {
+        "status": "running",
+        "news_count": len(NEWS_CACHE),
+        "kap_count": len(KAP_CACHE)
+    }
 
+# 1. KUTU İÇİN (BIST & Türkiye Paneli):
 @app.get("/api/bist-news")
 def get_bist_news():
     return {
         "status": "ok",
         "count": len(NEWS_CACHE),
         "data": NEWS_CACHE
+    }
+
+# 2. KUTU İÇİN (KAP Bildirimleri Paneli):
+@app.get("/api/kap")
+def get_kap_disclosures():
+    return {
+        "status": "ok",
+        "count": len(KAP_CACHE),
+        "data": KAP_CACHE
     }
 
 if __name__ == "__main__":
