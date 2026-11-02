@@ -134,7 +134,7 @@ export default function Header() {
           {/* Sağ: Status Pill (Canlı Saat + Dönen Hava Durumu) */}
           <div className="bg-[#0c1322] border border-white/[0.08] rounded px-2.5 py-1 flex items-center gap-3 text-xs text-slate-300 shadow-sm shrink-0">
             {/* Canlı Saat (Solundaki yeşil nokta kaldırıldı) */}
-            <div className="font-mono tabular-nums text-slate-200 font-semibold tracking-wider text-xs">
+            <div suppressHydrationWarning className="font-mono tabular-nums text-slate-200 font-semibold tracking-wider text-xs">
               {saat || getInitialTime()}
             </div>
 

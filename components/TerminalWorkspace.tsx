@@ -22,22 +22,9 @@ export type TerminalHaber = {
   dateObj?: Date | null;
 };
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://bpt-news-backend.onrender.com";
 const CACHE_KEY_BIST = "bpt_bist_news";
 
-interface ApiNewsItemResponse {
-  id: string;
-  zaman: string;
-  time?: string;
-  tarih?: string;
-  kaynak: string;
-  baslik: string;
-  ozet?: string;
-  paragraflar?: string[];
-  detay?: string;
-  url?: string;
-  timestamp?: number;
-  dateObj?: string | null;
-}
 
 export interface GlobalNewsItem {
   id: string;
@@ -702,36 +689,6 @@ export const fetchTodayKapDisclosures = fetchLiveKapFeed;
 export const fetchLiveKapDisclosures = fetchLiveKapFeed;
 export const fetchKapDisclosures = fetchLiveKapFeed;
 
-export interface RssFeedConfig {
-  url: string;
-  badge: string;
-  filterEconomyOnly?: boolean;
-  fallbackUrls?: string[];
-}
-
-// Aktif Doğrudan RSS Kaynak Konfigürasyonu
-const ACTIVE_RSS_SOURCES: RssFeedConfig[] = [
-  {
-    url: "https://www.aa.com.tr/tr/rss/default?cat=ekonomi",
-    fallbackUrls: ["https://www.aa.com.tr/tr/rss/ekonomi"],
-    badge: "AA FİNANS",
-  },
-  { url: "https://www.ekonomim.com/rss", badge: "EKONOMİM" },
-  { url: "https://www.cnbce.com/rss", badge: "CNBC-E" },
-  { url: "https://www.ekonomist.com.tr/rss", badge: "EKONOMİST" },
-  { url: "https://www.foreks.com/rss", badge: "FOREKS" },
-  { url: "https://www.ntv.com.tr/ntvpara.rss", badge: "NTV PARA" },
-  {
-    url: "https://www.turkiyegazetesi.com.tr/rss",
-    badge: "TÜRKİYE GAZETESİ",
-    filterEconomyOnly: true,
-  },
-  {
-    url: "https://www.dunya.com/rss",
-    badge: "DÜNYA GAZETESİ",
-    filterEconomyOnly: true,
-  },
-];
 
 // HTML entity decode mekanizması
 export const decodeHtmlEntities = (str?: string | null): string => {
@@ -773,176 +730,6 @@ export const decodeHtmlEntities = (str?: string | null): string => {
   }
 };
 
-function cleanHtmlStr(str?: string | null): string {
-  return decodeHtmlEntities(str);
-}
-
-function extractTwoParagraphs(desc: string, title: string, badge: string): string[] {
-  if (!desc || desc.length < 15) {
-    return [
-      `[${badge}] tarafından aktarılan son dakika ekonomi ve finans gelişmesi: "${title}".`,
-      "Piyasa analistleri, haberin sektör endeksleri ve şirket değerlemeleri üzerindeki etkilerini izliyor.",
-    ];
-  }
-
-  const paragraphs = desc
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter((p) => p.length > 20);
-
-  if (paragraphs.length >= 2) {
-    return paragraphs.slice(0, 2);
-  }
-
-  const sentences = desc.match(/[^\.!\?]+[\.!\?]+/g);
-  if (sentences && sentences.length >= 2) {
-    const mid = Math.ceil(sentences.length / 2);
-    const p1 = sentences.slice(0, mid).join(" ").trim();
-    const p2 = sentences.slice(mid).join(" ").trim();
-    if (p1 && p2) return [p1, p2];
-  }
-
-  return [
-    desc,
-    "Borsa İstanbul ve finansal piyasalara ilişkin gelişmeler güncellenmektedir.",
-  ];
-}
-
-function parseRssWithDomParser(
-  xmlText: string,
-  feed: RssFeedConfig
-): TerminalHaber[] {
-  if (!xmlText || typeof xmlText !== "string") return [];
-  const items: TerminalHaber[] = [];
-
-  try {
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-
-    if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
-      throw new Error("XML parsererror");
-    }
-
-    const itemNodes = xmlDoc.getElementsByTagName("item");
-    for (let i = 0; i < itemNodes.length; i++) {
-      const node = itemNodes[i];
-
-      if (feed.filterEconomyOnly) {
-        const catNodes = node.getElementsByTagName("category");
-        let isEconomy = false;
-        for (let c = 0; c < catNodes.length; c++) {
-          const catText = (catNodes[c].textContent || "").trim().toLowerCase();
-          if (catText.includes("ekonomi")) {
-            isEconomy = true;
-            break;
-          }
-        }
-
-        if (!isEconomy) {
-          const linkText = (node.getElementsByTagName("link")[0]?.textContent || "").toLowerCase();
-          if (linkText.includes("/ekonomi/")) {
-            isEconomy = true;
-          }
-        }
-
-        if (!isEconomy) continue;
-      }
-
-      const titleEl = node.getElementsByTagName("title")[0];
-      const rawTitle = cleanHtmlStr(titleEl?.textContent);
-      if (!rawTitle || rawTitle.length < 5) continue;
-
-      const linkEl = node.getElementsByTagName("link")[0];
-      const guidEl = node.getElementsByTagName("guid")[0];
-      const rawLink = cleanHtmlStr(linkEl?.textContent || guidEl?.textContent || "#");
-
-      const pubDateEl = node.getElementsByTagName("pubDate")[0];
-      const { time, timestamp, dateObj } = parseNewsDate(pubDateEl?.textContent);
-
-      const descEl = node.getElementsByTagName("description")[0];
-      const cleanDesc = cleanHtmlStr(descEl?.textContent);
-      const paragraflar = extractTwoParagraphs(cleanDesc, rawTitle, feed.badge);
-
-      const id = `rss_${feed.badge.toLowerCase().replace(/[^a-z]/g, "")}_${timestamp}_${i}`;
-
-      items.push({
-        id,
-        zaman: time,
-        time,
-        tarih: "Bugün",
-        kaynak: feed.badge,
-        baslik: rawTitle,
-        ozet: rawTitle,
-        detay: cleanDesc,
-        paragraflar,
-        url: rawLink,
-        kategori: "bist",
-        timestamp,
-        dateObj,
-      });
-    }
-  } catch {
-    const chunks = xmlText.split(/<item[\s>]/i).slice(1);
-    chunks.forEach((chunk, i) => {
-      if (feed.filterEconomyOnly) {
-        const catMatches = [...chunk.matchAll(/<category[^>]*>([\s\S]*?)<\/category>/gi)];
-        let isEconomy = false;
-        for (const m of catMatches) {
-          if (cleanHtmlStr(m[1]).toLowerCase().includes("ekonomi")) {
-            isEconomy = true;
-            break;
-          }
-        }
-        if (!isEconomy) {
-          const linkMatch = chunk.match(/<link[^>]*>([\s\S]*?)<\/link>/i)?.[1] || "";
-          if (linkMatch.toLowerCase().includes("/ekonomi/")) {
-            isEconomy = true;
-          }
-        }
-        if (!isEconomy) return;
-      }
-
-      const titleMatch = chunk.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
-      if (!titleMatch) return;
-      const rawTitle = cleanHtmlStr(titleMatch);
-      if (!rawTitle || rawTitle.length < 5) return;
-
-      const linkMatch =
-        chunk.match(/<link[^>]*>([\s\S]*?)<\/link>/i)?.[1] ||
-        chunk.match(/<guid[^>]*>([\s\S]*?)<\/guid>/i)?.[1] ||
-        "#";
-      const rawLink = cleanHtmlStr(linkMatch);
-
-      const pubDateMatch = chunk.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i)?.[1];
-      const { time, timestamp, dateObj } = parseNewsDate(pubDateMatch);
-
-      const descMatch =
-        chunk.match(/<description[^>]*>([\s\S]*?)<\/description>/i)?.[1] ||
-        chunk.match(/<content:encoded[^>]*>([\s\S]*?)<\/content:encoded>/i)?.[1] ||
-        "";
-      const cleanDesc = cleanHtmlStr(descMatch);
-      const paragraflar = extractTwoParagraphs(cleanDesc, rawTitle, feed.badge);
-
-      items.push({
-        id: `rss_fb_${feed.badge.toLowerCase().replace(/[^a-z]/g, "")}_${timestamp}_${i}`,
-        zaman: time,
-        time,
-        tarih: "Bugün",
-        kaynak: feed.badge,
-        baslik: rawTitle,
-        ozet: rawTitle,
-        detay: cleanDesc,
-        paragraflar,
-        url: rawLink,
-        kategori: "bist",
-        timestamp,
-        dateObj,
-      });
-    });
-  }
-
-  return items;
-}
 
 const ACRONYMS_LIST: Record<string, string> = {
   us: "US",
@@ -1316,145 +1103,48 @@ export default function TerminalWorkspace() {
     }
   }, []);
 
-  const fetchRSS = async (url: string): Promise<string | null> => {
-    const proxies = [
-      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-      `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    ];
-    try {
-      return await Promise.any(
-        proxies.map(async (pUrl) => {
-          const res = await fetch(pUrl, { signal: AbortSignal.timeout(4500) });
-          if (!res.ok) throw new Error("Proxy failed");
-          const text = await res.text();
-          if (text && (text.includes("<item") || text.includes("<entry") || text.includes("<feed"))) return text;
-          throw new Error("Invalid XML");
-        })
-      );
-    } catch {
-      return null;
-    }
-  };
-
   const loadNews = useCallback(async () => {
     try {
-      const accumulatedNews: TerminalHaber[] = [];
-      const seenTitles = new Set<string>();
-
-      const updateFeedState = (incomingItems: TerminalHaber[]) => {
-        if (!incomingItems || incomingItems.length === 0) return;
-        for (const item of incomingItems) {
-          const normKey = item.baslik.toLowerCase().replace(/[^a-z0-9ğüşıöç]/g, "").slice(0, 40);
-          if (!seenTitles.has(normKey)) {
-            seenTitles.add(normKey);
-            accumulatedNews.push(item);
-          }
-        }
-
-        accumulatedNews.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-        const todaysNews = accumulatedNews.filter((item) => isToday(item.dateObj || item.timestamp));
-        const listToProcess = todaysNews.length > 0 ? todaysNews : accumulatedNews;
-
-        if (!isInitialLoadRef.current) {
-          const yeniGelenler = listToProcess.filter(
-            (h) => !knownIdsRef.current.has(h.id) && !knownIdsRef.current.has(h.baslik.slice(0, 30))
-          );
-
-          if (yeniGelenler.length > 0) {
-            const yeniIdler = new Set(yeniGelenler.map((h) => h.id));
-            setNewlyArrivedIds((prev) => new Set([...prev, ...yeniIdler]));
-
-            setTimeout(() => {
-              setNewlyArrivedIds((prev) => {
-                const kopya = new Set(prev);
-                yeniIdler.forEach((id) => kopya.delete(id));
-                return kopya;
-              });
-            }, 4000);
-          }
-        }
-
-        listToProcess.forEach((h) => {
-          knownIdsRef.current.add(h.id);
-          knownIdsRef.current.add(h.baslik.slice(0, 30));
-        });
-
-        isInitialLoadRef.current = false;
-        setBistHaberleri([...listToProcess]);
-        setLoadingBist(false);
-      };
-
-      // 1. ADIM: Sunucu tarafı dahili /api/news rotasını çağır (anında yanıt döner)
-      fetch("/api/news", { cache: "no-store", signal: AbortSignal.timeout(4500) })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.items && Array.isArray(data.items) && data.items.length > 0) {
-            const internalItems: TerminalHaber[] = data.items.map((it: ApiNewsItemResponse) => {
-              const parsedDate = parseNewsDate(it.timestamp || it.dateObj);
-              const itemTime = it.time || it.zaman || parsedDate.time;
-              return {
-                id: it.id,
-                zaman: itemTime,
-                time: itemTime,
-                tarih: it.tarih || "Bugün",
-                kaynak: it.kaynak,
-                baslik: it.baslik,
-                ozet: it.baslik,
-                paragraflar: it.paragraflar,
-                detay: it.paragraflar?.join("\n\n") || it.detay || it.baslik,
-                url: it.url || "#",
-                kategori: "bist" as const,
-                timestamp: it.timestamp || parsedDate.timestamp,
-                dateObj: parsedDate.dateObj,
-              };
-            });
-            updateFeedState(internalItems);
-          }
-        })
-        .catch(() => {});
-
-      // 2. ADIM: Tüm RSS kaynaklarını paralel olarak başlat, her biten kaynak anında ekrana yansısın
-      const feedPromises = ACTIVE_RSS_SOURCES.map(async (feed) => {
-        try {
-          let xml = await fetchRSS(feed.url);
-
-          if ((!xml || !xml.includes("<item")) && feed.fallbackUrls && feed.fallbackUrls.length > 0) {
-            for (const fallbackUrl of feed.fallbackUrls) {
-              const altXml = await fetchRSS(fallbackUrl);
-              if (altXml && altXml.includes("<item")) {
-                xml = altXml;
-                break;
-              }
-            }
-          }
-
-          if (xml) {
-            const parsed = parseRssWithDomParser(xml, feed);
-            if (parsed && parsed.length > 0) {
-              updateFeedState(parsed);
-            }
-          }
-        } catch {
-          // ignore
-        }
+      const res = await fetch(`${BACKEND_URL}/api/bist-news`, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(6000),
       });
+      if (res.ok) {
+        const json = await res.json();
+        if (json && Array.isArray(json.data) && json.data.length > 0) {
+          const freshData: TerminalHaber[] = json.data;
 
-      await Promise.allSettled(feedPromises);
+          if (!isInitialLoadRef.current) {
+            const newIds = new Set<string>();
+            freshData.forEach((item) => {
+              if (item.id && !knownIdsRef.current.has(item.id)) {
+                newIds.add(item.id);
+              }
+            });
+            if (newIds.size > 0) {
+              setNewlyArrivedIds(newIds);
+              setTimeout(() => {
+                setNewlyArrivedIds(new Set());
+              }, 6000);
+            }
+          } else {
+            isInitialLoadRef.current = false;
+          }
 
-      // Tüm kaynaklar bittikten sonra önbelleğe kaydet
-      if (accumulatedNews.length > 0) {
-        const todaysNews = accumulatedNews.filter((item) => isToday(item.dateObj || item.timestamp));
-        const finalToSave = todaysNews.length > 0 ? todaysNews : accumulatedNews;
-        try {
-          localStorage.setItem(CACHE_KEY_BIST, JSON.stringify(finalToSave));
-        } catch {
-          // ignore
+          freshData.forEach((item) => {
+            if (item.id) knownIdsRef.current.add(item.id);
+          });
+
+          setBistHaberleri(freshData);
+          try {
+            localStorage.setItem(CACHE_KEY_BIST, JSON.stringify(freshData));
+          } catch {
+            // ignore
+          }
         }
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error("BIST news fetch error:", err);
     } finally {
       setLoadingBist(false);
     }
@@ -1516,59 +1206,26 @@ export default function TerminalWorkspace() {
     });
 
     const loadKap = async () => {
-      checkAndResetKapDailyCache();
-      const freshItems = await fetchLiveKapFeed();
-      if (!isMounted) return;
-
-      if (freshItems && freshItems.length > 0) {
-        setKapBildirimleri((prev) => {
-          // Mevcut listedeki bildirimleri ID üzerinden kaydet
-          const existingMap = new Map<number, KapItem>();
-          prev.forEach((p) => {
-            const numId = Number(p.id);
-            existingMap.set(numId, p);
-            if (p.time && p.time !== "--:--") {
-              lockedKapTimesRef.current.set(numId, p.time);
-            }
-          });
-
-          // Yeni gelenleri işle: Zaten listede olan bir bildirimin `time` değerini ASLA değiştirme!
-          freshItems.forEach((item) => {
-            const numId = Number(item.id);
-            const lockedTime = lockedKapTimesRef.current.get(numId);
-            const finalTime = lockedTime || item.time;
-
-            if (finalTime && finalTime !== "--:--") {
-              lockedKapTimesRef.current.set(numId, finalTime);
-            }
-
-            existingMap.set(numId, {
-              ...item,
-              id: numId,
-              time: finalTime,
-            });
-          });
-
-          // Doğrudan bildirim ID'sine göre büyükten küçüğe sırala ve sadece bugünün bildirimlerini sakla!
-          const merged = Array.from(existingMap.values())
-            .filter((item) => isStrictlyTodayKap(item.timestamp || item.time, item.time))
-            .sort((a, b) => Number(b.id) - Number(a.id))
-            .slice(0, 35);
-
-          try {
-            if (merged.length > 0) {
-              localStorage.setItem(CACHE_KEY_KAP_V4, JSON.stringify(merged));
-            } else {
-              localStorage.removeItem(CACHE_KEY_KAP_V4);
-            }
-          } catch {
-            // ignore
-          }
-
-          return merged;
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/kap`, {
+          cache: "no-store",
+          signal: AbortSignal.timeout(6000),
         });
+        if (res.ok) {
+          const json = await res.json();
+          if (json && Array.isArray(json.data) && json.data.length > 0) {
+            if (isMounted) {
+              setKapBildirimleri(json.data);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("KAP fetch error:", err);
+      } finally {
+        if (isMounted) {
+          setLoadingKap(false);
+        }
       }
-      setLoadingKap(false);
     };
 
     void loadKap();
