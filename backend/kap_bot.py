@@ -1,3 +1,4 @@
+import re
 import time
 import threading
 from datetime import datetime
@@ -6,75 +7,106 @@ import requests
 KAP_CACHE = []
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
 }
 
-def extract_time_str(raw_time):
-    if not raw_time:
-        return "--:--"
-    raw_str = str(raw_time).strip()
-    if "T" in raw_str:
-        return raw_str.split("T")[-1][:8]
-    if len(raw_str) >= 8:
-        return raw_str[-8:]
-    return "--:--"
+def extract_ticker(title: str, company: str) -> str:
+    full = f"{title} {company}"
+    m = re.search(r"\[([A-Z0-9]{3,6})\]|\(([A-Z0-9]{3,6})\)|\b([A-Z]{4,5})\b", full)
+    if m:
+        code = m.group(1) or m.group(2) or m.group(3)
+        if code not in ["KAP", "BIST", "SANAYI", "GENEL", "RAPOR"]:
+            return code
+    return "BIST"
 
-def fetch_kap_feed():
-    global KAP_CACHE
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    url = f"https://www.kap.org.tr/tr/api/disclosures?fromDate={today_str}&toDate={today_str}&_t={int(time.time()*1000)}"
-    
+def fetch_kap_disclosures():
+    disclosures = []
+    # 1. Öncelik: Mynet Finans Canlı KAP Akışı
     try:
-        res = requests.get(url, headers=HEADERS, timeout=8)
+        url = f"https://finans.mynet.com/api/kap/haberler?_={int(time.time()*1000)}"
+        res = requests.get(url, headers=HEADERS, timeout=6)
         if res.status_code == 200:
-            raw_data = res.json()
-            if not isinstance(raw_data, list):
-                return
+            data = res.json()
+            items = data.get("data") if isinstance(data, dict) else data
+            if isinstance(items, list) and len(items) > 0:
+                for item in items[:40]:
+                    disc_id = item.get("id") or item.get("disclosureId") or item.get("disclosureIndex")
+                    raw_time = item.get("date") or item.get("publishDate") or ""
+                    
+                    time_str = "--:--"
+                    if " " in str(raw_time):
+                        time_str = str(raw_time).split(" ")[-1][:8]
+                    elif "T" in str(raw_time):
+                        time_str = str(raw_time).split("T")[-1][:8]
+                    elif len(str(raw_time)) >= 8:
+                        time_str = str(raw_time)[-8:]
 
-            parsed = []
-            for item in raw_data[:40]:
-                basic = item.get("basic", item)
-                disc_id = basic.get("disclosureIndex") or basic.get("id") or basic.get("disclosureId")
-                if not disc_id:
-                    continue
+                    company = item.get("companyTitle") or item.get("companyName") or "KAP Bildirimi"
+                    subject = item.get("subject") or item.get("title") or "Özel Durum Açıklaması"
+                    
+                    code = item.get("stockCode") or item.get("stockCodes") or ""
+                    if not code or code in ["KAP", "BIST"]:
+                        code = extract_ticker(subject, company)
 
-                raw_time = basic.get("publishDate") or basic.get("disclosureTime") or ""
-                time_str = extract_time_str(raw_time)
-
-                code = basic.get("stockCodes") or basic.get("stockCode") or basic.get("relatedStocks") or "BIST"
-                if "," in code:
-                    code = code.split(",")[0].strip()
-
-                title = basic.get("companyTitle") or basic.get("companyName") or "KAP Bildirimi"
-                subject = basic.get("title") or basic.get("disclosureTitle") or "Özel Durum Açıklaması"
-                summary = basic.get("summary") or subject
-
-                parsed.append({
-                    "id": int(disc_id),
-                    "code": code.strip().upper(),
-                    "type": (basic.get("disclosureClass") or basic.get("disclosureType") or "ÖDA").upper(),
-                    "title": title.strip(),
-                    "subject": subject.strip(),
-                    "summary": summary.strip(),
-                    "time": time_str,
-                    "url": f"https://www.kap.org.tr/tr/Bildirim/{disc_id}"
-                })
-
-            # ID'ye göre sırala: En büyük ID = En yeni KAP!
-            parsed.sort(key=lambda x: x["id"], reverse=True)
-            KAP_CACHE = parsed
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] KAP Bildirimleri güncellendi: {len(KAP_CACHE)} adet.")
+                    disclosures.append({
+                        "id": int(disc_id) if str(disc_id).isdigit() else int(time.time()),
+                        "code": code.upper().strip(),
+                        "type": (item.get("disclosureClass") or item.get("type") or "ÖDA").upper(),
+                        "title": company.strip(),
+                        "subject": subject.strip(),
+                        "summary": item.get("summary") or subject.strip(),
+                        "time": time_str,
+                        "url": f"https://www.kap.org.tr/tr/Bildirim/{disc_id}" if str(disc_id).isdigit() else f"https://finans.mynet.com/haberler/detay/{disc_id}"
+                    })
+                return disclosures
     except Exception as e:
-        print("KAP Fetch Hatası:", e)
+        print("[KAP Bot] Mynet hatası:", e)
 
-def kap_worker():
+    # 2. Öncelik (Yedek): Bigpara KAP Akışı
+    try:
+        url_bp = "https://bigpara.hurriyet.com.tr/api/v1/hisse/kaphaberleri"
+        res = requests.get(url_bp, headers=HEADERS, timeout=6)
+        if res.status_code == 200:
+            data = res.json()
+            for item in data.get("data", [])[:40]:
+                disc_id = item.get("id")
+                time_str = item.get("tarih", "")[-8:] if item.get("tarih") else "--:--"
+                title = item.get("baslik", "")
+                code = item.get("kod") or extract_ticker(title, "")
+                
+                disclosures.append({
+                    "id": int(disc_id) if str(disc_id).isdigit() else int(time.time()),
+                    "code": code.upper().strip(),
+                    "type": "ÖDA",
+                    "title": item.get("sirket", title),
+                    "subject": title,
+                    "summary": item.get("ozet", title),
+                    "time": time_str,
+                    "url": f"https://www.kap.org.tr/tr/Bildirim/{disc_id}" if str(disc_id).isdigit() else "#"
+                })
+            return disclosures
+    except Exception as e:
+        print("[KAP Bot] Bigpara hatası:", e)
+
+    return disclosures
+
+def run_kap_worker():
+    global KAP_CACHE
     while True:
-        fetch_kap_feed()
-        time.sleep(15)  # 15 saniyede bir yeni KAP kontrolü
+        try:
+            items = fetch_kap_disclosures()
+            if items:
+                items.sort(key=lambda x: x["id"], reverse=True)
+                KAP_CACHE = items
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] [KAP Bot] {len(KAP_CACHE)} bildirim hazır.")
+        except Exception as e:
+            print("[KAP Bot] Worker hatası:", e)
+        time.sleep(15)
 
-def start_kap_worker():
-    t = threading.Thread(target=kap_worker, daemon=True)
+def start_kap_bot():
+    t = threading.Thread(target=run_kap_worker, daemon=True)
     t.start()
 
-def get_latest_kap():
+def get_kap_data():
     return KAP_CACHE
