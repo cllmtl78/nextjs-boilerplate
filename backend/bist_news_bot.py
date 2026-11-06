@@ -1,8 +1,12 @@
 import re
 import calendar
+import hashlib
 import time
 import threading
+import unicodedata
 from datetime import datetime, timezone, timedelta
+from urllib.parse import unquote, urlsplit
+import requests
 import feedparser
 from bs4 import BeautifulSoup
 from news_day import only_today
@@ -11,11 +15,12 @@ NEWS_CACHE = []
 
 SOURCES = [
     {"badge": "AA FİNANS", "url": "https://www.aa.com.tr/tr/rss/default?cat=ekonomi"},
-    {"badge": "EKONOMİM", "url": "https://www.ekonomim.com/rss"},
+    {"badge": "EKONOMİM", "url": "https://www.ekonomim.com/rss", "categories": ("ekonomi", "finans"), "host": "ekonomim.com"},
     {"badge": "CNBC-E", "url": "https://www.cnbce.com/rss"},
     {"badge": "EKONOMİST", "url": "https://www.ekonomist.com.tr/rss"},
     {"badge": "FOREKS", "url": "https://www.foreks.com/rss"},
     {"badge": "NTV PARA", "url": "https://www.ntv.com.tr/ntvpara.rss"},
+    {"badge": "TRT HABER", "url": "https://www.trthaber.com/sondakika.rss", "categories": ("ekonomi",), "host": "trthaber.com"},
 ]
 
 HEADERS = {
@@ -37,17 +42,52 @@ def parse_entry_time(entry):
         return dt.strftime("%H:%M:%S"), int(dt.timestamp() * 1000), dt
     return "--:--", None, None
 
+
+def category_slug(value):
+    text = str(value or "").casefold().replace("ı", "i")
+    return "".join(char for char in unicodedata.normalize("NFKD", text) if not unicodedata.combining(char)).strip()
+
+
+def matches_source_category(entry, source):
+    allowed = source.get("categories")
+    if not allowed:
+        return True
+    link = urlsplit(str(entry.get("link", "")))
+    expected_host = source["host"]
+    if link.hostname not in (expected_host, f"www.{expected_host}"):
+        return False
+    # RSS <category> appears in feedparser's tags; some feeds expose only a
+    # section URL. Never guess a category from words in a headline.
+    categories = [category_slug(tag.get("term", "")) for tag in entry.get("tags", []) if isinstance(tag, dict)]
+    categories.append(category_slug(entry.get("category", "")))
+    for category in categories:
+        if category in allowed:
+            return True
+        path = [category_slug(part) for part in urlsplit(category).path.split("/") if part]
+        if path and path[-1] in allowed:
+            return True
+    path = [category_slug(unquote(part)) for part in link.path.split("/") if part]
+    # EKONOMİM: /ekonomi/... or /finans/...; TRT: /haber/ekonomi/...
+    if path and path[0] in allowed:
+        return True
+    return len(path) > 1 and path[0] == "haber" and path[1] in allowed
+
+
 def fetch_feed(source):
     items = []
     try:
-        feed = feedparser.parse(source["url"], request_headers=HEADERS)
+        response = requests.get(source["url"], headers=HEADERS, timeout=(5, 10))
+        response.raise_for_status()
+        feed = feedparser.parse(response.content)
         if not feed.entries:
             return items
 
         tz_tr = timezone(timedelta(hours=3))
         today_date = datetime.now(tz=tz_tr).date()
 
-        for entry in feed.entries[:15]:
+        for entry in feed.entries:
+            if not matches_source_category(entry, source):
+                continue
             title = clean_html(getattr(entry, "title", ""))
             if not title or len(title) < 6:
                 continue
@@ -58,9 +98,10 @@ def fetch_feed(source):
 
             summary = clean_html(getattr(entry, "summary", "") or getattr(entry, "description", ""))
             link = getattr(entry, "link", "#")
+            identity = str(getattr(entry, "id", "") or (link if urlsplit(str(link)).scheme in ("http", "https") else "") or title)
 
             items.append({
-                "id": f"{source['badge'].lower()}_{ts}_{hash(title) % 10000}",
+                "id": f"{source['badge'].lower()}_{hashlib.sha256(identity.encode('utf-8')).hexdigest()[:24]}",
                 "zaman": time_str,
                 "time": time_str,
                 "tarih": "Bugün",
@@ -74,7 +115,20 @@ def fetch_feed(source):
             })
     except Exception as e:
         print(f"[BIST Bot] {source['badge']} hatası:", e)
-    return items
+    # Filter the entire feed before limiting, otherwise general-news items can
+    # crowd economy stories out of the first 15 entries.
+    return sorted(items, key=lambda item: item["timestamp"], reverse=True)[:15]
+
+
+def sort_and_deduplicate(items):
+    seen, result = set(), []
+    for item in sorted(items, key=lambda item: item["timestamp"], reverse=True):
+        # Full headline: a common 35-character prefix does not mean same story.
+        key = re.sub(r"[^\w]", "", item["baslik"].casefold())
+        if key not in seen:
+            seen.add(key)
+            result.append(item)
+    return result
 
 def run_news_worker():
     global NEWS_CACHE
@@ -86,15 +140,7 @@ def run_news_worker():
                 all_collected.extend(fetch_feed(src))
 
             if all_collected:
-                seen = set()
-                unique_news = []
-                for n in all_collected:
-                    key = re.sub(r"[^a-zA-Z0-9çğıöşüÇĞİÖŞÜ]", "", n["baslik"].lower())[:35]
-                    if key not in seen:
-                        seen.add(key)
-                        unique_news.append(n)
-
-                unique_news.sort(key=lambda x: x["timestamp"], reverse=True)
+                unique_news = sort_and_deduplicate(all_collected)
                 NEWS_CACHE = only_today(unique_news)
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] [BIST Bot] {len(NEWS_CACHE)} haber hazır.")
         except Exception as e:
