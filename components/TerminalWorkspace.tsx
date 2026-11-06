@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import MarketIntelligence from "@/components/MarketIntelligence";
 import KapContent, { type KapContentBlock } from "@/components/KapContent";
+import { cleanWireText as cleanGlobalWireText, istanbulDay } from "@/lib/wire-text";
 
 export type TerminalHaber = {
   id: string;
@@ -36,8 +37,7 @@ export interface GlobalNewsItem {
   rawClean?: string;
 }
 
-const CACHE_KEY_GLOBAL = "bpt_global_news_v2";
-const CACHE_KEY_TRANSLATIONS = "global_translations_cache_v2";
+const CACHE_KEY_GLOBAL = "bpt_global_walter_v1";
 
 // Ticker ve gereksiz karakterleri temizleyen yardımcı fonksiyon
 export function cleanWireText(text: string): string {
@@ -736,165 +736,6 @@ export const decodeHtmlEntities = (str?: string | null): string => {
 };
 
 
-const ACRONYMS_LIST: Record<string, string> = {
-  us: "US",
-  eu: "EU",
-  fed: "FED",
-  sec: "SEC",
-  dod: "DOD",
-  "s&p": "S&P",
-  ceo: "CEO",
-  cfo: "CFO",
-  cpi: "CPI",
-  gdp: "GDP",
-  pmi: "PMI",
-  q1: "Q1",
-  q2: "Q2",
-  q3: "Q3",
-  q4: "Q4",
-  ai: "AI",
-  ipo: "IPO",
-  etf: "ETF",
-};
-
-// Tamamen BÜYÜK HARF olan metinleri doğal cümle düzenine çevirir, finansal kısaltmaları korur
-export function normalizeAllCapsText(raw: string): string {
-  if (!raw) return "";
-  const letters = raw.replace(/[^a-zA-Z]/g, "");
-  const upper = raw.replace(/[^A-Z]/g, "");
-  if (letters.length > 6 && upper.length / letters.length > 0.65) {
-    let lower = raw.toLowerCase();
-    // Cümle başı veya ayraç sonrası ilk harfi büyük harf yap
-    lower = lower.charAt(0).toUpperCase() + lower.slice(1);
-    lower = lower.replace(/(?:^|[.!?·]\s+)([a-z])/g, (match) => match.toUpperCase());
-
-    // Borsa ve kurum kısaltmalarını koru
-    for (const [key, val] of Object.entries(ACRONYMS_LIST)) {
-      const reg = new RegExp(`\\b${key}\\b`, "gi");
-      lower = lower.replace(reg, val);
-    }
-    return lower;
-  }
-  return raw;
-}
-
-// Finansal terminoloji eşleme ve baş harf formatlama
-export function applyFinancialTerminology(str: string): string {
-  if (!str) return "";
-  let out = str
-    .replace(/\bgrevlere\b/gi, "saldırılara")
-    .replace(/\bgrevleri\b/gi, "saldırıları")
-    .replace(/\bgrevler\b/gi, "saldırılar")
-    .replace(/\bgreve\b/gi, "saldırıya")
-    .replace(/\bgrevi\b/gi, "saldırıyı")
-    .replace(/\bgrev\b/gi, "saldırı")
-    .replace(/\bs&p 500\b/gi, "S&P 500")
-    .replace(/ABD Savunma Bakanlığı\s*\([^)]*\)/gi, "ABD Savunma Bakanlığı (DoD)")
-    .replace(/\bdod\b/gi, "ABD Savunma Bakanlığı (DoD)")
-    .replace(/(?:ABD Savunma Bakanlığı\s*\()?ABD Savunma Bakanlığı \(DoD\)\)?/gi, "ABD Savunma Bakanlığı (DoD)")
-    .replace(/\bfed\b/gi, "Fed")
-    .replace(/\bsec\b/gi, "SEC")
-    .replace(/^["'“”«»]+|["'“”«»]+$/g, "")
-    .trim();
-
-  // İlk harf ve ' · ' ayracından sonraki harfi büyük yap
-  out = out.charAt(0).toUpperCase() + out.slice(1);
-  out = out.replace(/(·\s+)([a-zğüşıöç])/gi, (_, prefix, char) => prefix + char.toUpperCase());
-  return out;
-}
-
-export const translateGlobalFeed = async (text: string): Promise<string> => {
-  if (!text) return "";
-
-  let clean = text
-    .replace(/\$[A-Z]{1,6}\b/g, "")
-    .replace(/^\[.*?\]\s*·?\s*/gi, "")
-    .replace(/^[\s\*\/\-]+/, "")
-    .replace(/\s+\*\s*/g, " · ")
-    .replace(/[•·]+$/, "")
-    .trim();
-
-  if (!clean) return "";
-
-  // ALL CAPS normalizasyonu
-  clean = normalizeAllCapsText(clean);
-
-  // Cache kontrolü (v2 key kullan ki eski İngilizce kalan önbellek ezilsin)
-  const cacheKey = "tr_v2_" + clean.slice(0, 35).toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (typeof window !== "undefined") {
-    try {
-      const cached = localStorage.getItem(cacheKey);
-      if (cached && !cached.toLowerCase().includes("grev") && !cached.startsWith("/")) {
-        return cached;
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  // 1. ADIM: Sunucu tarafı /api/translate rotasını çağır (Gemini & Free Translate entegre)
-  try {
-    const res = await fetch("/api/translate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: clean }),
-      signal: AbortSignal.timeout(4500),
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      const result = data?.translated?.trim();
-      if (result && result !== clean) {
-        const formatted = applyFinancialTerminology(result);
-        if (typeof window !== "undefined") {
-          try {
-            localStorage.setItem(cacheKey, formatted);
-          } catch {
-            // ignore
-          }
-        }
-        return formatted;
-      }
-    }
-  } catch {
-    // ignore
-  }
-
-  // 2. ADIM: İstemci tarafı doğrudan Google GTX Nöral Çeviri API'si (0-key, ultra hızlı)
-  try {
-    const preClean = clean
-      .replace(/\bstrikes\b/gi, "military operations")
-      .replace(/\bstrike\b/gi, "military operation");
-
-    const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=tr&dt=t&q=${encodeURIComponent(preClean)}`;
-    const gtxRes = await fetch(gtxUrl, { signal: AbortSignal.timeout(4000) });
-    if (gtxRes.ok) {
-      const gtxData = await gtxRes.json();
-      if (Array.isArray(gtxData) && Array.isArray(gtxData[0])) {
-        const parts = gtxData[0].map((chunk: [string, string]) => chunk[0]).filter(Boolean);
-        const joined = parts.join("").trim();
-        if (joined) {
-          const formatted = applyFinancialTerminology(joined);
-          if (typeof window !== "undefined") {
-            try {
-              localStorage.setItem(cacheKey, formatted);
-            } catch {
-              // ignore
-            }
-          }
-          return formatted;
-        }
-      }
-    }
-  } catch {
-    // ignore
-  }
-
-  return clean;
-};
-
-export const translateFinancialWithGemini = translateGlobalFeed;
-
 export default function TerminalWorkspace() {
   const [bistHaberleri, setBistHaberleri] = useState<TerminalHaber[]>(() => {
     if (typeof window === "undefined") return [];
@@ -927,7 +768,7 @@ export default function TerminalWorkspace() {
       const cached = localStorage.getItem(CACHE_KEY_GLOBAL);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed.filter((item: GlobalNewsItem) => item.id?.startsWith("WalterBloomberg/") && Number.isFinite(item.timestamp) && istanbulDay(item.timestamp) === istanbulDay(Date.now()));
       }
     } catch {
       // ignore
@@ -961,7 +802,7 @@ export default function TerminalWorkspace() {
       const cached = localStorage.getItem(CACHE_KEY_GLOBAL);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return false;
+        if (Array.isArray(parsed) && parsed.some((item: GlobalNewsItem) => Number.isFinite(item.timestamp) && istanbulDay(item.timestamp) === istanbulDay(Date.now()))) return false;
       }
     } catch {
       // ignore
@@ -1012,98 +853,34 @@ export default function TerminalWorkspace() {
 
   const knownIdsRef = useRef(new Set<string>());
   const isInitialLoadRef = useRef(true);
-  const translationsCacheRef = useRef(new Map<string, string>());
+  const globalRequestRef = useRef(false);
+  const [globalFeedUnavailable, setGlobalFeedUnavailable] = useState(false);
   // KAP bildirimlerinin saatlerini bir kez alındıktan sonra kilitleyen referans haritası
   const lockedKapTimesRef = useRef(new Map<number, string>());
 
   const loadGlobalNews = useCallback(async () => {
+    if (globalRequestRef.current) return;
+    globalRequestRef.current = true;
     try {
-      let items: { id: string; zaman: string; timestamp: number; rawText: string; baslik: string }[] = [];
-
-      try {
-        const res = await fetch("/api/telegram-news", { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.items && Array.isArray(data.items) && data.items.length > 0) {
-            items = data.items;
-          }
-        }
-      } catch {
-        // ignore
-      }
-
-      if (items.length === 0) {
-        try {
-          const proxyUrl =
-            "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://t.me/s/trad_fin");
-          const proxyRes = await fetch(proxyUrl);
-          if (proxyRes.ok) {
-            const html = await proxyRes.text();
-            const blocks = html.split('<div class="tgme_widget_message_wrap');
-            for (let i = 1; i < blocks.length; i++) {
-              const blk = blocks[i];
-              const textM = blk.match(/<div class="tgme_widget_message_text[^>]*>([\s\S]*?)<\/div>/i);
-              const timeM = blk.match(/<time[^>]*datetime="([^"]*)"[^>]*>([\s\S]*?)<\/time>/i);
-              const postM = blk.match(/data-post="([^"]*)"/i);
-
-              if (textM && textM[1]) {
-                const raw = textM[1]
-                  .replace(/<br\s*[\/]?>/gi, " ")
-                  .replace(/<[^>]+>/g, " ")
-                  .replace(/&#036;/g, "$")
-                  .replace(/&#39;/g, "'")
-                  .replace(/&quot;/g, '"')
-                  .replace(/&amp;/g, "&")
-                  .trim();
-
-                if (!raw) continue;
-                const { timestamp, zaman: zStr } = normalizeNewsDate(timeM?.[1]);
-                const pId = postM ? postM[1] : `tg_proxy_${timestamp}_${i}`;
-                const cleanText = cleanWireText(raw);
-                items.push({
-                  id: pId,
-                  zaman: zStr,
-                  timestamp,
-                  rawText: raw,
-                  baslik: cleanText,
-                });
-              }
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      if (items.length > 0) {
-        items.sort((a, b) => b.timestamp - a.timestamp);
-
-        const translatedItems: GlobalNewsItem[] = await Promise.all(
-          items.slice(0, 30).map(async (item) => {
-            const rawContent = item.rawText || item.baslik;
-            const trTitle = await translateGlobalFeed(rawContent);
-            return {
-              id: item.id,
-              zaman: item.zaman,
-              timestamp: item.timestamp,
-              baslik: trTitle,
-              rawText: item.rawText,
-              rawClean: rawContent,
-            };
-          })
-        );
-
-        setGlobalHaberler(translatedItems);
-
-        try {
-          localStorage.setItem(CACHE_KEY_GLOBAL, JSON.stringify(translatedItems));
-        } catch {
-          // ignore
-        }
-      }
+      const res = await fetch("/api/telegram-news", { cache: "no-store", signal: AbortSignal.timeout(45000) });
+      if (!res.ok) throw new Error("Global haber akışı alınamadı");
+      const data = await res.json();
+      if (!Array.isArray(data.items)) return;
+      setGlobalFeedUnavailable(false);
+      const items: GlobalNewsItem[] = data.items
+        .filter((item: GlobalNewsItem) => item.id?.startsWith("WalterBloomberg/") && typeof item.baslik === "string" && istanbulDay(item.timestamp) === istanbulDay(Date.now()))
+        .map((item: GlobalNewsItem) => ({ ...item, baslik: cleanGlobalWireText(item.baslik) }))
+        .filter((item: GlobalNewsItem) => item.baslik)
+        .sort((a: GlobalNewsItem, b: GlobalNewsItem) => b.timestamp - a.timestamp)
+        .slice(0, 200);
+      setGlobalHaberler(items);
+      try { localStorage.setItem(CACHE_KEY_GLOBAL, JSON.stringify(items)); } catch { /* Cache is optional. */ }
     } catch {
-      // ignore
+      // Retain already translated news during temporary service failures.
+      setGlobalFeedUnavailable(true);
+      setGlobalHaberler(current => current.filter(item => istanbulDay(item.timestamp) === istanbulDay(Date.now())));
     } finally {
+      globalRequestRef.current = false;
       setLoadingGlobal(false);
     }
   }, []);
@@ -1171,20 +948,6 @@ export default function TerminalWorkspace() {
   }, [loadNews]);
 
   useEffect(() => {
-    try {
-      const savedTrans = localStorage.getItem(CACHE_KEY_TRANSLATIONS);
-      if (savedTrans) {
-        const parsed = JSON.parse(savedTrans);
-        if (parsed && typeof parsed === "object") {
-          Object.entries(parsed).forEach(([k, v]) => {
-            if (typeof v === "string") translationsCacheRef.current.set(k, v);
-          });
-        }
-      }
-    } catch {
-      // ignore
-    }
-
     const timer = setTimeout(() => {
       void loadGlobalNews();
     }, 50);
@@ -1359,15 +1122,13 @@ export default function TerminalWorkspace() {
                   <span>Küresel canlı akış bekleniyor...</span>
                 </div>
                 <p className="text-[11px] text-slate-500 max-w-[320px]">
-                  Telegram @trad_fin bağlantısı kuruluyor.
+                  {globalFeedUnavailable ? "Türkçe haber akışına şu anda ulaşılamıyor." : "Türkçe küresel haberler hazırlanıyor."}
                 </p>
               </div>
             ) : (
               globalHaberler.map((item, index) => {
                 const itemTime = item.zaman || parseNewsTime(item.timestamp);
-                const itemText = (item.baslik || "")
-                  .replace(/^[\s\*\/\-]+/, "")
-                  .trim();
+                const itemText = cleanGlobalWireText(item.baslik || "");
 
                 return (
                   <div
