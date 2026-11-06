@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # İki bağımsız botu içeri al
 from bist_news_bot import start_bist_news_bot, get_bist_news_data
 from kap_bot import start_kap_bot, get_kap_data
+from global_news_bot import start_global_news_bot, get_global_news_data
 
 app = FastAPI(title="BPT Terminal Engine")
 
@@ -19,6 +20,7 @@ app.add_middleware(
 # Botları arka planda bağımsız olarak başlat
 start_bist_news_bot()
 start_kap_bot()
+start_global_news_bot()
 
 @app.get("/")
 def health():
@@ -39,6 +41,11 @@ def api_bist_news():
 def api_kap():
     data = get_kap_data()
     return {"status": "ok", "count": len(data), "data": data}
+
+
+@app.get("/api/global-news")
+def api_global_news():
+    return get_global_news_data()
 
 if __name__ == "__main__":
     import uvicorn

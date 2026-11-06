@@ -862,7 +862,7 @@ export default function TerminalWorkspace() {
     if (globalRequestRef.current) return;
     globalRequestRef.current = true;
     try {
-      const res = await fetch("/api/telegram-news", { cache: "no-store", signal: AbortSignal.timeout(45000) });
+      const res = await fetch(`${BACKEND_URL}/api/global-news`, { cache: "no-store", signal: AbortSignal.timeout(6000) });
       if (!res.ok) throw new Error("Global haber akışı alınamadı");
       const data = await res.json();
       if (!Array.isArray(data.items)) return;

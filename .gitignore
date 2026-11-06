@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Global news cache (source text and translations; no credentials)
+/backend/.data/
+__pycache__/
