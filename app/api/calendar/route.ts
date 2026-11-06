@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { translateCalendarTitles } from "@/lib/translate-calendar";
 
 export const dynamic = "force-dynamic";
 
 export interface EconomicCalendarEvent {
   id: string;
   title: string;
+  originalTitle?: string;
   country: "TR" | "US" | "EU" | "CN" | "JP";
   date: string;
   time: string;
@@ -177,6 +179,7 @@ export async function GET() {
       );
 
       if (filtered.length > 0) {
+        const titles = await translateCalendarTitles(filtered.map((item: { title?: string }) => item.title || ""));
         const events: EconomicCalendarEvent[] = filtered.map(
           (item: {
             id?: string | number;
@@ -218,7 +221,8 @@ export async function GET() {
 
             return {
               id: item.id ? String(item.id) : `tv_${idx}`,
-              title: item.title || "Ekonomik Gösterge",
+              title: titles.get(item.title || "") || "Ekonomik Gösterge",
+              originalTitle: item.title || "",
               country: (item.country || "TR") as "TR" | "US" | "EU" | "CN" | "JP",
               date: rawDate,
               time: timeStr,
