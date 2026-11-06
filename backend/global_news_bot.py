@@ -3,6 +3,7 @@ import hashlib
 import html
 import json
 import logging
+import math
 import os
 from pathlib import Path
 import re
@@ -10,6 +11,7 @@ import sqlite3
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 
 import requests
 from bs4 import BeautifulSoup, UnicodeDammit
@@ -24,8 +26,51 @@ DEFAULT_DB = Path(__file__).parent / ".data" / "global-news.sqlite3"
 
 class ServiceHTTPError(RuntimeError):
     """Only an upstream name and status code, never request headers or bodies."""
-    def __init__(self, source, status):
+    def __init__(self, source, status, retry_after=0, quota_scope="unknown"):
         super().__init__(f"{source} HTTP {int(status)}")
+        self.source = source
+        self.status = int(status)
+        self.retry_after = retry_after
+        self.quota_scope = quota_scope
+
+
+def gemini_http_error(response):
+    """Read only retry hints and quota identifiers; never log the error body."""
+    delays, scopes = [0], []
+    header = response.headers.get("Retry-After")
+    if isinstance(header, str):
+        try:
+            delays.append(float(header))
+        except ValueError:
+            try:
+                date = parsedate_to_datetime(header)
+                delays.append(date.timestamp() - time.time())
+            except (ValueError, TypeError, OverflowError):
+                pass
+    try:
+        body = response.json()
+        error = body.get("error", {}) if isinstance(body, dict) else {}
+        details = error.get("details", []) if isinstance(error, dict) else []
+        for detail in details if isinstance(details, list) else []:
+            if not isinstance(detail, dict):
+                continue
+            delay = detail.get("retryDelay")
+            if isinstance(delay, str) and re.fullmatch(r"\d+(?:\.\d+)?s", delay):
+                delays.append(float(delay[:-1]))
+            violations = detail.get("violations", [])
+            for violation in violations if isinstance(violations, list) else []:
+                if not isinstance(violation, dict):
+                    continue
+                identifier = " ".join(str(violation.get(key, "")) for key in ("quotaId", "quotaMetric")).lower()
+                if "perday" in identifier or "per_day" in identifier:
+                    scopes.append("daily")
+                elif "perminute" in identifier or "per_minute" in identifier:
+                    scopes.append("minute")
+    except (ValueError, TypeError):
+        pass
+    delay = min(86400, max(value for value in delays if math.isfinite(value)))
+    scope = "daily" if "daily" in scopes else "minute" if "minute" in scopes else "unknown"
+    return ServiceHTTPError("Gemini", response.status_code, max(0, delay), scope)
 
 
 def failure_category(error):
@@ -111,6 +156,7 @@ class GlobalNewsStore:
                 CREATE TABLE IF NOT EXISTS global_translations (
                     digest TEXT PRIMARY KEY, text TEXT NOT NULL, saved_at REAL NOT NULL);
                 CREATE INDEX IF NOT EXISTS global_post_date ON global_posts(timestamp);
+                CREATE TABLE IF NOT EXISTS global_provider_state (name TEXT PRIMARY KEY, value TEXT NOT NULL);
             ''')
             for row in self.connection.execute("SELECT id,raw_text,digest FROM global_posts").fetchall():
                 digest = self.digest(row["raw_text"])
@@ -175,11 +221,36 @@ class GlobalNewsStore:
         with self.lock, self.connection:
             self.connection.executemany("UPDATE global_posts SET retry_at=? WHERE digest=?", [(time.time()+180, item["digest"]) for item in batch])
 
+    def provider_state(self):
+        with self.lock:
+            return dict(self.connection.execute("SELECT name,value FROM global_provider_state").fetchall())
+
+    def translation_retry_at(self):
+        value = float(self.provider_state().get("retry_at", "0"))
+        return value if math.isfinite(value) else 0
+
+    def rate_limited(self, error):
+        with self.lock, self.connection:
+            attempts = min(6, int(self.provider_state().get("attempts", "0")) + 1)
+            delay = max(min(1800, 60 * 2 ** (attempts-1)), error.retry_after,
+                        3600 if error.quota_scope == "daily" else 0)
+            self.connection.executemany("INSERT OR REPLACE INTO global_provider_state VALUES(?,?)", [
+                ("retry_at", str(time.time()+delay)), ("attempts", str(attempts)), ("quota_scope", error.quota_scope)])
+        return int(math.ceil(delay))
+
+    def clear_rate_limit(self):
+        with self.lock, self.connection:
+            self.connection.execute("DELETE FROM global_provider_state")
+
     def snapshot(self, now=None):
         rows = self.rows(now)
         data = [{"id": row["id"], "timestamp": row["timestamp"], "zaman": row["time"],
                  "baslik": row["translation"]} for row in rows if row["translation"]]
+        retry_at = self.translation_retry_at()
+        state = "rate_limited" if retry_at > time.time() else "pending" if len(rows)>len(data) else "ready"
         return {"status": "ok", "success": True, "count": len(data), "pending": len(rows)-len(data),
+                "translation_state": state,
+                "translation_retry_at": datetime.fromtimestamp(retry_at, timezone.utc).isoformat() if retry_at>time.time() else None,
                 "data": data, "items": data}
 
     def prune(self, now=None):
@@ -249,7 +320,7 @@ class GlobalNewsBot:
                   "contents": [{"role": "user", "parts": [{"text": json.dumps({"news": [{"id": item["id"], "text": item["text"]} for item in batch]}, ensure_ascii=False)}]}],
                   "generationConfig": {"temperature": 0.1, "responseMimeType": "application/json", "responseSchema": schema}})
         if response.status_code != 200:
-            raise ServiceHTTPError("Gemini", response.status_code)
+            raise gemini_http_error(response)
         parts = response.json().get("candidates", [{}])[0].get("content", {}).get("parts", [])
         text = "".join(part.get("text", "") for part in parts)
         return json.loads(text).get("translations")
@@ -259,12 +330,19 @@ class GlobalNewsBot:
             self.collect(now)
         except Exception as exc:
             logger.warning("[Global] Telegram toplama başarısız (%s); kayıtlı haberler korunuyor", failure_category(exc))
-        batch = self.store.pending(now)
+        batch = self.store.pending(now) if self.store.translation_retry_at() <= time.time() else []
         if batch and (os.environ.get("GEMINI_API_KEY") or self.translator != self.translate):
             try:
                 count = self.store.save_translations(batch, self.translator(batch))
+                if count:
+                    self.store.clear_rate_limit()
                 print(f"[Global] {count} WalterBloomberg haberi Türkçeye çevrildi.", flush=True)
             except Exception as exc:
+                if isinstance(exc, ServiceHTTPError) and exc.source == "Gemini" and exc.status == 429:
+                    delay = self.store.rate_limited(exc)
+                    scope = "günlük" if exc.quota_scope == "daily" else "dakikalık" if exc.quota_scope == "minute" else "belirtilmemiş"
+                    logger.warning("[Global] Gemini HTTP 429: kota türü %s. Tüm çeviri istekleri %s saniye bekletiliyor; haber toplama sürüyor.", scope, delay)
+                    return
                 self.store.defer(batch)
                 # Exception bodies may contain request metadata; log only safe category.
                 logger.warning("[Global] Çeviri başarısız (%s). GEMINI_API_KEY, model ve kotayı kontrol edin.", failure_category(exc))

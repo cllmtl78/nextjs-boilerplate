@@ -40,3 +40,11 @@ Testler kontrollü kaynak HTML'i ve çeviri yanıtları kullanır; canlı çevir
 Çeviri talimatları `backend/global_translation_prompt.txt` dosyasındadır. Başlık, paragraf ve madde düzeni Telegram HTML'inden arayüze kadar korunur. Madde veya paragraf yapısını kaybeden yanıtlar kaydedilmez ve tekrar denenir. Çeviri promptu kaynak dışı yorum, analiz, çıkarım, neden-sonuç ilişkisi veya yatırım tavsiyesi eklemeyi yasaklar. Bu yapısal kontroller anlam doğruluğunu otomatik olarak garanti etmez; örnekler gerçek model yanıtlarıyla da incelenmelidir.
 
 Prompt içeriği çeviri önbelleği anahtarına dahildir. Prompt veya biçim sürümü değiştiğinde eski düz metin çevirileri yeni kurallarla tekrar üretilir. Haberler kademeli çevrildiği için yeniden dağıtımdan sonra geçmişin dolması birkaç dakika sürebilir.
+
+## Gemini 429 (kota / hız sınırı)
+
+HTTP 429, Gemini'nin kota veya hız sınırı yanıtıdır. Tek başına API anahtarının geçersiz olduğunu göstermez. Uygulamanın `/api/global-news` için HTTP 200 vermesi ise yalnızca haber API'sine erişilebildiğini gösterir; hazır haber sayısı `count`, bekleyen çeviri sayısı `pending` alanındadır.
+
+429 alınınca yalnızca başarısız grup değil tüm Gemini çeviri kuyruğu bekletilir. `Retry-After` ve Google `RetryInfo` süreleri dikkate alınır; tekrar eden sınır hatalarında bekleme 1 dakikadan 30 dakikaya artar. Google günlük kota sınırı bildirmişse en az 1 saat beklenir; bu saat dolunca kotanın açılacağı garanti edilmez. Telegram toplama ve hazır haberleri sunma devam eder. Bekleme SQLite'a kaydedilir; dosya korunduğunda süreç yeniden başlatılsa da korunur. Başarılı çeviriden sonra normal akışa dönülür. API, `translation_state` ve UTC `translation_retry_at` ile bu durumu açıklar. Yanıt gövdesi veya anahtar loglanmaz.
+
+Google AI Studio'da https://aistudio.google.com/usage üzerinden aynı proje/modelin kullanımını ve limitlerini kontrol edin. Günlük kota dolmuşsa ilgili kota yenilenmesini beklemek veya proje kotasını/faturalandırmasını düzenlemek gerekir. Limit 0 görünüyorsa projede o modele kullanılabilir kota tanımlanmamış olabilir. Aynı projede yeni bir API anahtarı oluşturmak proje/model kotasını artırmaz. Kota ya da faturalandırma ayarları bu kod değişikliğiyle değiştirilmez.
