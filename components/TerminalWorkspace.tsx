@@ -177,8 +177,11 @@ export interface KapItem {
   subject: string;
   summary: string;
   time: string;
-  timestamp: number;
-  kapUrl: string;
+  timestamp?: number;
+  kapUrl?: string;
+  url?: string;
+  link?: string;
+  company?: string;
 }
 
 const CACHE_KEY_KAP_V4 = "bpt_kap_disclosures_v4";
@@ -1214,8 +1217,17 @@ export default function TerminalWorkspace() {
         if (res.ok) {
           const json = await res.json();
           if (json && Array.isArray(json.data) && json.data.length > 0) {
+            const mapped: KapItem[] = json.data.map((item: KapItem) => {
+              const kapLink = item.url || item.link || item.kapUrl || (item.id ? `https://www.kap.org.tr/tr/Bildirim/${item.id}` : "");
+              return {
+                ...item,
+                url: kapLink,
+                link: kapLink,
+                kapUrl: kapLink,
+              };
+            });
             if (isMounted) {
-              setKapBildirimleri(json.data);
+              setKapBildirimleri(mapped);
             }
           }
         }
@@ -1397,11 +1409,8 @@ export default function TerminalWorkspace() {
                 </div>
               ) : (
                 kapBildirimleri.map((item) => {
-                  const cleanSubject = getCleanKapSubject(item.subject, item.title, item.type, item.summary);
-                  const displayLine =
-                    item.title && item.title !== cleanSubject && !item.title.toLowerCase().includes(cleanSubject.toLowerCase())
-                      ? `${item.title} — ${cleanSubject}`
-                      : cleanSubject || item.title;
+                  const targetUrl = item.url || item.link || item.kapUrl || (item.id ? `https://www.kap.org.tr/tr/Bildirim/${item.id}` : "");
+                  const displaySubject = item.subject || item.title || "";
 
                   return (
                     <article
@@ -1422,16 +1431,16 @@ export default function TerminalWorkspace() {
                           <span className="text-[11px] font-mono text-slate-500 tabular-nums">
                             {item.time}
                           </span>
-                          {item.kapUrl && (
+                          {targetUrl && (
                             <a
-                              href={item.kapUrl}
+                              href={targetUrl}
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
-                              title="Resmi KAP Bildirimini Aç"
+                              title="KAP'ta Görüntüle / Kaynağa Git"
                               className="text-slate-500 hover:text-[#38bdf8] transition p-0.5"
                             >
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                               </svg>
                             </a>
@@ -1440,7 +1449,7 @@ export default function TerminalWorkspace() {
                       </div>
 
                       <p className="text-xs text-slate-200 line-clamp-2 leading-relaxed group-hover:text-white mt-1">
-                        {displayLine}
+                        {displaySubject}
                       </p>
                     </article>
                   );
@@ -1618,12 +1627,12 @@ export default function TerminalWorkspace() {
                   Kapat
                 </button>
                 <a
-                  href={selectedKap.kapUrl}
+                  href={selectedKap.url || selectedKap.link || selectedKap.kapUrl || (selectedKap.id ? `https://www.kap.org.tr/tr/Bildirim/${selectedKap.id}` : "https://www.kap.org.tr/tr/")}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 text-xs font-semibold text-white bg-[#2563eb] hover:bg-blue-600 px-5 py-2.5 rounded-lg shadow-lg shadow-blue-500/20 transition active:scale-95"
                 >
-                  <span>KAP&apos;ta Görüntüle</span>
+                  <span>KAP&apos;ta Görüntüle / Kaynağa Git</span>
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
