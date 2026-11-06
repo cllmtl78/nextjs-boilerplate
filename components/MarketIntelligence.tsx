@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { displayCalendarTitle } from "@/lib/calendar-titles";
+import { formatCalendarValue, type CalendarUnits } from "@/lib/calendar-values";
 
 interface StockMover {
   symbol: string;
@@ -17,9 +18,10 @@ interface SectorItem {
   change: number;
 }
 
-export interface EconomicCalendarItem {
+export interface EconomicCalendarItem extends CalendarUnits {
   id: string;
   title: string;
+  originalTitle?: string;
   country: "TR" | "US" | "EU" | "CN" | "JP";
   date: string;
   time: string;
@@ -40,37 +42,37 @@ const renderCountryBadge = (country: "TR" | "US" | "EU" | "CN" | "JP") => {
   switch (country) {
     case "TR":
       return (
-        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-950/70 border border-rose-800/60 text-rose-300 font-mono shrink-0">
+        <span className="text-[10px] font-bold leading-3 px-0.5 py-0 rounded bg-rose-950/70 border border-rose-800/60 text-rose-300 font-mono shrink-0">
           TR
         </span>
       );
     case "US":
       return (
-        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-950/70 border border-sky-800/60 text-sky-300 font-mono shrink-0">
+        <span className="text-[10px] font-bold leading-3 px-0.5 py-0 rounded bg-sky-950/70 border border-sky-800/60 text-sky-300 font-mono shrink-0">
           US
         </span>
       );
     case "EU":
       return (
-        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-950/70 border border-blue-800/60 text-blue-300 font-mono shrink-0">
+        <span className="text-[10px] font-bold leading-3 px-0.5 py-0 rounded bg-blue-950/70 border border-blue-800/60 text-blue-300 font-mono shrink-0">
           EU
         </span>
       );
     case "CN":
       return (
-        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-950/70 border border-amber-800/60 text-amber-300 font-mono shrink-0">
+        <span className="text-[10px] font-bold leading-3 px-0.5 py-0 rounded bg-amber-950/70 border border-amber-800/60 text-amber-300 font-mono shrink-0">
           CN
         </span>
       );
     case "JP":
       return (
-        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-950/70 border border-indigo-800/60 text-indigo-300 font-mono shrink-0">
+        <span className="text-[10px] font-bold leading-3 px-0.5 py-0 rounded bg-indigo-950/70 border border-indigo-800/60 text-indigo-300 font-mono shrink-0">
           JP
         </span>
       );
     default:
       return (
-        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-mono shrink-0">
+        <span className="text-[10px] font-bold leading-3 px-0.5 py-0 rounded bg-slate-800 border border-slate-700 text-slate-300 font-mono shrink-0">
           {country}
         </span>
       );
@@ -484,12 +486,12 @@ export default function MarketIntelligence() {
           <span className="text-[10px] font-mono text-slate-500 tracking-wider">EKONOMİK GÖSTERGELER</span>
         </div>
 
-        <div className="overflow-y-auto flex-1 pane-scroll p-3 flex flex-col gap-3">
+        <div className="overflow-y-auto flex-1 pane-scroll p-0 flex flex-col gap-0">
           {loadingCalendar && calendarEvents.length === 0 ? (
             [...Array(5)].map((_, i) => (
               <div
                 key={i}
-                className="p-3.5 rounded-lg bg-[#0e1628]/60 border border-white/[0.05] flex items-center justify-between gap-3 animate-pulse"
+                className="px-1 py-0.5 border-b border-white/[0.05] flex items-center justify-between gap-3 animate-pulse"
               >
                 <div className="flex-1 space-y-2">
                   <div className="flex items-center gap-2">
@@ -512,15 +514,16 @@ export default function MarketIntelligence() {
           ) : (
             calendarEvents.map((item) => {
               const trTitle = displayCalendarTitle(item.title);
-              const hasActual = item.actual !== null && item.actual !== undefined;
+              const actualText = formatCalendarValue(item.actual, item);
+              const hasActual = actualText !== "--";
 
               return (
                 <div
                   key={item.id}
-                  className="p-3.5 rounded-lg bg-[#0e1628]/90 border border-white/[0.07] hover:bg-[#131f38] hover:border-white/[0.14] transition-all flex items-center justify-between gap-3 shadow-sm"
+                  className="px-1 py-0.5 shrink-0 border-b border-white/[0.07] last:border-b-0 hover:bg-[#131f38] transition-colors flex items-center justify-between gap-2"
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5">
+                    <div className="flex items-center gap-1.5 mb-0">
                       <span className="text-xs font-mono tabular-nums text-slate-300 font-bold shrink-0">
                         {item.time}
                       </span>
@@ -530,30 +533,30 @@ export default function MarketIntelligence() {
                       </span>
                     </div>
 
-                    <div className="text-[11px] font-mono text-slate-400 pl-7 flex items-center gap-2 mt-1">
+                    <div className="text-[11px] font-mono text-slate-400 flex items-center gap-1 mt-0">
                       <span>
                         Bekl:{" "}
                         <span className="text-slate-200 font-medium tabular-nums">
-                          {item.forecast !== null && item.forecast !== undefined ? String(item.forecast) : "--"}
+                          {formatCalendarValue(item.forecast, item)}
                         </span>
                       </span>
                       <span className="text-slate-600">|</span>
                       <span>
                         Önceki:{" "}
                         <span className="text-slate-300 tabular-nums">
-                          {item.previous !== null && item.previous !== undefined ? String(item.previous) : "--"}
+                          {formatCalendarValue(item.previous, item)}
                         </span>
                       </span>
                     </div>
                   </div>
 
-                  <div className="w-28 text-right shrink-0 flex flex-col items-end justify-center">
+                  <div className="min-w-12 text-right shrink-0 flex flex-col items-end justify-center">
                     {hasActual ? (
                       <>
                         <span className="text-xs font-mono font-bold text-emerald-400 block tabular-nums">
-                          {String(item.actual)}
+                          {actualText}
                         </span>
-                        <span className="text-[9px] font-mono font-bold tracking-wider text-emerald-400 bg-emerald-950/60 border border-emerald-800/50 px-2 py-0.5 rounded uppercase block mt-1 shadow-sm">
+                        <span className="text-[9px] font-mono font-bold tracking-wider text-emerald-400 bg-emerald-950/60 border border-emerald-800/50 px-0.5 py-0 rounded-sm uppercase block leading-3 mt-0">
                           AÇIKLANDI
                         </span>
                       </>
@@ -562,7 +565,7 @@ export default function MarketIntelligence() {
                         <span className="text-xs font-mono text-slate-500 block tabular-nums">
                           --
                         </span>
-                        <span className="text-[9px] font-mono font-medium tracking-wider text-slate-400 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded uppercase block mt-1">
+                        <span className="text-[9px] font-mono font-medium tracking-wider text-slate-400 bg-slate-900 border border-slate-800 px-0.5 py-0 rounded-sm uppercase block leading-3 mt-0">
                           BEKLENİYOR
                         </span>
                       </>

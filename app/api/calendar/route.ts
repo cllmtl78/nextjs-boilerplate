@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { translateCalendarTitles } from "@/lib/translate-calendar";
+import type { CalendarUnits } from "@/lib/calendar-values";
 
 export const dynamic = "force-dynamic";
 
-export interface EconomicCalendarEvent {
+export interface EconomicCalendarEvent extends CalendarUnits {
   id: string;
   title: string;
   originalTitle?: string;
@@ -190,6 +191,9 @@ export async function GET() {
             forecast?: number | string | null;
             previous?: number | string | null;
             importance?: number;
+            unit?: string | null;
+            scale?: string | number | null;
+            currency?: string | null;
           }, idx: number) => {
             const rawDate = item.date || new Date().toISOString();
             const dateObj = new Date(rawDate);
@@ -230,6 +234,9 @@ export async function GET() {
               actual: actualVal,
               forecast: forecastVal,
               previous: previousVal,
+              unit: typeof item.unit === "string" ? item.unit : null,
+              scale: typeof item.scale === "string" || typeof item.scale === "number" ? item.scale : null,
+              currency: typeof item.currency === "string" ? item.currency : null,
               importance: typeof item.importance === "number" ? item.importance : 0,
               isCompleted: actualVal !== null,
             };

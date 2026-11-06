@@ -1139,7 +1139,7 @@ export default function TerminalWorkspace() {
               </div>
             </div>
 
-            <div className="pane-scroll p-3">
+            <div className="pane-scroll px-1 py-0">
               {loadingKap && kapBildirimleri.length === 0 ? (
                 <TerminalSkeletonList count={3} />
               ) : kapBildirimleri.length === 0 ? (
@@ -1155,7 +1155,7 @@ export default function TerminalWorkspace() {
                     <article
                       key={item.id}
                       onClick={() => setSelectedKap(item)}
-                      className="cursor-pointer group hover:bg-slate-900/50 transition border-b border-white/[0.04] pb-2 mb-2 last:border-b-0 last:pb-0 last:mb-0"
+                      className="cursor-pointer group hover:bg-slate-900/50 transition border-b border-white/[0.04] py-0.5 last:border-b-0"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
@@ -1187,7 +1187,7 @@ export default function TerminalWorkspace() {
                         </div>
                       </div>
 
-                      <p className="text-xs text-slate-200 line-clamp-2 leading-relaxed group-hover:text-white mt-1">
+                      <p className="text-xs text-slate-200 line-clamp-2 leading-4 group-hover:text-white">
                         {displaySubject}
                       </p>
                     </article>
