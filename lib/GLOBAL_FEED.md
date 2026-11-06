@@ -34,3 +34,9 @@ node_modules/.bin/tsc --noEmit
 ```
 
 Testler kontrollü kaynak HTML'i ve çeviri yanıtları kullanır; canlı çeviri kalitesini ölçmek için gerçek Gemini erişimiyle örnek haberler okunmalıdır.
+
+## Haber biçimi ve tarafsızlık
+
+Çeviri talimatları `backend/global_translation_prompt.txt` dosyasındadır. Başlık, paragraf ve madde düzeni Telegram HTML'inden arayüze kadar korunur. Madde veya paragraf yapısını kaybeden yanıtlar kaydedilmez ve tekrar denenir. Çeviri promptu kaynak dışı yorum, analiz, çıkarım, neden-sonuç ilişkisi veya yatırım tavsiyesi eklemeyi yasaklar. Bu yapısal kontroller anlam doğruluğunu otomatik olarak garanti etmez; örnekler gerçek model yanıtlarıyla da incelenmelidir.
+
+Prompt içeriği çeviri önbelleği anahtarına dahildir. Prompt veya biçim sürümü değiştiğinde eski düz metin çevirileri yeni kurallarla tekrar üretilir. Haberler kademeli çevrildiği için yeniden dağıtımdan sonra geçmişin dolması birkaç dakika sürebilir.

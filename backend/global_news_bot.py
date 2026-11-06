@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 TR = timezone(timedelta(hours=3))
 SOURCE = "https://t.me/s/WalterBloomberg"
 PROMPT = Path(__file__).with_name("global_translation_prompt.txt").read_text(encoding="utf-8")
+PROMPT_REVISION = hashlib.sha256(PROMPT.encode("utf-8")).hexdigest()
 DEFAULT_DB = Path(__file__).parent / ".data" / "global-news.sqlite3"
 
 
@@ -32,12 +33,33 @@ def failure_category(error):
 
 
 def clean_wire_text(text):
-    text = html.unescape(text)
+    text = html.unescape(text).replace("\r\n", "\n").replace("\r", "\n")
     text = re.sub(r"https?://[^\s<>()]+|\bwww\.[^\s<>()]+|\bt\.me/[^\s<>()]+", " ", text, flags=re.I)
-    text = re.sub(r"\(\s*@WalterBloomberg\s*\)|@WalterBloomberg\b", " ", text, flags=re.I)
-    text = re.sub(r"\(\s*\)|\[\s*\]", " ", text).replace("*", "")
+    text = re.sub(r"\([^\S\n]*@WalterBloomberg[^\S\n]*\)|@WalterBloomberg\b", " ", text, flags=re.I)
+    text = re.sub(r"\([^\S\n]*\)|\[[^\S\n]*\]", " ", text).replace("*", "")
     text = re.sub(r"\$([A-Z][A-Z0-9.]{0,9})\b", r"\1", text)
-    return re.sub(r"\s+", " ", text).strip(" •·|")
+    lines = [re.sub(r"[^\S\n]+", " ", line).strip() for line in text.split("\n")]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+
+def telegram_body_text(body):
+    fragment = BeautifulSoup(str(body), "html.parser")
+    for tag in fragment.select("br"):
+        tag.replace_with("\n")
+    for tag in fragment.select("p, div, li"):
+        tag.insert_before("\n")
+        tag.insert_after("\n")
+    return clean_wire_text(fragment.get_text(" "))
+
+
+def preserves_news_structure(source, translated):
+    def paragraphs(text):
+        return [part for part in text.split("\n\n") if part.strip()]
+
+    def bullets(text):
+        return sum(bool(re.match(r"^(?:[🔸🔹•▪●]\s*|[-–]\s+|\d+[.)]\s+)", line.strip())) for line in text.splitlines())
+
+    return len(paragraphs(source)) == len(paragraphs(translated)) and bullets(source) == bullets(translated) and ("\n" not in source or "\n" in translated)
 
 
 def day_bounds(now=None):
@@ -64,7 +86,7 @@ def parse_telegram_page(document):
         timestamp = int(date.timestamp() * 1000)
         times.append(timestamp)
         body = node.select_one(".tgme_widget_message_text")
-        text = clean_wire_text(body.get_text(" ", strip=True)) if body else ""
+        text = telegram_body_text(body) if body else ""
         if len(text) < 3:
             continue
         post_id = f"WalterBloomberg/{int(match[1])}"
@@ -90,13 +112,17 @@ class GlobalNewsStore:
                     digest TEXT PRIMARY KEY, text TEXT NOT NULL, saved_at REAL NOT NULL);
                 CREATE INDEX IF NOT EXISTS global_post_date ON global_posts(timestamp);
             ''')
+            for row in self.connection.execute("SELECT id,raw_text,digest FROM global_posts").fetchall():
+                digest = self.digest(row["raw_text"])
+                if digest != row["digest"]:
+                    self.connection.execute("UPDATE global_posts SET digest=?,retry_at=0 WHERE id=?", (digest,row["id"]))
 
     def close(self):
         with self.lock:
             self.connection.close()
 
     def digest(self, text):
-        return hashlib.sha256(f"walter-v2:{self.model}:{clean_wire_text(text)}".encode("utf-8")).hexdigest()
+        return hashlib.sha256(f"walter-v3:{self.model}:{PROMPT_REVISION}:{clean_wire_text(text)}".encode("utf-8")).hexdigest()
 
     def upsert(self, posts):
         with self.lock, self.connection:
@@ -133,12 +159,12 @@ class GlobalNewsStore:
         for row in rows:
             if not isinstance(row, dict) or not isinstance(row.get("text"), str) or row.get("id") not in expected or row["id"] in received:
                 raise ValueError("Çeviri kimlikleri eşleşmiyor")
-            received[row["id"]] = clean_wire_text(row["text"]).strip('"“”')
+            received[row["id"]] = clean_wire_text(row["text"])
         count = 0
         with self.lock, self.connection:
             for item in batch:
                 translated = received.get(item["id"], "")
-                if translated and translated.casefold() != item["text"].casefold():
+                if translated and translated.casefold() != item["text"].casefold() and preserves_news_structure(item["text"], translated):
                     self.connection.execute("INSERT OR REPLACE INTO global_translations VALUES(?,?,?)", (item["digest"], translated, time.time()))
                     count += 1
                 else:

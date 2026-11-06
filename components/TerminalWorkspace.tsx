@@ -41,7 +41,7 @@ export interface GlobalNewsItem {
   rawClean?: string;
 }
 
-const CACHE_KEY_GLOBAL = "bpt_global_walter_v1";
+const CACHE_KEY_GLOBAL = "bpt_global_walter_v2_format";
 
 // Ticker ve gereksiz karakterleri temizleyen yardımcı fonksiyon
 export function cleanWireText(text: string): string {
@@ -1116,7 +1116,7 @@ export default function TerminalWorkspace() {
                       {itemTime}
                     </span>
 
-                    <p className="text-[12px] text-slate-200 leading-relaxed font-normal m-0 p-0 flex-1">
+                    <p className="text-[12px] text-slate-200 leading-relaxed font-normal whitespace-pre-wrap break-words m-0 p-0 flex-1">
                       <span>{itemText}</span>
                     </p>
                   </div>

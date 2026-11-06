@@ -12,17 +12,19 @@ export function decodeWireEntities(text: string): string {
 // Preserve names, case, market tickers and numbers. Never rewrite meaning here.
 export function cleanWireText(text: string): string {
   return decodeWireEntities(text)
-    .replace(/https?:\/\/[^\s<>]+|\bwww\.[^\s<>]+|\bt\.me\/[^\s<>]+/gi, " ")
-    .replace(/\(\s*@WalterBloomberg\s*\)|@WalterBloomberg\b/gi, " ")
+    .replace(/\r\n?/g, "\n")
+    .replace(/https?:\/\/[^\s<>()]+|\bwww\.[^\s<>()]+|\bt\.me\/[^\s<>()]+/gi, " ")
+    .replace(/\([^\S\n]*@WalterBloomberg[^\S\n]*\)|@WalterBloomberg\b/gi, " ")
+    .replace(/\([^\S\n]*\)|\[[^\S\n]*\]/g, " ")
     .replace(/\*/g, "")
     .replace(/\$([A-Z][A-Z0-9.]{0,9})\b/g, "$1")
-    .replace(/\s+/g, " ")
-    .replace(/^[\s•·|]+|[\s•·|]+$/g, "")
+    .split("\n").map(line => line.replace(/[^\S\n]+/g, " ").trim()).join("\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
 export function wireHtmlToText(html: string): string {
-  const text = html.replace(/<br\s*\/?>/gi, " ").replace(/<[^>]*>/g, " ");
+  const text = html.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]*>/g, " ");
   return cleanWireText(text);
 }
 

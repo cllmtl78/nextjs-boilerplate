@@ -48,7 +48,7 @@ class GlobalBotTests(unittest.TestCase):
         posts, cursor, oldest = parse_telegram_page(message(11, "<b>S&amp;P 500</b><div>FALLS 4%</div>* (@WalterBloomberg)") + message(12, "NASDAQ 100 FALLS 6%", "2026-11-06T12:31:00Z"))
         self.assertEqual(len(posts), 2)
         self.assertEqual(posts[0]["id"], "WalterBloomberg/12")
-        self.assertEqual(posts[1]["rawText"], "S&P 500 FALLS 4%")
+        self.assertEqual(posts[1]["rawText"], "S&P 500\nFALLS 4%")
         self.assertEqual(posts[1]["zaman"], "15:30:00")
         self.assertEqual(cursor, 11)
         self.assertEqual(oldest, int(datetime.fromisoformat("2026-11-06T12:30:00+00:00").timestamp()*1000))
