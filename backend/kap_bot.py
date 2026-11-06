@@ -1,196 +1,283 @@
+"""Yeni Şafak KAP news collector with an official KAP fallback.
+
+Only links actually published by a source are accepted as disclosure IDs.
+All network activity stays in the worker, never in the FastAPI request handler.
+"""
+import json
+import logging
 import re
-import time
 import threading
+import time
 from datetime import datetime, timezone, timedelta
+from urllib.parse import urljoin, urlsplit, urlunsplit
+
 import requests
+from bs4 import BeautifulSoup
 
+logger = logging.getLogger(__name__)
+TR = timezone(timedelta(hours=3))
+LIST_URL = "https://www.yenisafak.com/ekonomi/kap-haberleri"
 KAP_CACHE = []
-
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Accept": "application/json, text/plain, */*",
-    "Origin": "https://tr.tradingview.com",
-    "Referer": "https://tr.tradingview.com/",
+    "User-Agent": "Mozilla/5.0 (compatible; BPTFinans/1.0)",
+    "Accept": "text/html,application/json;q=0.9,*/*;q=0.8",
 }
-
-# Fon, repo ve tahvil çöplerini engelleyen filtre
-JUNK_KEYWORDS = [
-    "ŞEMSİYE FON",
-    "YATIRIMCI BİLGİ FORMU",
-    "BORSA DIŞI REPO",
-    "TERS REPO",
-    "BORSA DIŞI VAAD",
-    "FON İHRAÇ",
-    "İZAHNAME (FON)",
-]
+JUNK_KEYWORDS = (
+    "ŞEMSİYE FON", "YATIRIMCI BİLGİ FORMU", "BORSA DIŞI REPO",
+    "TERS REPO", "BORSA DIŞI VAAD", "FON İHRAÇ", "İZAHNAME (FON)",
+)
+_worker = None
+_worker_lock = threading.Lock()
 
 
-def clean_subject_text(text: str) -> str:
-    if not text:
-        return ""
-    # Başındaki "KAP —", "KAP:", "01285 —", "[ŞİRKET ADI]" gibi tüm fazlalıkları siler
-    t = re.sub(r"^KAP\s*[:\-—]\s*", "", text, flags=re.IGNORECASE).strip()
-    t = re.sub(r"^[A-Z0-9,\s]*\[.*?\]\s*", "", t).strip()
-    t = re.sub(r"^[A-Z0-9]{3,6}\s*[\-—:]\s*", "", t).strip()
-    return t
+def clean_subject_text(text):
+    text = re.sub(r"^KAP\s*[:\-—]\s*", "", text or "", flags=re.I).strip()
+    text = re.sub(r"^[A-Z0-9,\s]*\[.*?\]\s*", "", text).strip()
+    return re.sub(r"^[A-Z0-9]{3,6}\s*[\-—:]\s*", "", text).strip()
+
+
+def official_link(value):
+    """Validate host and exact disclosure path, rather than guessing an ID."""
+    if not isinstance(value, str):
+        return None
+    parsed = urlsplit(value.strip())
+    if parsed.scheme not in ("http", "https") or parsed.hostname not in ("kap.org.tr", "www.kap.org.tr"):
+        return None
+    match = re.fullmatch(r"/(?:tr|en)/(?:Bildirim|disclosure)/(\d+)/?", parsed.path, re.I)
+    if not match:
+        return None
+    return int(match[1]), f"https://www.kap.org.tr/tr/Bildirim/{int(match[1])}"
+
+
+def article_url(href):
+    parsed = urlsplit(urljoin(LIST_URL, href))
+    if parsed.scheme not in ("http", "https") or parsed.hostname != "www.yenisafak.com":
+        return None
+    path = parsed.path.rstrip("/")
+    # Stay within the KAP section; do not crawl general economy/navigation links.
+    if not path.startswith("/ekonomi/") or path == "/ekonomi/kap-haberleri":
+        return None
+    if "kap" not in path.lower() and not re.search(r"-\d{5,}$", path):
+        return None
+    return urlunsplit(("https", "www.yenisafak.com", path, "", ""))
+
+
+def json_nodes(soup):
+    def walk(obj):
+        if isinstance(obj, dict):
+            yield obj
+            for value in obj.values():
+                yield from walk(value)
+        elif isinstance(obj, list):
+            for value in obj:
+                yield from walk(value)
+    for script in soup.select('script[type="application/ld+json"]'):
+        try:
+            yield from walk(json.loads(script.string or script.get_text()))
+        except (ValueError, TypeError):
+            logger.warning("[KAP] Geçersiz JSON-LD kaydı atlandı")
+
+
+def parse_listing(html):
+    soup = BeautifulSoup(html, "html.parser")
+    urls = []
+    for anchor in soup.select("a[href]"):
+        url = article_url(anchor["href"])
+        if url and url not in urls:
+            urls.append(url)
+    for node in json_nodes(soup):
+        for key in ("url", "item"):
+            value = node.get(key)
+            if isinstance(value, str):
+                url = article_url(value)
+                if url and url not in urls:
+                    urls.append(url)
+    return urls[:40]
+
+
+def parse_article(html, source_url):
+    soup = BeautifulSoup(html, "html.parser")
+    article = soup.find("article") or soup.find("main") or soup
+    nodes = list(json_nodes(soup))
+    metadata = next((n for n in nodes if "headline" in n), {})
+    title_node = article.find("h1") or soup.find("h1")
+    title = (metadata.get("headline") or (title_node.get_text(" ", strip=True) if title_node else ""))
+    if not isinstance(title, str) or not title.strip():
+        return []
+    # Restrict text matching to article content to avoid header/footer ticker symbols.
+    body = metadata.get("articleBody") or article.get_text(" ", strip=True)
+    if not isinstance(body, str):
+        body = article.get_text(" ", strip=True)
+    if any(word in title.upper() for word in JUNK_KEYWORDS):
+        return []
+    links = []
+    for anchor in article.select("a[href]"):
+        link = official_link(urljoin(source_url, anchor["href"]))
+        if link and link not in links:
+            links.append(link)
+    # Some publishers print the official URL as text rather than an anchor.
+    for value in re.findall(r'https?://(?:www\.)?kap\.org\.tr/[^\s<>"\']+', body):
+        link = official_link(value.rstrip(".,);"))
+        if link and link not in links:
+            links.append(link)
+    if not links:
+        logger.warning("[KAP] Haberde resmî bildirim bağlantısı bulunamadı: %s", source_url)
+        return []
+    # Explicit labels/formats only: never infer an exchange symbol from an arbitrary word.
+    match = re.search(r"\bBIST\s*:\s*([A-Z0-9]{3,6})\b", body)
+    if not match:
+        match = re.search(r"(?:Hisse Kodu|İlgili Şirketler|İlgili Hisseler|Borsa Kodu)\s*[:：]?\s*\[?([A-Z0-9]{3,6})\b", body)
+    if not match:
+        match = re.search(r"\(([A-Z0-9]{3,6})\)", title)
+    if not match:
+        match = re.search(r"\b([A-Z0-9]{3,6})\s*\[", title)
+    code = match[1] if match else ""
+    raw_date = metadata.get("datePublished", "")
+    if not raw_date:
+        meta = soup.select_one('meta[property="article:published_time"]')
+        date_node = article.find("time")
+        raw_date = meta.get("content", "") if meta else (date_node.get("datetime", "") if date_node else "")
+    published = None
+    try:
+        published = datetime.fromisoformat(str(raw_date).replace("Z", "+00:00"))
+        if published.tzinfo is None:
+            published = published.replace(tzinfo=TR)
+        published = published.astimezone(TR)
+    except (ValueError, TypeError):
+        pass  # Unknown publication time is never replaced with the current time.
+    description = soup.select_one('meta[name="description"]')
+    summary = metadata.get("description") or (description.get("content", "") if description else "") or title
+    subject = clean_subject_text(title)
+    return [{
+        "id": disc_id, "code": code, "type": "KAP", "company": "",
+        "title": subject, "subject": subject, "summary": summary,
+        "time": published.strftime("%H:%M:%S") if published else "--:--",
+        "date": published.isoformat() if published else None,
+        "timestamp": int(published.timestamp()) if published else None,
+        "url": link, "link": link, "kapUrl": link,
+        "source": "Yeni Şafak", "sourceUrl": source_url,
+    } for disc_id, link in links]
+
+
+class YeniSafakCollector:
+    def __init__(self):
+        self.session = requests.Session()
+        self.session.headers.update(HEADERS)
+        self.cache = {}  # url -> (retry_after, parsed records)
+
+    def get_html(self, url):
+        response = self.session.get(url, timeout=(5, 15))
+        response.raise_for_status()
+        if urlsplit(response.url).hostname != "www.yenisafak.com":
+            raise ValueError("Yeni Şafak dışına yönlendirme reddedildi")
+        return response.text
+
+    def fetch(self):
+        urls = parse_listing(self.get_html(LIST_URL))
+        if not urls:
+            raise ValueError("Yeni Şafak listesinde haber bağlantısı bulunamadı; sayfa yapısını kontrol edin")
+        records = {}
+        now = time.monotonic()
+        pending = 0
+        for url in urls:
+            cached = self.cache.get(url)
+            if not cached or cached[0] <= now:
+                # Bound request volume and cycle duration. Older links wait for next poll.
+                if pending >= 8:
+                    continue
+                pending += 1
+                try:
+                    items = parse_article(self.get_html(url), url)
+                    self.cache[url] = (now + (3600 if items else 300), items)
+                except (requests.RequestException, ValueError) as exc:
+                    logger.warning("[KAP] Haber alınamadı %s: %s", url, exc)
+                    self.cache[url] = (now + 300, cached[1] if cached else [])
+                time.sleep(0.3)
+            for item in self.cache[url][1]:
+                records[item["id"]] = item
+        self.cache = {url: value for url, value in self.cache.items() if url in urls}
+        if not records:
+            logger.warning("[KAP] Liste okundu ama resmî KAP bağlantısı içeren kayıt elde edilemedi")
+        return sorted(records.values(), key=lambda item: item["id"], reverse=True)[:40]
+
+
+_collector = YeniSafakCollector()
+
+
+def fetch_official_kap():
+    response = requests.get("https://www.kap.org.tr/tr/api/disclosures", headers=HEADERS, timeout=(5, 15))
+    response.raise_for_status()
+    data = response.json()
+    if not isinstance(data, list):
+        raise ValueError("KAP yanıtı beklenen JSON listesi değil")
+    results = {}
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        basic = item.get("basic", item)
+        if not isinstance(basic, dict):
+            continue
+        disc_id = basic.get("disclosureIndex") or basic.get("disclosureId") or basic.get("id")
+        title = basic.get("title") or basic.get("disclosureTitle") or ""
+        if not str(disc_id).isdigit() or not isinstance(title, str) or not title:
+            continue
+        if any(word in title.upper() for word in JUNK_KEYWORDS):
+            continue
+        code = basic.get("stockCodes") or basic.get("stockCode") or ""
+        if isinstance(code, list):
+            code = ",".join(str(value) for value in code)
+        link = f"https://www.kap.org.tr/tr/Bildirim/{int(disc_id)}"
+        raw_date = str(basic.get("publishDate") or basic.get("disclosureTime") or "")
+        clock = re.search(r"\b\d{2}:\d{2}(?::\d{2})?\b", raw_date)
+        results[int(disc_id)] = {
+            "id": int(disc_id), "code": str(code), "type": "KAP",
+            "title": clean_subject_text(title), "subject": clean_subject_text(title),
+            "summary": basic.get("summary") or title,
+            "company": basic.get("companyTitle") or basic.get("companyName") or "",
+            "time": clock[0] if clock else "--:--", "url": link, "link": link,
+            "kapUrl": link, "source": "KAP",
+        }
+    return sorted(results.values(), key=lambda item: item["id"], reverse=True)[:40]
 
 
 def fetch_fast_kap():
-    tz_tr = timezone(timedelta(hours=3))
-    results = []
-
-    # 1. KAYNAK: Doğrudan KAP Canlı API (AllOrigins & Codetabs önbelleksiz anlık tünel)
-    ts_now = int(time.time() * 1000)
-    kap_api_urls = [
-        f"https://www.kap.org.tr/tr/api/disclosures?_={ts_now}",
-        f"https://api.codetabs.com/v1/proxy?quest=https://www.kap.org.tr/tr/api/disclosures",
-    ]
-
-    for api_url in kap_api_urls:
-        try:
-            res = requests.get(api_url, headers=HEADERS, timeout=7)
-            if res.status_code == 200 and res.text.strip().startswith("["):
-                data = res.json()
-                for item in data:
-                    basic = item.get("basic", item)
-                    if not isinstance(basic, dict):
-                        continue
-
-                    disc_id = basic.get("disclosureIndex") or basic.get("disclosureId") or basic.get("id")
-                    if not disc_id:
-                        continue
-
-                    # Hisse kodunu al
-                    raw_code = basic.get("stockCodes") or basic.get("stockCode") or basic.get("relatedStocks") or ""
-                    if isinstance(raw_code, list):
-                        raw_code = raw_code[0] if raw_code else ""
-                    code = str(raw_code).replace("[", "").replace("]", "").replace('"', "").split(",")[0].strip().upper()
-
-                    # SADECE gerçek BIST hisse kodlarını kabul et (01285 gibi tahvil/repo kodlarını ve boş fonları atla)
-                    if not code or not code.isalpha() or not (3 <= len(code) <= 6) or code == "KAP":
-                        continue
-
-                    subject = clean_subject_text(basic.get("title") or basic.get("disclosureTitle") or "")
-                    if not subject:
-                        continue
-
-                    if any(junk in subject.upper() for junk in JUNK_KEYWORDS):
-                        continue
-
-                    summary = clean_subject_text(basic.get("summary") or subject)
-                    company = (basic.get("companyTitle") or basic.get("companyName") or code).strip()
-                    disc_type = (basic.get("disclosureClass") or "ÖDA").strip().upper()
-
-                    raw_time = str(basic.get("publishDate") or basic.get("disclosureTime") or "")
-                    m_time = re.search(r"(\d{2}:\d{2}:\d{2})", raw_time)
-                    m_short = re.search(r"(\d{2}:\d{2})", raw_time)
-                    time_str = m_time.group(1) if m_time else (f"{m_short.group(1)}:00" if m_short else datetime.now(tz_tr).strftime("%H:%M:%S"))
-
-                    kap_link = f"https://www.kap.org.tr/tr/Bildirim/{disc_id}"
-
-                    results.append({
-                        "id": int(disc_id),
-                        "code": code,
-                        "type": disc_type,
-                        "title": subject,       # Başında "KAP —" olmaması için doğrudan başlık
-                        "subject": subject,
-                        "company": company,
-                        "summary": summary if summary else subject,
-                        "time": time_str,
-                        "url": kap_link,
-                        "link": kap_link,       # Frontend'deki her iki prop adını da destekler
-                    })
-
-                if results:
-                    results.sort(key=lambda x: x["id"], reverse=True)
-                    return results[:40]
-        except Exception as e:
-            print("[KAP Bot] Doğrudan API tünel hatası:", e)
-
-    # 2. KAYNAK: TradingView Gerçek Zamanlı KAP Stream (Sadece BIST Hisseleri)
     try:
-        tv_url = f"https://news-headlines.tradingview.com/v2/view/headlines/symbol?client=web&lang=tr&market=TR&provider=kap&_={ts_now}"
-        res_tv = requests.get(tv_url, headers=HEADERS, timeout=7)
-        if res_tv.status_code == 200:
-            items = res_tv.json().get("items", [])
-            for idx, it in enumerate(items):
-                raw_title = it.get("title", "")
-                if any(junk in raw_title.upper() for junk in JUNK_KEYWORDS):
-                    continue
-
-                # Sembolden gerçek hisse kodunu al (Örn: BIST:THYAO -> THYAO)
-                code = ""
-                for sym_obj in it.get("relatedSymbols", []):
-                    sym = sym_obj.get("symbol", "")
-                    cand = sym.split(":")[-1].strip().upper()
-                    if cand.isalpha() and 3 <= len(cand) <= 6 and cand != "KAP":
-                        code = cand
-                        break
-
-                # Sembolde yoksa başlıktan yakala: "KAP: THYAO [TÜRK HAVA YOLLARI...]"
-                if not code:
-                    m_code = re.search(r"KAP:\s*([A-Z]{3,6})\b", raw_title)
-                    if m_code and m_code.group(1) != "KAP":
-                        code = m_code.group(1)
-
-                # Hisse kodu olmayan (fon/repo/duyuru) bildirimleri tamamen atla
-                if not code:
-                    continue
-
-                subject = clean_subject_text(raw_title)
-                ts = it.get("published", int(time.time()))
-                dt = datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(tz_tr)
-                time_str = dt.strftime("%H:%M:%S")
-
-                # Resmi KAP Bildirim ID'si varsa al, yoksa KAP sorgu/bildirim linki ver
-                raw_id = str(it.get("id", ""))
-                m_kap_id = re.search(r"(\d{6,8})", raw_id)
-                disc_id = int(m_kap_id.group(1)) if m_kap_id else (int(ts) * 100 + idx)
-
-                story_path = it.get("storyPath", "")
-                kap_link = (
-                    f"https://www.kap.org.tr/tr/Bildirim/{m_kap_id.group(1)}"
-                    if m_kap_id
-                    else (f"https://tr.tradingview.com{story_path}" if story_path else "https://www.kap.org.tr/tr/")
-                )
-
-                results.append({
-                    "id": disc_id,
-                    "code": code,
-                    "type": "ÖDA",
-                    "title": subject,
-                    "subject": subject,
-                    "summary": subject,
-                    "time": time_str,
-                    "url": kap_link,
-                    "link": kap_link,
-                })
-
-            if results:
-                return results[:40]
-    except Exception as e:
-        print("[KAP Bot] TV Stream hatası:", e)
-
-    return []
+        results = _collector.fetch()
+        if results:
+            return results
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning("[KAP] Yeni Şafak kaynağı alınamadı: %s", exc)
+    try:
+        return fetch_official_kap()
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning("[KAP] Resmî kaynak alınamadı: %s", exc)
+        return []
 
 
 def run_kap_worker():
     global KAP_CACHE
+    failures = 0
     while True:
         try:
             data = fetch_fast_kap()
             if data:
                 KAP_CACHE = data
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] [KAP Bot] {len(KAP_CACHE)} hisse KAP bildirimi güncellendi.")
-        except Exception as e:
-            print("[KAP Bot] Worker hatası:", e)
-        # Saniyelik hız için 10 saniyede bir kontrol
-        time.sleep(10)
+                failures = 0
+                logger.info("[KAP] %s bildirim güncellendi", len(data))
+            else:
+                failures += 1
+        except Exception:
+            failures += 1
+            logger.exception("[KAP] Worker hatası; son başarılı veriler korunuyor")
+        time.sleep(min(60 * (2 ** min(failures, 3)), 480))
 
 
 def start_kap_bot():
-    t = threading.Thread(target=run_kap_worker, daemon=True)
-    t.start()
+    global _worker
+    with _worker_lock:
+        if _worker is None or not _worker.is_alive():
+            _worker = threading.Thread(target=run_kap_worker, name="kap-worker", daemon=True)
+            _worker.start()
 
 
 def get_kap_data():
