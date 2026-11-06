@@ -1230,13 +1230,13 @@ export default function TerminalWorkspace() {
           aria-modal="true"
         >
           <div
-            className="w-full max-w-2xl bg-[#0b0f19] border border-[#2563eb]/40 rounded-xl shadow-[0_0_50px_rgba(37,99,235,0.15)] overflow-hidden flex flex-col"
+            className="w-full max-w-2xl max-h-[calc(100dvh-2rem)] bg-[#0b0f19] border border-[#2563eb]/40 rounded-xl shadow-[0_0_50px_rgba(37,99,235,0.15)] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-[#2563eb] to-transparent" />
 
-            <div className="px-6 pt-5 pb-4 border-b border-white/[0.06] flex items-center justify-between">
-              <div className="flex items-center gap-3">
+            <div className="px-4 sm:px-6 pt-5 pb-4 shrink-0 gap-4 border-b border-white/[0.06] flex items-center justify-between">
+              <div className="flex min-w-0 flex-wrap items-center gap-3">
                 <span className="font-mono text-xs font-bold text-white bg-[#2563eb] px-2.5 py-1 rounded tracking-wider shadow-sm uppercase">
                   {seciliHaber.kaynak}
                 </span>
@@ -1254,7 +1254,7 @@ export default function TerminalWorkspace() {
               </button>
             </div>
 
-            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+            <div className="p-4 sm:p-6 min-h-0 space-y-5 max-h-[65vh] overflow-y-auto">
               <h2 className="text-lg font-bold text-slate-100 leading-snug tracking-tight">
                 {decodeHtmlEntities(seciliHaber.baslik)}
               </h2>
@@ -1267,7 +1267,7 @@ export default function TerminalWorkspace() {
               </p>
             </div>
 
-            <div className="px-6 py-4 bg-[#080c14] border-t border-white/[0.06] flex items-center justify-between gap-4">
+            <div className="px-4 sm:px-6 py-4 shrink-0 flex-wrap gap-4 bg-[#080c14] border-t border-white/[0.06] flex items-center justify-between">
               <div className="text-[11px] font-mono text-slate-500">
                 Kategori:{" "}
                 <span className="text-slate-300">
@@ -1281,7 +1281,7 @@ export default function TerminalWorkspace() {
                 </span>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-3">
                 <button
                   onClick={() => setSeciliHaber(null)}
                   className="text-xs font-medium text-slate-400 hover:text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition"
@@ -1318,13 +1318,13 @@ export default function TerminalWorkspace() {
           aria-modal="true"
         >
           <div
-            className="w-full max-w-2xl bg-[#0b0f19] border border-[#2563eb]/40 rounded-xl shadow-[0_0_50px_rgba(37,99,235,0.15)] overflow-hidden flex flex-col"
+            className="w-full max-w-2xl max-h-[calc(100dvh-2rem)] bg-[#0b0f19] border border-[#2563eb]/40 rounded-xl shadow-[0_0_50px_rgba(37,99,235,0.15)] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-[#38bdf8] to-transparent" />
 
-            <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            <div className="px-4 sm:px-6 py-4 shrink-0 gap-4 border-b border-white/[0.06] flex items-center justify-between">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <span className="font-mono text-xs font-bold text-white bg-[#2563eb] px-2.5 py-1 rounded tracking-wider">
                   {selectedKap.code}
                 </span>
@@ -1337,30 +1337,32 @@ export default function TerminalWorkspace() {
               </div>
               <button
                 onClick={() => setSelectedKap(null)}
-                className="text-slate-400 hover:text-white text-sm font-mono px-2 py-1 rounded hover:bg-white/[0.06] transition"
+                className="shrink-0 text-slate-400 hover:text-white text-sm font-mono px-2 py-1 rounded hover:bg-white/[0.06] transition"
               >
                 ✕ ESC
               </button>
             </div>
 
-            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+            <div className="p-4 sm:p-6 min-h-0 space-y-5 max-h-[65vh] overflow-y-auto">
               <h2 className="text-base font-bold text-slate-100 leading-snug">
                 {selectedKap.title}
               </h2>
-              <div className="text-xs font-semibold text-[#38bdf8] bg-slate-900/80 p-2.5 rounded border border-white/[0.04]">
-                Konu: {selectedKap.subject}
-              </div>
+              {selectedKap.subject && selectedKap.subject !== selectedKap.title && (
+                <div className="text-xs font-semibold text-[#38bdf8] bg-slate-900/80 p-2.5 rounded border border-white/[0.04]">
+                  Konu: {selectedKap.subject}
+                </div>
+              )}
               <KapContent content={selectedKap.content} summary={selectedKap.summary} />
             </div>
 
-            <div className="px-6 py-4 bg-[#080c14] border-t border-white/[0.06] flex items-center justify-between">
+            <div className="px-4 sm:px-6 py-4 shrink-0 flex-wrap gap-4 bg-[#080c14] border-t border-white/[0.06] flex items-center justify-between">
               <span className="text-[11px] font-mono text-slate-500">
                 Kaynak: Kamuyu Aydınlatma Platformu (#{selectedKap.id})
               </span>
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-3">
                 <button
                   onClick={() => setSelectedKap(null)}
-                  className="text-xs text-slate-400 hover:text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition"
+                  className="shrink-0 text-xs text-slate-400 hover:text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition"
                 >
                   Kapat
                 </button>

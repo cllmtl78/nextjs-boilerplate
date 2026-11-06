@@ -13,6 +13,37 @@ ARTICLE = '''<html><meta property="article:published_time" content="2026-11-06T1
 URL = 'https://www.yenisafak.com/ekonomi/kap-haberleri/kap-thy-ozel-durum-1234567'
 
 class KapTests(unittest.TestCase):
+    def test_real_source_line_wraps_are_joined_without_losing_text(self):
+        from bs4 import BeautifulSoup
+        html = (Path(__file__).parent / 'fixtures/yenisafak_kap_5159326.html').read_text()
+        blocks = bot.article_content(BeautifulSoup(html, 'html.parser').select_one('.detail-layout'))
+        explanation = [block for block in blocks if block['type'] == 'text' and 'GOLDEN GLOBAL' in block['text']]
+        self.assertEqual(len(explanation), 1)
+        self.assertIn('A.Ş. olduğu TRDGLVKK2611', explanation[0]['text'])
+        self.assertIn('2026 tarihli itfa', explanation[0]['text'])
+        self.assertTrue(explanation[0]['text'].endswith('gerçekleştirilememiştir.'))
+
+    def test_inline_text_keeps_word_separation_and_section_headings(self):
+        from bs4 import BeautifulSoup
+        html = '''<article><h2>Bildirim İçeriği</h2>
+        <p class="detail-text"><span>Sermaye</span><span>Piyasası</span> Kurulu'nun <b>kararı</b>.</p>
+        <p class="detail-text">Açıklama</p><p class="detail-text">İlk paragraf.</p>
+        <p class="detail-text">İkinci paragraf.</p></article>'''
+        blocks = bot.article_content(BeautifulSoup(html, 'html.parser').article)
+        self.assertEqual(blocks[0], {'type':'text','text':'Bildirim İçeriği','heading':True})
+        self.assertEqual(blocks[1]['text'], "Sermaye Piyasası Kurulu'nun kararı.")
+        self.assertTrue(blocks[2]['heading'])
+        self.assertEqual([block['text'] for block in blocks[3:]], ['İlk paragraf.', 'İkinci paragraf.'])
+
+    def test_duplicate_title_is_not_repeated_in_disclosure_body(self):
+        html = '''<article><h1>Sorumluluk Beyanı (Konsolide)</h1>
+        <p class="detail-text">Sorumluluk Beyanı (Konsolide)</p>
+        <p class="detail-text">Açıklama</p><p class="detail-text">Şirket açıklaması.</p>
+        <a href="https://www.kap.org.tr/tr/Bildirim/1694480">KAP</a></article>'''
+        item = bot.parse_article(html, URL)[0]
+        self.assertEqual(item['content'][0]['text'], 'Açıklama')
+        self.assertNotIn('Sorumluluk Beyanı', item['summary'])
+
     def test_utf8_html_is_not_decoded_as_requests_default_latin1(self):
         text = '<h1>İŞ YATIRIM A.Ş. — Açıklama, çığ, ödeme</h1>'
         response = requests.Response()

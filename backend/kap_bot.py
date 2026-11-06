@@ -132,12 +132,17 @@ def article_content(article):
     """Return ordered text/table blocks; never send publisher HTML to React."""
     blocks = []
     pending = []
+    section_titles = {"açıklama", "açıklamalar", "bildirim içeriği", "sorumluluk beyanı", "finansal tablolar"}
 
     def flush():
-        text = re.sub(r"[^\S\n]+", " ", "".join(pending)).strip()
+        text = re.sub(r"[^\S\n]+", " ", " ".join(pending)).strip()
+        text = re.sub(r"[ \t]+([,.;:!?])", r"\1", text)
         pending.clear()
         if text and text != "-KAP-" and not extract_official_links(text):
-            blocks.append({"type": "text", "text": text})
+            block = {"type": "text", "text": text}
+            if text.casefold() in section_titles:
+                block["heading"] = True
+            blocks.append(block)
 
     def span(cell, name):
         try:
@@ -147,9 +152,15 @@ def article_content(article):
 
     def walk(node):
         if isinstance(node, NavigableString):
-            pending.append(str(node))
+            pending.append(re.sub(r"\s+", " ", str(node)))
             return
         if node.name in ("script", "style", "noscript"):
+            return
+        if node.name in ("h2", "h3", "h4"):
+            flush()
+            text = node.get_text(" ", strip=True)
+            if text:
+                blocks.append({"type": "text", "text": text, "heading": True})
             return
         if node.name == "table":
             flush()
@@ -182,13 +193,25 @@ def article_content(article):
 
     # Tables can be siblings of .detail-text paragraphs. Select both, but walk
     # only the outermost matches to avoid duplicating nested paragraphs/tables.
-    candidates = article.select(".detail-text, table")
+    candidates = article.select(".detail-text, table, h2, h3, h4")
     candidate_ids = {id(node) for node in candidates}
     for node in candidates:
         if not any(id(parent) in candidate_ids for parent in node.parents):
             walk(node)
             flush()
-    return blocks
+    # Some KAP wire articles wrap one sentence across multiple <p> elements.
+    # A long line followed by a lowercase word is a continuation, not a new
+    # section. Preserve explicit headings, tables and lettered list items.
+    readable = []
+    for block in blocks:
+        previous = readable[-1] if readable else None
+        if (previous and previous["type"] == "text" and not previous.get("heading")
+                and block["type"] == "text" and not block.get("heading")
+                and len(previous["text"]) >= 80 and re.match(r"^[a-zçğıöşü]{2,}", block["text"])):
+            previous["text"] += " " + block["text"]
+        else:
+            readable.append(block)
+    return readable
 
 
 def parse_article(html, source_url):
@@ -262,6 +285,8 @@ def parse_article(html, source_url):
     description = soup.select_one('meta[name="description"]')
     summary = metadata.get("description") or (description.get("content", "") if description else "") or title
     content = article_content(article)
+    if len(content) > 1 and content[0]["type"] == "text" and content[0]["text"].strip() == subject.strip():
+        content = content[1:]  # The modal already displays the exact same title.
     if content:
         summary = "\n".join(block["text"] if block["type"] == "text" else
                             "\n".join("\t".join(cell["text"] for cell in row) for row in block["rows"])
