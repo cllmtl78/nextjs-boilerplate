@@ -280,6 +280,18 @@ body {
   border: 1px solid rgba(159, 18, 57, 0.45);
 }
 
+.ticker-pill-neutral {
+  color: #94a3b8;
+  background: rgb(30 41 59 / 35%);
+  border: 1px solid rgb(51 65 85 / 45%);
+}
+
+.ticker-state {
+  color: #94a3b8;
+  font-size: 9px;
+  letter-spacing: 0.2px;
+}
+
 /* Fiyat Değişiminde Parlama */
 @keyframes flashTickUp {
   0% {
