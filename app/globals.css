@@ -612,6 +612,39 @@ button {
   gap: 12px;
 }
 
+.legal-notice-trigger {
+  margin-left: auto;
+  color: #38bdf8;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.legal-notice-trigger:hover {
+  text-decoration: underline;
+}
+
+.legal-notice-dialog {
+  margin: auto;
+  padding: 0;
+  width: min(40rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  color: #cbd5e1;
+  background: #0b0f19;
+  border: 1px solid rgb(37 99 235 / 40%);
+  border-radius: 12px;
+  box-shadow: 0 0 50px rgb(37 99 235 / 15%);
+}
+
+.legal-notice-dialog::backdrop {
+  background: rgb(0 0 0 / 80%);
+  backdrop-filter: blur(8px);
+}
+
+.legal-notice-panel {
+  border-top: 2px solid #2563eb;
+}
+
 /* ================= 6. RESPONSIVE ================= */
 @media (max-width: 1200px) {
   .terminal-grid {

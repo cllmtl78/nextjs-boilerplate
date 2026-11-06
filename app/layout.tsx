@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
+import LegalNotice from "@/components/LegalNotice";
 
 const sansFont = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -32,11 +33,14 @@ export default function RootLayout({
         <main className="container main">{children}</main>
         <div className="footer-wrap">
           <footer className="container footer">
-            <p>
-              Bu sitedeki içerikler bilgilendirme amaçlıdır ve yatırım tavsiyesi
-              değildir.
-            </p>
-            <p>© 2026 BPT Finans. Tüm hakları saklıdır.</p>
+            <div className="space-y-1">
+              <p>
+                Bu sitedeki içerikler bilgilendirme amaçlıdır ve yatırım tavsiyesi
+                değildir.
+              </p>
+              <p>© 2026 BPT Finans. Tüm hakları saklıdır.</p>
+            </div>
+            <LegalNotice />
           </footer>
         </div>
       </body>
