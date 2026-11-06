@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import MarketIntelligence from "@/components/MarketIntelligence";
+import KapContent, { type KapContentBlock } from "@/components/KapContent";
 
 export type TerminalHaber = {
   id: string;
@@ -176,6 +177,7 @@ export interface KapItem {
   title: string;
   subject: string;
   summary: string;
+  content?: KapContentBlock[];
   time: string;
   timestamp?: number;
   kapUrl?: string;
@@ -1610,9 +1612,7 @@ export default function TerminalWorkspace() {
               <div className="text-xs font-semibold text-[#38bdf8] bg-slate-900/80 p-2.5 rounded border border-white/[0.04]">
                 Konu: {selectedKap.subject}
               </div>
-              <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line font-normal">
-                {selectedKap.summary}
-              </p>
+              <KapContent content={selectedKap.content} summary={selectedKap.summary} />
             </div>
 
             <div className="px-6 py-4 bg-[#080c14] border-t border-white/[0.06] flex items-center justify-between">

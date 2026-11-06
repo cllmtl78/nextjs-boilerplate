@@ -12,6 +12,54 @@ ARTICLE = '''<html><meta property="article:published_time" content="2026-11-06T1
 URL = 'https://www.yenisafak.com/ekonomi/kap-haberleri/kap-thy-ozel-durum-1234567'
 
 class KapTests(unittest.TestCase):
+    def test_utf8_html_is_not_decoded_as_requests_default_latin1(self):
+        text = '<h1>İŞ YATIRIM A.Ş. — Açıklama, çığ, ödeme</h1>'
+        response = requests.Response()
+        response.status_code = 200
+        response.url = URL
+        response._content = text.encode('utf-8')
+        response.encoding = 'ISO-8859-1'
+        self.assertNotEqual(response.text, text)
+        collector = bot.YeniSafakCollector()
+        collector.session.get = Mock(return_value=response)
+        self.assertEqual(collector.get_html(URL), text)
+
+    def test_non_utf8_declared_html_charset(self):
+        text = '<meta charset="windows-1254"><p>Şirket açıklaması</p>'
+        response = requests.Response()
+        response._content = text.encode('windows-1254')
+        self.assertIn('Şirket açıklaması', bot.decode_response_html(response))
+
+    def test_turkish_multi_symbol_title_and_financial_table(self):
+        html = '''<div class="detail-layout"><article class="detail-head">
+        <h1>KAP *** AYTEMİZ YATIRIM BANKASI A.Ş. *** AYTEM,YYA *** Banka Finansal Rapor</h1></article>
+        <div class="detail-text"><p>Finansal Durum Tablosu (Bilanço)</p>
+        <table><caption>Para Tipi: TL</caption><tr><th rowspan="2">Varlıklar</th><th colspan="2">Dönem</th></tr>
+        <tr><th>Cari Dönem</th><th>Önceki Dönem</th></tr>
+        <tr><td>İlişkili Taraflardan Alacaklar</td><td>610000000</td><td>110000000</td></tr></table>
+        <p>Özkaynaklar ve yükümlülükler.</p></div>
+        <a href="https://www.kap.org.tr/tr/Bildirim/1694432">KAP</a></div>'''
+        item = bot.parse_article(html, URL)[0]
+        self.assertEqual(item['code'], 'AYTEM,YYA')
+        self.assertEqual(item['title'], 'Banka Finansal Rapor')
+        self.assertEqual(item['company'], 'AYTEMİZ YATIRIM BANKASI A.Ş.')
+        self.assertEqual([block['type'] for block in item['content']], ['text', 'table', 'text'])
+        table = item['content'][1]
+        self.assertEqual(table['rows'][0][0]['rowSpan'], 2)
+        self.assertEqual(table['rows'][0][1]['colSpan'], 2)
+        self.assertEqual(table['rows'][2][0]['text'], 'İlişkili Taraflardan Alacaklar')
+        self.assertEqual(table['rows'][2][1]['text'], '610000000')
+        self.assertIn('İlişkili Taraflardan Alacaklar\t610000000\t110000000', item['summary'])
+
+    def test_nested_detail_paragraphs_and_sibling_tables_are_not_duplicated(self):
+        html = '''<article><div class="detail-text"><div class="detail-text">İlk paragraf</div></div>
+        <table><tr><td>Varlıklar</td><td>123</td></tr></table></article>'''
+        from bs4 import BeautifulSoup
+        blocks = bot.article_content(BeautifulSoup(html, 'html.parser').article)
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[0]['text'], 'İlk paragraf')
+        self.assertEqual(blocks[1]['rows'][0][1]['text'], '123')
+
     def test_real_saved_yenisafak_page_header_and_body_are_siblings(self):
         html = (Path(__file__).parent / 'fixtures/yenisafak_kap_5159326.html').read_text()
         url = 'https://www.yenisafak.com/ekonomi/kap-haberleri/kap-merkezi-kayit-kurulusu-as-ggbvk-merkezi-kayit-kurulusu-as-duyurusu-5159326'

@@ -13,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString, UnicodeDammit
 
 logger = logging.getLogger(__name__)
 TR = timezone(timedelta(hours=3))
@@ -115,6 +115,81 @@ def parse_listing(html):
     return urls[:40]
 
 
+def decode_response_html(response):
+    # requests defaults text/html without a charset to Latin-1, corrupting UTF-8
+    # Turkish text before BeautifulSoup ever sees the document.
+    try:
+        return response.content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        decoded = UnicodeDammit(response.content, is_html=True)
+        if decoded.unicode_markup is None:
+            raise ValueError("Haber sayfasının karakter kodlaması çözülemedi")
+        return decoded.unicode_markup
+
+
+def article_content(article):
+    """Return ordered text/table blocks; never send publisher HTML to React."""
+    blocks = []
+    pending = []
+
+    def flush():
+        text = re.sub(r"[^\S\n]+", " ", "".join(pending)).strip()
+        pending.clear()
+        if text and text != "-KAP-" and not extract_official_links(text):
+            blocks.append({"type": "text", "text": text})
+
+    def span(cell, name):
+        try:
+            return max(1, min(100, int(cell.get(name, 1))))
+        except (ValueError, TypeError):
+            return 1
+
+    def walk(node):
+        if isinstance(node, NavigableString):
+            pending.append(str(node))
+            return
+        if node.name in ("script", "style", "noscript"):
+            return
+        if node.name == "table":
+            flush()
+            rows = []
+            for row in node.find_all("tr"):
+                if row.find_parent("table") is not node:
+                    continue
+                cells = [{"text": cell.get_text(" ", strip=True),
+                          "header": cell.name == "th",
+                          "colSpan": span(cell, "colspan"),
+                          "rowSpan": span(cell, "rowspan")}
+                         for cell in row.find_all(["td", "th"], recursive=False)]
+                if cells:
+                    rows.append(cells)
+            if rows:
+                caption = node.find("caption", recursive=False)
+                blocks.append({"type": "table", "rows": rows,
+                               "caption": caption.get_text(" ", strip=True) if caption else ""})
+            return
+        if node.name == "br":
+            pending.append("\n")
+            return
+        boundary = node.name in ("div", "p", "li", "h2", "h3", "h4", "section")
+        if boundary:
+            flush()
+        for child in node.children:
+            walk(child)
+        if boundary:
+            flush()
+
+    # Tables can be siblings of .detail-text paragraphs. Select both, but walk
+    # only the outermost matches to avoid duplicating nested paragraphs/tables.
+    candidates = article.select(".detail-text, table")
+    candidate_ids = {id(node) for node in candidates}
+    for node in candidates:
+        if not any(id(parent) in candidate_ids for parent in node.parents):
+            walk(node)
+            flush()
+    return blocks
+
+
 def parse_article(html, source_url):
     soup = BeautifulSoup(html, "html.parser")
     # Yeni Şafak's <article class="detail-head"> contains only the heading.
@@ -159,7 +234,7 @@ def parse_article(html, source_url):
     code = match[1] if match else ""
     company = ""
     subject = clean_subject_text(title)
-    publisher_title = re.fullmatch(r"KAP\s*\*{3}\s*(.*?)\s*\*{3}\s*([A-Z0-9]{3,6})\s*\*{3}\s*(.+)", title.strip(), re.S)
+    publisher_title = re.fullmatch(r"KAP\s*\*{3}\s*(.*?)\s*\*{3}\s*([A-Z0-9]{3,6}(?:\s*,\s*[A-Z0-9]{3,6})*)\s*\*{3}\s*(.+)", title.strip(), re.S)
     if publisher_title:
         company, code, subject = (part.strip() for part in publisher_title.groups())
     raw_date = metadata.get("datePublished", "")
@@ -185,12 +260,14 @@ def parse_article(html, source_url):
         pass  # Unknown publication time is never replaced with the current time.
     description = soup.select_one('meta[name="description"]')
     summary = metadata.get("description") or (description.get("content", "") if description else "") or title
-    paragraphs = [node.get_text(" ", strip=True) for node in article.select(".detail-text")]
-    if paragraphs:
-        summary = "\n".join(text for text in paragraphs if text and not extract_official_links(text) and text != "-KAP-") or summary
+    content = article_content(article)
+    if content:
+        summary = "\n".join(block["text"] if block["type"] == "text" else
+                            "\n".join("\t".join(cell["text"] for cell in row) for row in block["rows"])
+                            for block in content)
     return [{
         "id": disc_id, "code": code, "type": "KAP", "company": company,
-        "title": subject, "subject": subject, "summary": summary,
+        "title": subject, "subject": subject, "summary": summary, "content": content,
         "time": published.strftime("%H:%M:%S") if published else "--:--",
         "date": published.isoformat() if published else None,
         "timestamp": int(published.timestamp()) if published else None,
@@ -210,7 +287,7 @@ class YeniSafakCollector:
         response.raise_for_status()
         if urlsplit(response.url).hostname != "www.yenisafak.com":
             raise ValueError("Yeni Şafak dışına yönlendirme reddedildi")
-        return response.text
+        return decode_response_html(response)
 
     def fetch(self):
         urls = parse_listing(self.get_html(LIST_URL))
