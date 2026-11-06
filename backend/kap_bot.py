@@ -117,7 +117,9 @@ def parse_listing(html):
 
 def parse_article(html, source_url):
     soup = BeautifulSoup(html, "html.parser")
-    article = soup.find("article") or soup.find("main") or soup
+    # Yeni Şafak's <article class="detail-head"> contains only the heading.
+    # The actual disclosure text/link are siblings inside .detail-layout.
+    article = soup.select_one(".detail-layout") or soup.find("article") or soup.find("main") or soup
     nodes = list(json_nodes(soup))
     metadata = next((n for n in nodes if "headline" in n), {})
     title_node = article.find("h1") or soup.find("h1")
@@ -155,11 +157,24 @@ def parse_article(html, source_url):
     if not match:
         match = re.search(r"\[([A-Z0-9]{3,6})\]", body)
     code = match[1] if match else ""
+    company = ""
+    subject = clean_subject_text(title)
+    publisher_title = re.fullmatch(r"KAP\s*\*{3}\s*(.*?)\s*\*{3}\s*([A-Z0-9]{3,6})\s*\*{3}\s*(.+)", title.strip(), re.S)
+    if publisher_title:
+        company, code, subject = (part.strip() for part in publisher_title.groups())
     raw_date = metadata.get("datePublished", "")
     if not raw_date:
         meta = soup.select_one('meta[property="article:published_time"]')
         date_node = article.find("time")
         raw_date = meta.get("content", "") if meta else (date_node.get("datetime", "") if date_node else "")
+    if not raw_date:
+        # Site uses visible Turkish date text, not a <time datetime> element.
+        for node in article.select(".detail-head-meta-primary .detail-head-text"):
+            match_date = re.search(r"(\d{2}:\d{2}(?::\d{2})?),\s*(\d{2}/\d{2}/\d{4})", node.get_text(" ", strip=True))
+            if match_date:
+                fmt = "%H:%M:%S %d/%m/%Y" if len(match_date[1]) == 8 else "%H:%M %d/%m/%Y"
+                raw_date = datetime.strptime(f"{match_date[1]} {match_date[2]}", fmt).replace(tzinfo=TR).isoformat()
+                break
     published = None
     try:
         published = datetime.fromisoformat(str(raw_date).replace("Z", "+00:00"))
@@ -170,9 +185,11 @@ def parse_article(html, source_url):
         pass  # Unknown publication time is never replaced with the current time.
     description = soup.select_one('meta[name="description"]')
     summary = metadata.get("description") or (description.get("content", "") if description else "") or title
-    subject = clean_subject_text(title)
+    paragraphs = [node.get_text(" ", strip=True) for node in article.select(".detail-text")]
+    if paragraphs:
+        summary = "\n".join(text for text in paragraphs if text and not extract_official_links(text) and text != "-KAP-") or summary
     return [{
-        "id": disc_id, "code": code, "type": "KAP", "company": "",
+        "id": disc_id, "code": code, "type": "KAP", "company": company,
         "title": subject, "subject": subject, "summary": summary,
         "time": published.strftime("%H:%M:%S") if published else "--:--",
         "date": published.isoformat() if published else None,

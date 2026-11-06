@@ -1,5 +1,6 @@
 """Parser/worker tests use synthetic HTML; they do not claim live-site compatibility."""
 import unittest
+from pathlib import Path
 from unittest.mock import Mock, patch
 import requests
 import kap_bot as bot
@@ -11,6 +12,27 @@ ARTICLE = '''<html><meta property="article:published_time" content="2026-11-06T1
 URL = 'https://www.yenisafak.com/ekonomi/kap-haberleri/kap-thy-ozel-durum-1234567'
 
 class KapTests(unittest.TestCase):
+    def test_real_saved_yenisafak_page_header_and_body_are_siblings(self):
+        html = (Path(__file__).parent / 'fixtures/yenisafak_kap_5159326.html').read_text()
+        url = 'https://www.yenisafak.com/ekonomi/kap-haberleri/kap-merkezi-kayit-kurulusu-as-ggbvk-merkezi-kayit-kurulusu-as-duyurusu-5159326'
+        items = bot.parse_article(html, url)
+        self.assertEqual(len(items), 1)
+        item = items[0]
+        self.assertEqual(item['id'], 1694413)
+        self.assertEqual(item['url'], 'https://www.kap.org.tr/tr/Bildirim/1694413')
+        self.assertEqual(item['code'], 'GGBVK')
+        self.assertEqual(item['company'], 'MERKEZİ KAYIT KURULUŞU A.Ş.')
+        self.assertEqual(item['subject'], 'Merkezi Kayıt Kuruluşu A.Ş. Duyurusu')
+        self.assertEqual(item['time'], '20:00:00')
+        self.assertEqual(item['date'], '2026-11-06T20:00:00+03:00')
+        self.assertIn('GOLDEN GLOBAL', item['summary'])
+        self.assertNotIn('Reklam', item['summary'])
+
+    def test_real_layout_ignores_recommendations_outside_detail(self):
+        html = (Path(__file__).parent / 'fixtures/yenisafak_kap_5159326.html').read_text()
+        html += '<article><h1>Başka haber</h1><a href="https://www.kap.org.tr/tr/Bildirim/9999999">KAP</a></article>'
+        self.assertEqual([item['id'] for item in bot.parse_article(html, URL)], [1694413])
+
     def test_article_preserves_official_link_and_time(self):
         items = bot.parse_article(ARTICLE, URL)
         self.assertEqual(len(items), 1)
