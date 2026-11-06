@@ -1,9 +1,11 @@
 import re
+import calendar
 import time
 import threading
 from datetime import datetime, timezone, timedelta
 import feedparser
 from bs4 import BeautifulSoup
+from news_day import only_today
 
 NEWS_CACHE = []
 
@@ -30,11 +32,10 @@ def parse_entry_time(entry):
     p_parsed = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
     tz_tr = timezone(timedelta(hours=3))
     if p_parsed:
-        utc_ts = time.mktime(p_parsed)
+        utc_ts = calendar.timegm(p_parsed)
         dt = datetime.fromtimestamp(utc_ts, tz=timezone.utc).astimezone(tz_tr)
         return dt.strftime("%H:%M:%S"), int(dt.timestamp() * 1000), dt
-    now = datetime.now(tz=tz_tr)
-    return now.strftime("%H:%M:%S"), int(now.timestamp() * 1000), now
+    return "--:--", None, None
 
 def fetch_feed(source):
     items = []
@@ -52,7 +53,7 @@ def fetch_feed(source):
                 continue
 
             time_str, ts, dt_obj = parse_entry_time(entry)
-            if dt_obj.date() != today_date:
+            if dt_obj is None or dt_obj.date() != today_date:
                 continue
 
             summary = clean_html(getattr(entry, "summary", "") or getattr(entry, "description", ""))
@@ -79,6 +80,7 @@ def run_news_worker():
     global NEWS_CACHE
     while True:
         try:
+            NEWS_CACHE = only_today(NEWS_CACHE)
             all_collected = []
             for src in SOURCES:
                 all_collected.extend(fetch_feed(src))
@@ -93,7 +95,7 @@ def run_news_worker():
                         unique_news.append(n)
 
                 unique_news.sort(key=lambda x: x["timestamp"], reverse=True)
-                NEWS_CACHE = unique_news
+                NEWS_CACHE = only_today(unique_news)
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] [BIST Bot] {len(NEWS_CACHE)} haber hazır.")
         except Exception as e:
             print("[BIST Bot] Worker hatası:", e)
@@ -104,4 +106,4 @@ def start_bist_news_bot():
     t.start()
 
 def get_bist_news_data():
-    return NEWS_CACHE
+    return only_today(NEWS_CACHE)

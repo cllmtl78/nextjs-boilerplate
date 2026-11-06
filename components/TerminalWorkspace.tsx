@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import MarketIntelligence from "@/components/MarketIntelligence";
 import KapContent, { type KapContentBlock } from "@/components/KapContent";
 import { cleanWireText as cleanGlobalWireText, istanbulDay } from "@/lib/wire-text";
+import { isCurrentNewsDay, isCurrentNewsItem, watchIstanbulDay, resetDailyNewsCache } from "@/lib/news-day";
 
 export type TerminalHaber = {
   id: string;
@@ -117,17 +118,7 @@ export const parseNewsTime = (dateInput: string | number | Date | null | undefin
 export const formatTimeTR = parseNewsTime;
 
 // 2. GÜNLÜK AKIŞI SIFIRLAMA (23:59 Sonrası Yeni Gün Temizliği):
-export const isToday = (dateObj: Date | number | string | null | undefined): boolean => {
-  if (!dateObj) return false;
-  const d = dateObj instanceof Date ? dateObj : new Date(dateObj);
-  if (isNaN(d.getTime())) return false;
-  const today = new Date();
-  return (
-    d.getDate() === today.getDate() &&
-    d.getMonth() === today.getMonth() &&
-    d.getFullYear() === today.getFullYear()
-  );
-};
+export const isToday = (dateObj: Date | number | string | null | undefined): boolean => isCurrentNewsDay(dateObj);
 
 export function formatNaturalCase(text: string): string {
   if (!text) return "";
@@ -178,6 +169,7 @@ export interface KapItem {
   subject: string;
   summary: string;
   content?: KapContentBlock[];
+  date?: string | null;
   time: string;
   timestamp?: number;
   kapUrl?: string;
@@ -374,52 +366,17 @@ export const extractFixedKapTime = (rawDateStr: unknown): string => {
 
 // Gelecek Saat Kontrolü ile Dünkü Veriyi Kesin Eleme Filtresi
 export const isStrictlyTodayKap = (rawDateStr: unknown, extractedTime: string): boolean => {
-  const now = new Date();
-  const trNowStr = now.toLocaleTimeString("tr-TR", {
-    timeZone: "Europe/Istanbul",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-
-  if (rawDateStr) {
-    const str = String(rawDateStr).trim().toLowerCase();
-    if (str.includes("dün") || str.includes("yesterday")) return false;
-
-    const dd = String(now.getDate()).padStart(2, "0");
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const yyyy = String(now.getFullYear());
-
-    // İçinde tarih formatı varsa bugünün tarihiyle eşleşmek zorunda
-    if (/\d{2}[\.\/\-]\d{2}[\.\/\-]\d{4}|\d{4}-\d{2}-\d{2}/.test(str)) {
-      const isTodayMatch =
-        str.includes(`${dd}.${mm}.${yyyy}`) ||
-        str.includes(`${yyyy}-${mm}-${dd}`) ||
-        str.includes(`${dd}/${mm}/${yyyy}`);
-      if (!isTodayMatch) return false;
-    }
-  }
-
-  // Eğer bildirim saati şu anki Türkiye saatinden ilerideyse (örn: dün 22:46, şu an 18:07), kesinlikle dünün bildirimidir!
-  if (extractedTime && extractedTime !== "--:--" && extractedTime > trNowStr) {
-    return false;
-  }
-
-  return true;
+  // A clock alone cannot establish the publication day.
+  void extractedTime;
+  return isCurrentNewsDay(rawDateStr);
 };
 
-export const isTodayKap = (timestampOrDate: unknown): boolean => {
-  if (!timestampOrDate) return false;
-  const time = extractFixedKapTime(timestampOrDate);
-  return isStrictlyTodayKap(timestampOrDate, time);
-};
+export const isTodayKap = (timestampOrDate: unknown): boolean => isCurrentNewsDay(timestampOrDate);
 
 export const checkAndResetKapDailyCache = (): void => {
   if (typeof window === "undefined") return;
   try {
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const todayStr = istanbulDay(Date.now());
     const lastDate = localStorage.getItem(CACHE_KEY_KAP_DATE);
 
     if (lastDate !== todayStr) {
@@ -750,7 +707,7 @@ export default function TerminalWorkspace() {
             localStorage.removeItem(CACHE_KEY_BIST);
             return [];
           }
-          const filtered = parsed.filter((it: TerminalHaber) => isToday(it.dateObj || it.timestamp));
+          const filtered = parsed.filter((it: TerminalHaber) => isCurrentNewsItem(it));
           if (filtered.length > 0) return filtered;
           localStorage.removeItem(CACHE_KEY_BIST);
           return [];
@@ -820,7 +777,7 @@ export default function TerminalWorkspace() {
       if (cached) {
         const parsed = JSON.parse(cached) as KapItem[];
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const onlyToday = parsed.filter((item) => isStrictlyTodayKap(item.timestamp || item.time, item.time));
+          const onlyToday = parsed.filter((item) => isCurrentNewsItem(item));
           if (onlyToday.length > 0) {
             return onlyToday.sort((a, b) => Number(b.id) - Number(a.id));
           }
@@ -840,7 +797,7 @@ export default function TerminalWorkspace() {
       if (cached) {
         const parsed = JSON.parse(cached) as KapItem[];
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const onlyToday = parsed.filter((item) => isStrictlyTodayKap(item.timestamp || item.time, item.time));
+          const onlyToday = parsed.filter((item) => isCurrentNewsItem(item));
           if (onlyToday.length > 0) return false;
         }
       }
@@ -857,6 +814,19 @@ export default function TerminalWorkspace() {
   const [globalFeedUnavailable, setGlobalFeedUnavailable] = useState(false);
   // KAP bildirimlerinin saatlerini bir kez alındıktan sonra kilitleyen referans haritası
   const lockedKapTimesRef = useRef(new Map<number, string>());
+
+  useEffect(() => watchIstanbulDay(() => {
+    setBistHaberleri(current => current.filter(item => isCurrentNewsItem(item)));
+    setGlobalHaberler(current => current.filter(item => isCurrentNewsItem(item)));
+    setKapBildirimleri(current => current.filter(item => isCurrentNewsItem(item)));
+    setSelectedKap(null);
+    setSeciliHaber(null);
+    setNewlyArrivedIds(new Set());
+    knownIdsRef.current.clear();
+    lockedKapTimesRef.current.clear();
+    isInitialLoadRef.current = true;
+    try { resetDailyNewsCache(localStorage); } catch { /* Storage may be unavailable. */ }
+  }), []);
 
   const loadGlobalNews = useCallback(async () => {
     if (globalRequestRef.current) return;
@@ -893,8 +863,8 @@ export default function TerminalWorkspace() {
       });
       if (res.ok) {
         const json = await res.json();
-        if (json && Array.isArray(json.data) && json.data.length > 0) {
-          const freshData: TerminalHaber[] = json.data;
+        if (json && Array.isArray(json.data)) {
+          const freshData: TerminalHaber[] = json.data.filter((item: TerminalHaber) => isCurrentNewsItem(item));
 
           if (!isInitialLoadRef.current) {
             const newIds = new Set<string>();
@@ -927,6 +897,7 @@ export default function TerminalWorkspace() {
       }
     } catch (err) {
       console.error("BIST news fetch error:", err);
+      setBistHaberleri(current => current.filter(item => isCurrentNewsItem(item)));
     } finally {
       setLoadingBist(false);
     }
@@ -981,8 +952,8 @@ export default function TerminalWorkspace() {
         });
         if (res.ok) {
           const json = await res.json();
-          if (json && Array.isArray(json.data) && json.data.length > 0) {
-            const mapped: KapItem[] = json.data.map((item: KapItem) => {
+          if (json && Array.isArray(json.data)) {
+            const mapped: KapItem[] = json.data.filter((item: KapItem) => isCurrentNewsItem(item)).map((item: KapItem) => {
               const kapLink = item.url || item.link || item.kapUrl || (item.id ? `https://www.kap.org.tr/tr/Bildirim/${item.id}` : "");
               return {
                 ...item,
@@ -993,11 +964,13 @@ export default function TerminalWorkspace() {
             });
             if (isMounted) {
               setKapBildirimleri(mapped);
+              try { localStorage.setItem(CACHE_KEY_KAP_V4, JSON.stringify(mapped)); } catch { /* Cache is optional. */ }
             }
           }
         }
       } catch (err) {
         console.error("KAP fetch error:", err);
+        if (isMounted) setKapBildirimleri(current => current.filter(item => isCurrentNewsItem(item)));
       } finally {
         if (isMounted) {
           setLoadingKap(false);

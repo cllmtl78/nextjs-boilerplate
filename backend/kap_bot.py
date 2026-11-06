@@ -14,6 +14,7 @@ from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 
 import requests
 from bs4 import BeautifulSoup, NavigableString, UnicodeDammit
+from news_day import only_today, publication_time
 
 logger = logging.getLogger(__name__)
 TR = timezone(timedelta(hours=3))
@@ -270,7 +271,7 @@ def parse_article(html, source_url):
         "title": subject, "subject": subject, "summary": summary, "content": content,
         "time": published.strftime("%H:%M:%S") if published else "--:--",
         "date": published.isoformat() if published else None,
-        "timestamp": int(published.timestamp()) if published else None,
+        "timestamp": int(published.timestamp() * 1000) if published else None,
         "url": link, "link": link, "kapUrl": link,
         "source": "Yeni Şafak", "sourceUrl": source_url,
     } for disc_id, link in links]
@@ -345,6 +346,7 @@ def fetch_official_kap():
             code = ",".join(str(value) for value in code)
         link = f"https://www.kap.org.tr/tr/Bildirim/{int(disc_id)}"
         raw_date = str(basic.get("publishDate") or basic.get("disclosureTime") or "")
+        published = publication_time(raw_date)
         clock = re.search(r"\b\d{2}:\d{2}(?::\d{2})?\b", raw_date)
         results[int(disc_id)] = {
             "id": int(disc_id), "code": str(code), "type": "KAP",
@@ -353,19 +355,21 @@ def fetch_official_kap():
             "company": basic.get("companyTitle") or basic.get("companyName") or "",
             "time": clock[0] if clock else "--:--", "url": link, "link": link,
             "kapUrl": link, "source": "KAP",
+            "timestamp": int(published.timestamp() * 1000) if published else None,
+            "date": published.isoformat() if published else None,
         }
     return sorted(results.values(), key=lambda item: item["id"], reverse=True)[:40]
 
 
 def fetch_fast_kap():
     try:
-        results = _collector.fetch()
+        results = only_today(_collector.fetch())
         if results:
             return results
     except (requests.RequestException, ValueError) as exc:
         logger.warning("[KAP] Yeni Şafak kaynağı alınamadı: %s", exc)
     try:
-        return fetch_official_kap()
+        return only_today(fetch_official_kap())
     except (requests.RequestException, ValueError) as exc:
         logger.warning("[KAP] Resmî kaynak alınamadı: %s", exc)
         return []
@@ -376,7 +380,8 @@ def run_kap_worker():
     failures = 0
     while True:
         try:
-            data = fetch_fast_kap()
+            KAP_CACHE = only_today(KAP_CACHE)
+            data = only_today(fetch_fast_kap())
             if data:
                 KAP_CACHE = data
                 failures = 0
@@ -400,4 +405,4 @@ def start_kap_bot():
 
 
 def get_kap_data():
-    return KAP_CACHE
+    return only_today(KAP_CACHE)

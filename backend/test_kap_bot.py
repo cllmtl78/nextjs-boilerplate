@@ -1,5 +1,6 @@
 """Parser/worker tests use synthetic HTML; they do not claim live-site compatibility."""
 import unittest
+import time
 from pathlib import Path
 from unittest.mock import Mock, patch
 import requests
@@ -155,8 +156,9 @@ class KapTests(unittest.TestCase):
         self.assertEqual(collector.get_html.call_count, 3)
 
     def test_source_failure_uses_official_fallback(self):
-        with patch.object(bot._collector, 'fetch', side_effect=requests.HTTPError('403')), patch.object(bot, 'fetch_official_kap', return_value=[{'id': 42}]):
-            self.assertEqual(bot.fetch_fast_kap(), [{'id': 42}])
+        item = {'id': 42, 'timestamp': int(time.time() * 1000)}
+        with patch.object(bot._collector, 'fetch', side_effect=requests.HTTPError('403')), patch.object(bot, 'fetch_official_kap', return_value=[item]):
+            self.assertEqual(bot.fetch_fast_kap(), [item])
 
     def test_no_live_workers_started_by_import(self):
         self.assertIsNone(bot._worker)
