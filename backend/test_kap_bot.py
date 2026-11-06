@@ -8,7 +8,7 @@ ARTICLE = '''<html><meta property="article:published_time" content="2026-11-06T1
 <article><h1>THYAO [TÜRK HAVA YOLLARI] Özel Durum Açıklaması</h1>
 <p>İlgili Şirketler: THYAO</p><a href="https://www.kap.org.tr/tr/Bildirim/1234567">KAP</a>
 <a href="https://www.kap.org.tr/tr/Bildirim/1234567">Tekrar</a></article></html>'''
-URL = 'https://www.yenisafak.com/ekonomi/thy-ozel-durum-1234567'
+URL = 'https://www.yenisafak.com/ekonomi/kap-haberleri/kap-thy-ozel-durum-1234567'
 
 class KapTests(unittest.TestCase):
     def test_article_preserves_official_link_and_time(self):
@@ -34,8 +34,41 @@ class KapTests(unittest.TestCase):
                     'https://kap.org.tr/tr/Bildirim/1234567/other']:
             self.assertIsNone(bot.official_link(url))
 
+    def test_official_paths_with_and_without_language(self):
+        for path in ['/Bildirim/1234567', '/tr/Bildirim/1234567',
+                     '/en/disclosure/1234567', '/disclosure/1234567/']:
+            self.assertEqual(bot.official_link('https://www.kap.org.tr' + path),
+                             (1234567, 'https://www.kap.org.tr/tr/Bildirim/1234567'))
+
+    def test_root_path_link_from_publisher_article(self):
+        html = ARTICLE.replace('/tr/Bildirim/', '/Bildirim/')
+        self.assertEqual(bot.parse_article(html, URL)[0]['id'], 1234567)
+
+    def test_escaped_article_content_and_protocol_relative_url(self):
+        for content in [
+            'https://www.kap.org.tr/Bildirim/1234567',
+            'https:\\/\\/www.kap.org.tr\\/Bildirim\\/1234567',
+            'https%3A%2F%2Fwww.kap.org.tr%2FBildirim%2F1234567',
+            '//www.kap.org.tr/Bildirim/1234567',
+            r'https:\u002f\u002fwww.kap.org.tr\u002fBildirim\u002f1234567',
+        ]:
+            with self.subTest(content=content):
+                html = '<article><h1>PCILT [Şirket] Payların Geri Alınması</h1><p>' + content + '</p></article>'
+                self.assertEqual(bot.parse_article(html, URL)[0]['id'], 1234567)
+
+    def test_unrelated_page_links_do_not_become_disclosures(self):
+        html = '<article><h1>Şirket açıklaması</h1></article><footer><a href="https://www.kap.org.tr/Bildirim/9999999">Başka haber</a></footer>'
+        self.assertEqual(bot.parse_article(html, URL), [])
+
+    def test_exact_kap_section_from_deployment_log(self):
+        path = '/ekonomi/kap-haberleri/kap-pc-iletisim-ve-medya-hizmetleri-sanayi-ticaret-as-pcilt-paylarin-geri-alinmasina-iliskin-bildirim-5159325'
+        self.assertEqual(bot.article_url(path), 'https://www.yenisafak.com' + path)
+        for path in ['/ekonomi/oruc-reis-rotayi-cevirdi-turkiyenin-yeni-hedefi-belli-oldu-4870340',
+                     '/ekonomi/kap-haberleri', '/ekonomi/kap-haberleri?page=2']:
+            self.assertIsNone(bot.article_url(path))
+
     def test_listing_relative_links_dedup_and_scope(self):
-        html = f'<a href="{URL}">Haber</a><a href="{URL}?x=2">Tekrar</a><a href="/ekonomi/kap-haberleri">Liste</a><a href="https://evil.com/ekonomi/kap-123456">Dış</a>'
+        html = f'<a href="{URL}">Haber</a><a href="{URL}?x=2">Tekrar</a><a href="/ekonomi/kap-haberleri">Liste</a><a href="https://evil.com/ekonomi/kap-123456">Dış</a><a href="/ekonomi/oruc-reis-rotayi-cevirdi-4870340">Ekonomi</a>'
         self.assertEqual(bot.parse_listing(html), [URL])
 
     def test_json_ld_and_utc(self):

@@ -4,12 +4,13 @@ Only links actually published by a source are accepted as disclosure IDs.
 All network activity stays in the worker, never in the FastAPI request handler.
 """
 import json
+import html as html_lib
 import logging
 import re
 import threading
 import time
 from datetime import datetime, timezone, timedelta
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 
 import requests
 from bs4 import BeautifulSoup
@@ -40,13 +41,34 @@ def official_link(value):
     """Validate host and exact disclosure path, rather than guessing an ID."""
     if not isinstance(value, str):
         return None
-    parsed = urlsplit(value.strip())
+    value = decode_content(value).strip()
+    if value.startswith("//"):
+        value = "https:" + value
+    parsed = urlsplit(value)
     if parsed.scheme not in ("http", "https") or parsed.hostname not in ("kap.org.tr", "www.kap.org.tr"):
         return None
-    match = re.fullmatch(r"/(?:tr|en)/(?:Bildirim|disclosure)/(\d+)/?", parsed.path, re.I)
+    match = re.fullmatch(r"/(?:(?:tr|en)/)?(?:Bildirim|disclosure)/(\d+)/?", parsed.path, re.I)
     if not match:
         return None
     return int(match[1]), f"https://www.kap.org.tr/tr/Bildirim/{int(match[1])}"
+
+
+def decode_content(value):
+    """Decode publisher HTML/URL/JSON escaping without evaluating scripts."""
+    value = html_lib.unescape(value)
+    value = value.replace("\\/", "/")
+    value = re.sub(r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m[1], 16)), value)
+    return unquote(value)
+
+
+def extract_official_links(content):
+    content = decode_content(content)
+    links = []
+    for value in re.findall(r'(?:https?:)?//(?:www\.)?kap\.org\.tr/[^\s<>"\'\\]+', content, re.I):
+        link = official_link(value.rstrip(".,);]"))
+        if link and link not in links:
+            links.append(link)
+    return links
 
 
 def article_url(href):
@@ -55,9 +77,7 @@ def article_url(href):
         return None
     path = parsed.path.rstrip("/")
     # Stay within the KAP section; do not crawl general economy/navigation links.
-    if not path.startswith("/ekonomi/") or path == "/ekonomi/kap-haberleri":
-        return None
-    if "kap" not in path.lower() and not re.search(r"-\d{5,}$", path):
+    if not re.fullmatch(r"/ekonomi/kap-haberleri/[^/]+-\d+", path):
         return None
     return urlunsplit(("https", "www.yenisafak.com", path, "", ""))
 
@@ -110,15 +130,16 @@ def parse_article(html, source_url):
         body = article.get_text(" ", strip=True)
     if any(word in title.upper() for word in JUNK_KEYWORDS):
         return []
-    links = []
+    # Search actual article markup too: URLs can be HTML-escaped text, data
+    # attributes or embedded content, not necessarily an <a href> element.
+    links = extract_official_links(str(article))
     for anchor in article.select("a[href]"):
         link = official_link(urljoin(source_url, anchor["href"]))
         if link and link not in links:
             links.append(link)
     # Some publishers print the official URL as text rather than an anchor.
-    for value in re.findall(r'https?://(?:www\.)?kap\.org\.tr/[^\s<>"\']+', body):
-        link = official_link(value.rstrip(".,);"))
-        if link and link not in links:
+    for link in extract_official_links(body):
+        if link not in links:
             links.append(link)
     if not links:
         logger.warning("[KAP] Haberde resmî bildirim bağlantısı bulunamadı: %s", source_url)
@@ -131,6 +152,8 @@ def parse_article(html, source_url):
         match = re.search(r"\(([A-Z0-9]{3,6})\)", title)
     if not match:
         match = re.search(r"\b([A-Z0-9]{3,6})\s*\[", title)
+    if not match:
+        match = re.search(r"\[([A-Z0-9]{3,6})\]", body)
     code = match[1] if match else ""
     raw_date = metadata.get("datePublished", "")
     if not raw_date:
@@ -263,7 +286,9 @@ def run_kap_worker():
             if data:
                 KAP_CACHE = data
                 failures = 0
-                logger.info("[KAP] %s bildirim güncellendi", len(data))
+                # Uvicorn does not necessarily configure this module's INFO logger.
+                # Keep successful ingestion visible in hosting-provider logs too.
+                print(f"[KAP] {len(data)} bildirim güncellendi; kaynak: {data[0].get('source', 'KAP')}", flush=True)
             else:
                 failures += 1
         except Exception:
