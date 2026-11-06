@@ -10,6 +10,7 @@ import requests
 import feedparser
 from bs4 import BeautifulSoup
 from news_day import only_today
+from bist_arrivals import record_arrivals
 
 NEWS_CACHE = []
 
@@ -122,7 +123,7 @@ def fetch_feed(source):
 
 def sort_and_deduplicate(items):
     seen, result = set(), []
-    for item in sorted(items, key=lambda item: item["timestamp"], reverse=True):
+    for item in sorted(items, key=lambda item: (item.get("receivedAt", item["timestamp"]), item["timestamp"]), reverse=True):
         # Full headline: a common 35-character prefix does not mean same story.
         key = re.sub(r"[^\w]", "", item["baslik"].casefold())
         if key not in seen:
@@ -137,7 +138,7 @@ def run_news_worker():
             NEWS_CACHE = only_today(NEWS_CACHE)
             all_collected = []
             for src in SOURCES:
-                all_collected.extend(fetch_feed(src))
+                all_collected.extend(record_arrivals(fetch_feed(src)))
 
             if all_collected:
                 unique_news = sort_and_deduplicate(all_collected)

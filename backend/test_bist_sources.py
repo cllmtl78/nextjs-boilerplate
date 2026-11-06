@@ -75,7 +75,7 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(first['id'],corrected['id'])
         self.assertNotEqual(first['timestamp'],corrected['timestamp'])
 
-    def test_newly_fetched_older_publication_belongs_in_second_place(self):
+    def test_unstamped_source_records_use_publication_as_tiebreaker(self):
         recent={'baslik':'Biraz önce yayımlanan haber','timestamp':2000}
         newly_fetched={'baslik':'RSS akışına sonradan gelen haber','timestamp':1000}
         self.assertEqual(bot.sort_and_deduplicate([newly_fetched,recent]),[recent,newly_fetched])

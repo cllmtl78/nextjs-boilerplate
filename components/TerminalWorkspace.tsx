@@ -22,11 +22,14 @@ export type TerminalHaber = {
   kapTuru?: "ÖDA" | "PGO" | "FR" | "GKK" | "SÖZ";
   resmiKurum?: "TCMB" | "SPK" | "BDDK" | "HMB" | "TÜİK" | "RESMİ GAZETE";
   timestamp?: number;
+  receivedAt?: number;
+  publishedAt?: number;
+  publishedTime?: string;
   dateObj?: Date | null;
 };
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://bpt-news-backend.onrender.com";
-const CACHE_KEY_BIST = "bpt_bist_news";
+const CACHE_KEY_BIST = "bpt_bist_news_arrival_v1";
 
 
 export interface GlobalNewsItem {
@@ -707,7 +710,7 @@ export default function TerminalWorkspace() {
             localStorage.removeItem(CACHE_KEY_BIST);
             return [];
           }
-          const filtered = parsed.filter((it: TerminalHaber) => isCurrentNewsItem(it));
+          const filtered = parsed.filter((it: TerminalHaber) => isCurrentNewsItem(it)).sort((a: TerminalHaber, b: TerminalHaber) => (b.receivedAt || 0) - (a.receivedAt || 0));
           if (filtered.length > 0) return filtered;
           localStorage.removeItem(CACHE_KEY_BIST);
           return [];
@@ -864,7 +867,7 @@ export default function TerminalWorkspace() {
       if (res.ok) {
         const json = await res.json();
         if (json && Array.isArray(json.data)) {
-          const freshData: TerminalHaber[] = json.data.filter((item: TerminalHaber) => isCurrentNewsItem(item));
+          const freshData: TerminalHaber[] = json.data.filter((item: TerminalHaber) => isCurrentNewsItem(item)).sort((a: TerminalHaber, b: TerminalHaber) => (b.receivedAt || 0) - (a.receivedAt || 0));
 
           if (!isInitialLoadRef.current) {
             const newIds = new Set<string>();
@@ -1042,7 +1045,7 @@ export default function TerminalWorkspace() {
                     }`}
                   >
                     <div className="flex items-center gap-2 font-mono text-[10.5px]">
-                      <span className="row-time tabular-nums text-slate-500">{h.time || h.zaman}</span>
+                      <span title="Geliş saati" className="row-time tabular-nums text-slate-500">{h.time || h.zaman}</span>
                       <span className="px-1.5 py-0.5 rounded bg-[#0a1120] border border-slate-700/60 text-slate-300 font-mono text-[9.5px] uppercase tracking-wide">
                         [{h.kaynak}]
                       </span>
@@ -1239,6 +1242,7 @@ export default function TerminalWorkspace() {
                 </span>
                 <span className="font-mono text-xs text-slate-400">
                   {seciliHaber.time || seciliHaber.zaman} · {seciliHaber.tarih || "Bugün"}
+                  {seciliHaber.publishedTime && <span className="ml-2">Yayın: {seciliHaber.publishedTime}</span>}
                 </span>
               </div>
               <button

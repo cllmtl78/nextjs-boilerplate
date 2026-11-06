@@ -70,7 +70,7 @@ export function watchIstanbulDay(onChange: () => void, clock: DayClock = {
   return () => { clock.cancel(timer); removeWake(); };
 }
 
-export const DAILY_NEWS_CACHE_KEYS = ["bpt_bist_news", "bpt_global_walter_v1", "bpt_global_news_v2", "bpt_kap_cache", "bpt_kap_disclosures", "bpt_kap_disclosures_v3", "bpt_kap_disclosures_v4"];
+export const DAILY_NEWS_CACHE_KEYS = ["bpt_bist_news", "bpt_bist_news_arrival_v1", "bpt_global_walter_v1", "bpt_global_news_v2", "bpt_kap_cache", "bpt_kap_disclosures", "bpt_kap_disclosures_v3", "bpt_kap_disclosures_v4"];
 
 export function resetDailyNewsCache(storage: Pick<Storage, "removeItem" | "setItem">, now = Date.now()): void {
   for (const key of DAILY_NEWS_CACHE_KEYS) storage.removeItem(key);
