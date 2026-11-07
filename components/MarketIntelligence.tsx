@@ -393,7 +393,7 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
   }, []);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-[10px]">
+    <div className="terminal-grid">
       {/* ================= 1. KOLON: / BIST Sektör (h-[380px]) ================= */}
       <div className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[380px] overflow-hidden">
         <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
@@ -403,7 +403,6 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
               BIST Sektör
             </span>
           </div>
-          <span className="text-[10px] font-mono text-slate-500 tracking-wider">CANLI ENDEKS</span>
         </div>
 
         {/* SEKTÖR AKIŞI (Veri yüklenene kadar Skeleton Loader, yüklendiğinde canlı barlar) */}
@@ -488,7 +487,6 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
               TAKVİM
             </span>
           </div>
-          <span className="text-[10px] font-mono text-slate-500 tracking-wider">EKONOMİK GÖSTERGELER</span>
         </div>
 
         <div className="overflow-y-auto flex-1 pane-scroll p-0 flex flex-col gap-0">
@@ -583,25 +581,15 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
         </div>
       </div>
 
-      {/* ================= 3. KOLON: / Kripto (Dönen Neon Işık - Border Beam - h-[380px]) ================= */}
-      <div className="relative rounded-lg p-[1px] overflow-hidden bg-slate-900/60 h-[380px]">
-        <div
-          className="absolute -inset-[100%] animate-border-beam"
-          style={{
-            background: "conic-gradient(from 0deg, transparent 0 340deg, #38bdf8 360deg)",
-          }}
-        />
-
-        <div className="relative h-full w-full bg-[#0b0f19] rounded-[7px] flex flex-col z-10 overflow-hidden">
-          <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
-            <span className="text-xs font-mono font-bold text-slate-200">
-              <span className="text-[#38bdf8] mr-1">/</span>Kripto
-            </span>
-            <span className="text-[10px] font-mono text-slate-500 tracking-wider">HABER AKIŞI</span>
-          </div>
-
-          <OfficialNews backendUrl={backendUrl} onSelect={onSelectNews} endpoint="crypto-news" feedName="Telegram" />
+      {/* Kripto haber akışı */}
+      <div className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[380px] overflow-hidden">
+        <div className="h-10 px-4 flex items-center border-b border-white/[0.06] bg-slate-900/40 shrink-0">
+          <h2 className="font-mono text-xs font-semibold tracking-wider text-slate-200">
+            <span className="text-[#38bdf8] font-bold mr-1.5">/</span>
+            Kripto
+          </h2>
         </div>
+        <OfficialNews backendUrl={backendUrl} onSelect={onSelectNews} endpoint="crypto-news" feedName="Telegram" bistStyle />
       </div>
     </div>
   );
