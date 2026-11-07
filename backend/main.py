@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from bist_news_bot import start_bist_news_bot, get_bist_news_data
 from kap_bot import start_kap_bot, get_kap_data
 from global_news_bot import start_global_news_bot, get_global_news_data
+from official_news_bot import start_official_news_bot, get_official_news_data
 
 app = FastAPI(title="BPT Terminal Engine")
 
@@ -21,6 +22,7 @@ app.add_middleware(
 start_bist_news_bot()
 start_kap_bot()
 start_global_news_bot()
+start_official_news_bot()
 
 @app.get("/")
 def health():
@@ -46,6 +48,11 @@ def api_kap():
 @app.get("/api/global-news")
 def api_global_news():
     return get_global_news_data()
+
+
+@app.get("/api/official-news")
+def api_official_news():
+    return get_official_news_data()
 
 if __name__ == "__main__":
     import uvicorn

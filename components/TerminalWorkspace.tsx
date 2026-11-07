@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import MarketIntelligence from "@/components/MarketIntelligence";
+import OfficialNews from "@/components/OfficialNews";
 import KapContent, { type KapContentBlock } from "@/components/KapContent";
 import { cleanWireText as cleanGlobalWireText, istanbulDay } from "@/lib/wire-text";
 import { isCurrentNewsDay, isCurrentNewsItem, watchIstanbulDay, resetDailyNewsCache } from "@/lib/news-day";
@@ -1208,10 +1209,7 @@ export default function TerminalWorkspace() {
               </div>
             </div>
 
-            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500 font-mono text-xs select-none">
-              <span className="text-[#38bdf8] font-bold mb-1">/</span>
-              <span>Resmi kurum duyuru akışı hazırlanıyor...</span>
-            </div>
+            <OfficialNews backendUrl={BACKEND_URL} onSelect={setSeciliHaber} />
           </section>
         </div>
       </div>
