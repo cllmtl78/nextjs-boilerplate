@@ -1204,7 +1204,7 @@ export default function TerminalWorkspace() {
               <div className="flex items-center">
                 <h2 className="font-mono text-xs font-semibold tracking-wider text-slate-200">
                   <span className="text-[#38bdf8] font-bold mr-1.5">/</span>
-                  Resmi Kurumlar
+                  Resmi
                 </h2>
               </div>
             </div>
