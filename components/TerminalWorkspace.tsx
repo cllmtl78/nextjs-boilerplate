@@ -1241,8 +1241,7 @@ export default function TerminalWorkspace() {
                   {seciliHaber.kaynak}
                 </span>
                 <span className="font-mono text-xs text-slate-400">
-                  {seciliHaber.time || seciliHaber.zaman} · {seciliHaber.tarih || "Bugün"}
-                  {seciliHaber.publishedTime && <span className="ml-2">Yayın: {seciliHaber.publishedTime}</span>}
+                  {seciliHaber.time || seciliHaber.zaman}
                 </span>
               </div>
               <button
@@ -1267,20 +1266,7 @@ export default function TerminalWorkspace() {
               </p>
             </div>
 
-            <div className="px-4 sm:px-6 py-4 shrink-0 flex-wrap gap-4 bg-[#080c14] border-t border-white/[0.06] flex items-center justify-between">
-              <div className="text-[11px] font-mono text-slate-500">
-                Kategori:{" "}
-                <span className="text-slate-300">
-                  {seciliHaber.kategori === "bist"
-                    ? "Piyasa Özeti / BIST"
-                    : seciliHaber.kategori === "kap"
-                    ? "KAP Kamuyu Aydınlatma"
-                    : seciliHaber.kategori === "resmi"
-                    ? "Resmi Kurum Bülteni"
-                    : "Piyasa Özeti / BIST"}
-                </span>
-              </div>
-
+            <div className="px-4 sm:px-6 py-4 shrink-0 flex-wrap gap-4 bg-[#080c14] border-t border-white/[0.06] flex items-center justify-end">
               <div className="flex min-w-0 flex-wrap items-center gap-3">
                 <button
                   onClick={() => setSeciliHaber(null)}
