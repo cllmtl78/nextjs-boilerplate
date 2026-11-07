@@ -4,18 +4,21 @@ import { useEffect, useState } from "react";
 import type { TerminalHaber } from "./TerminalWorkspace";
 import { isCurrentNewsItem, watchIstanbulDay } from "@/lib/news-day";
 
-export default function OfficialNews({ backendUrl, onSelect }: {
+export default function OfficialNews({ backendUrl, onSelect, endpoint = "official-news", feedName = "Nitter" }: {
   backendUrl: string;
+  endpoint?: string;
+  feedName?: string;
   onSelect: (item: TerminalHaber) => void;
 }) {
   const [items, setItems] = useState<TerminalHaber[]>([]);
   const [state, setState] = useState("starting");
+  const [pending, setPending] = useState(false);
   useEffect(() => {
     let disposed = false;
     const controller = new AbortController();
     const load = async () => {
       try {
-        const response = await fetch(`${backendUrl}/api/official-news`, {
+        const response = await fetch(`${backendUrl}/api/${endpoint}`, {
           cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]),
         });
         if (!response.ok) throw new Error("Feed unavailable");
@@ -24,6 +27,7 @@ export default function OfficialNews({ backendUrl, onSelect }: {
         if (!disposed) {
           setItems(body.data.filter((item: TerminalHaber) => isCurrentNewsItem(item)));
           setState(body.status);
+          setPending(Number(body.pending) > 0);
         }
       } catch {
         if (!disposed) {
@@ -39,7 +43,7 @@ export default function OfficialNews({ backendUrl, onSelect }: {
       void load();
     });
     return () => { disposed = true; controller.abort(); clearInterval(interval); unwatch(); };
-  }, [backendUrl]);
+  }, [backendUrl, endpoint]);
 
   return <div className="pane-scroll flex-1 min-h-0">
     {(state === "unavailable" || state === "partial") && <p className="px-4 py-2 text-xs text-slate-500">Paylaşım kaynağına erişimde sorun var.</p>}
@@ -51,7 +55,7 @@ export default function OfficialNews({ backendUrl, onSelect }: {
       </div>
       <p className="text-xs leading-4 font-normal text-slate-200 line-clamp-3 whitespace-pre-line">{item.baslik}</p>
     </button>) : <p className="p-6 text-center text-xs font-mono text-slate-500">
-      {state === "starting" ? "Paylaşımlar kontrol ediliyor..." : state === "unavailable" ? "Nitter akışına şu anda ulaşılamıyor." : "Bugüne ait paylaşım bulunamadı."}
+      {state === "starting" ? "Paylaşımlar kontrol ediliyor..." : state === "unavailable" ? `${feedName} akışına şu anda ulaşılamıyor.` : pending ? "Haberler Türkçeye çevrilmeyi bekliyor." : "Bugüne ait paylaşım bulunamadı."}
     </p>}
   </div>;
 }

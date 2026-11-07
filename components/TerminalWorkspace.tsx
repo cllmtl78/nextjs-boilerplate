@@ -18,7 +18,7 @@ export type TerminalHaber = {
   paragraflar?: string[];
   detay?: string;
   url?: string;
-  kategori: "bist" | "global" | "kap" | "resmi";
+  kategori: "bist" | "global" | "kap" | "resmi" | "kripto";
   hisseler?: string[];
   kapTuru?: "ÖDA" | "PGO" | "FR" | "GKK" | "SÖZ";
   resmiKurum?: "TCMB" | "SPK" | "BDDK" | "HMB" | "TÜİK" | "RESMİ GAZETE";
@@ -1216,7 +1216,7 @@ export default function TerminalWorkspace() {
 
       {/* ALT SIRA: 3 KOLONLU GRID */}
       <div className="w-full mt-4" style={{ marginTop: "16px" }}>
-        <MarketIntelligence />
+        <MarketIntelligence backendUrl={BACKEND_URL} onSelectNews={setSeciliHaber} />
       </div>
 
       {/* HABER DETAY MODALI */}
@@ -1255,6 +1255,7 @@ export default function TerminalWorkspace() {
               <h2 className="text-lg font-bold text-slate-100 leading-snug tracking-tight">
                 {decodeHtmlEntities(seciliHaber.baslik)}
               </h2>
+              {seciliHaber.kategori !== "kripto" && (
               <p className="text-sm text-slate-300 leading-relaxed font-normal whitespace-pre-line">
                 {decodeHtmlEntities(
                   seciliHaber.paragraflar && seciliHaber.paragraflar.length > 0
@@ -1262,6 +1263,7 @@ export default function TerminalWorkspace() {
                     : seciliHaber.detay || seciliHaber.ozet || "Haber detayları piyasa kaynakları üzerinden canlı aktarılmıştır."
                 )}
               </p>
+              )}
             </div>
 
             <div className="px-4 sm:px-6 py-4 shrink-0 flex-wrap gap-4 bg-[#080c14] border-t border-white/[0.06] flex items-center justify-end">

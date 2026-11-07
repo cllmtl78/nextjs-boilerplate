@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import OfficialNews from "@/components/OfficialNews";
+import type { TerminalHaber } from "@/components/TerminalWorkspace";
 import { displayCalendarTitle } from "@/lib/calendar-titles";
 import { formatCalendarValue, type CalendarUnits } from "@/lib/calendar-values";
 
@@ -204,7 +206,10 @@ const SECTOR_DEFINITIONS: { code: string; name: string; keyStocks: string[] }[] 
   { code: "XINSA", name: "İnşaat", keyStocks: ["ENKAI", "OYAKC", "CIMSA", "NUHCM"] },
 ];
 
-export default function MarketIntelligence() {
+export default function MarketIntelligence({ backendUrl, onSelectNews }: {
+  backendUrl: string;
+  onSelectNews: (item: TerminalHaber) => void;
+}) {
   // Canlı Sektör Verisi (Önbellek varsa anında başlat, FOUC önle)
   const [sectors, setSectors] = useState<SectorItem[]>(() => {
     if (typeof window === "undefined") return [];
@@ -578,7 +583,7 @@ export default function MarketIntelligence() {
         </div>
       </div>
 
-      {/* ================= 3. KOLON: / Bülten (Dönen Neon Işık - Border Beam - h-[380px]) ================= */}
+      {/* ================= 3. KOLON: / Kripto (Dönen Neon Işık - Border Beam - h-[380px]) ================= */}
       <div className="relative rounded-lg p-[1px] overflow-hidden bg-slate-900/60 h-[380px]">
         <div
           className="absolute -inset-[100%] animate-border-beam"
@@ -590,22 +595,12 @@ export default function MarketIntelligence() {
         <div className="relative h-full w-full bg-[#0b0f19] rounded-[7px] flex flex-col z-10 overflow-hidden">
           <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
             <span className="text-xs font-mono font-bold text-slate-200">
-              <span className="text-[#38bdf8] mr-1">/</span>Bülten
+              <span className="text-[#38bdf8] mr-1">/</span>Kripto
             </span>
-            <span className="text-[10px] font-mono text-slate-500 tracking-wider">RAPOR & ANALİZ</span>
+            <span className="text-[10px] font-mono text-slate-500 tracking-wider">HABER AKIŞI</span>
           </div>
 
-          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-            <div className="w-12 h-12 rounded-full bg-[#38bdf8]/10 border border-[#38bdf8]/20 flex items-center justify-center text-[#38bdf8] mb-3 shadow-[0_0_15px_rgba(56,189,248,0.15)]">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <p className="text-xs font-semibold text-slate-200">Bülten verisi bekleniyor...</p>
-            <p className="text-[11px] text-slate-500 mt-1 max-w-[200px]">
-              Günlük aracı kurum ve bülten raporları akışa eklenecektir.
-            </p>
-          </div>
+          <OfficialNews backendUrl={backendUrl} onSelect={onSelectNews} endpoint="crypto-news" feedName="Telegram" />
         </div>
       </div>
     </div>

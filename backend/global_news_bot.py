@@ -113,11 +113,11 @@ def day_bounds(now=None):
     return int(start.timestamp() * 1000), int((start + timedelta(days=1)).timestamp() * 1000)
 
 
-def parse_telegram_page(document):
+def parse_telegram_page(document, channel="WalterBloomberg"):
     soup = BeautifulSoup(document, "html.parser")
     posts, ids, times = {}, [], []
     for node in soup.select("div[data-post]"):
-        match = re.fullmatch(r"WalterBloomberg/(\d+)", node.get("data-post", ""), re.I)
+        match = re.fullmatch(re.escape(channel) + r"/(\d+)", node.get("data-post", ""), re.I)
         if not match:
             continue
         ids.append(int(match[1]))
@@ -134,7 +134,7 @@ def parse_telegram_page(document):
         text = telegram_body_text(body) if body else ""
         if len(text) < 3:
             continue
-        post_id = f"WalterBloomberg/{int(match[1])}"
+        post_id = f"{channel}/{int(match[1])}"
         posts[post_id] = {"id": post_id, "timestamp": timestamp,
                           "zaman": date.astimezone(TR).strftime("%H:%M:%S"), "rawText": text}
     return sorted(posts.values(), key=lambda item: item["timestamp"], reverse=True), min(ids) if ids else None, min(times) if times else None
@@ -261,6 +261,11 @@ class GlobalNewsStore:
 
 
 class GlobalNewsBot:
+    source = SOURCE
+    label = "Global"
+    channel = "WalterBloomberg"
+    parse_page = staticmethod(parse_telegram_page)
+
     def __init__(self, store, session=None, translator=None):
         self.store = store
         self.session = session or requests.Session()
@@ -278,7 +283,7 @@ class GlobalNewsBot:
         seen_today = set()
         deadline = time.monotonic() + 25
         for page in range(12):
-            response = self.session.get(SOURCE, params={"before": cursor} if cursor is not None else {},
+            response = self.session.get(self.source, params={"before": cursor} if cursor is not None else {},
                                         headers={"User-Agent": "Mozilla/5.0", "Accept": "text/html"}, timeout=(5, 15))
             if response.status_code != 200:
                 raise ServiceHTTPError("Telegram", response.status_code)
@@ -288,7 +293,7 @@ class GlobalNewsBot:
                 document = UnicodeDammit(response.content, is_html=True).unicode_markup
             if document is None:
                 raise ValueError("Telegram HTML kodlaması okunamadı")
-            posts, next_cursor, oldest = parse_telegram_page(document)
+            posts, next_cursor, oldest = self.parse_page(document)
             if next_cursor is None:
                 raise ValueError("Telegram mesaj yapısı bulunamadı")
             today = [post for post in posts if start <= post["timestamp"] < end]
@@ -329,23 +334,23 @@ class GlobalNewsBot:
         try:
             self.collect(now)
         except Exception as exc:
-            logger.warning("[Global] Telegram toplama başarısız (%s); kayıtlı haberler korunuyor", failure_category(exc))
+            logger.warning("[%s] Telegram toplama başarısız (%s); kayıtlı haberler korunuyor", self.label, failure_category(exc))
         batch = self.store.pending(now) if self.store.translation_retry_at() <= time.time() else []
         if batch and (os.environ.get("GEMINI_API_KEY") or self.translator != self.translate):
             try:
                 count = self.store.save_translations(batch, self.translator(batch))
                 if count:
                     self.store.clear_rate_limit()
-                print(f"[Global] {count} WalterBloomberg haberi Türkçeye çevrildi.", flush=True)
+                print(f"[{self.label}] {count} {self.channel} haberi Türkçeye çevrildi.", flush=True)
             except Exception as exc:
                 if isinstance(exc, ServiceHTTPError) and exc.source == "Gemini" and exc.status == 429:
                     delay = self.store.rate_limited(exc)
                     scope = "günlük" if exc.quota_scope == "daily" else "dakikalık" if exc.quota_scope == "minute" else "belirtilmemiş"
-                    logger.warning("[Global] Gemini HTTP 429: kota türü %s. Tüm çeviri istekleri %s saniye bekletiliyor; haber toplama sürüyor.", scope, delay)
+                    logger.warning("[%s] Gemini HTTP 429: kota türü %s. Çeviri istekleri %s saniye bekletiliyor; haber toplama sürüyor.", self.label, scope, delay)
                     return
                 self.store.defer(batch)
                 # Exception bodies may contain request metadata; log only safe category.
-                logger.warning("[Global] Çeviri başarısız (%s). GEMINI_API_KEY, model ve kotayı kontrol edin.", failure_category(exc))
+                logger.warning("[%s] Çeviri başarısız (%s). GEMINI_API_KEY, model ve kotayı kontrol edin.", self.label, failure_category(exc))
         self.store.prune(now)
 
 
