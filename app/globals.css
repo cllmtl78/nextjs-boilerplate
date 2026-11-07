@@ -183,6 +183,64 @@ body {
   border-radius: 2px;
 }
 
+.header-clock-weather {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.header-clock {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text-main);
+}
+
+.header-clock-weather > div:last-child {
+  justify-content: flex-end;
+}
+
+.mainbar-inner {
+  gap: 16px;
+}
+
+.exchange-status {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  font-family: var(--font-mono), monospace;
+}
+
+.exchange-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border: 1px solid;
+  border-radius: 3px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.exchange-closed {
+  background: #111827;
+  border-color: #334155;
+  color: #94a3b8;
+}
+
+.exchange-open {
+  background: rgb(6 78 59 / 35%);
+  border-color: rgb(16 185 129 / 35%);
+  color: #34d399;
+}
+
+.exchange-dot {
+  font-size: 7px;
+}
+
 /* Weather Animation */
 @keyframes weatherSlideFade {
   0% {
@@ -754,21 +812,64 @@ body {
   }
 
   .exchange-status {
-    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     width: 100%;
-    justify-content: space-between;
-    gap: 6px;
-    font-size: 10px;
+    gap: 5px;
   }
 
-  .exchange-status > div {
-    flex-shrink: 0;
-    gap: 4px;
+  .exchange-badge {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 3px;
+    padding: 3px 4px;
+    font-size: 9px;
+  }
+
+  .exchange-countdown {
+    width: 100%;
+    text-align: center;
+    line-height: 1;
+  }
+
+  .exchange-countdown-label {
+    display: none;
   }
 
   .header-clock-weather {
-    align-self: flex-end;
-    max-width: 100%;
+    gap: 2px;
+    font-size: 10px;
+  }
+
+  .header-clock-weather .text-xs {
+    font-size: 10px;
+  }
+
+  .header-clock {
+    font-size: 11px;
+  }
+
+  .brand-group {
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .brand-logo {
+    height: 24px;
+  }
+
+  .terminal-tag {
+    font-size: 8px;
+    padding-inline: 3px;
+  }
+
+  .mainbar-inner {
+    gap: 8px;
+    padding-block: 7px;
+  }
+
+  .topbar-inner {
+    padding-block: 5px;
   }
 
   .main {

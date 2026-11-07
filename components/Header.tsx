@@ -4,169 +4,55 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import Weather from "./Weather";
 import MarketBar from "./MarketBar";
-
-const getInitialTime = () => {
-  try {
-    return new Date().toLocaleTimeString("tr-TR", {
-      timeZone: "Europe/Istanbul",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    });
-  } catch {
-    return "";
-  }
-};
+import { EXCHANGES, marketSessions } from "@/lib/market-sessions";
 
 export default function Header() {
-  const [saat, setSaat] = useState<string>(getInitialTime);
-  const [bistDurum, setBistDurum] = useState<{ acik: boolean; metin: string }>({
-    acik: true,
-    metin: "Açık",
-  });
-  const [lseAcik, setLseAcik] = useState<boolean>(false);
-  const [nyseAcik, setNyseAcik] = useState<boolean>(false);
-
+  const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
-    function guncelle() {
-      const now = new Date();
-
-      // Format: HH:mm:ss (Canlı saat)
-      setSaat(
-        now.toLocaleTimeString("tr-TR", {
-          timeZone: "Europe/Istanbul",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: false,
-        })
-      );
-
-      const gun = now.getDay();
-      const haftaIci = gun >= 1 && gun <= 5;
-      const saatDakika = now.getHours() * 60 + now.getMinutes();
-
-      // BIST İşlem Saatleri: Hafta içi 10:00 - 18:00
-      if (haftaIci && saatDakika >= 600 && saatDakika < 1080) {
-        // Kapanışa kalan süre hesabı (18:00)
-        const kapanis = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 0, 0);
-        const kalanMs = Math.max(0, kapanis.getTime() - now.getTime());
-        const kalanSaat = Math.floor(kalanMs / 3600000);
-        const kalanDakika = Math.floor((kalanMs % 3600000) / 60000);
-        const kalanSaniye = Math.floor((kalanMs % 60000) / 1000);
-        const kalanMetin = `${String(kalanSaat).padStart(2, "0")}:${String(kalanDakika).padStart(2, "0")}:${String(kalanSaniye).padStart(2, "0")}`;
-
-        setBistDurum({
-          acik: true,
-          metin: `Açık · ${kalanMetin}`,
-        });
-      } else {
-        setBistDurum({
-          acik: false,
-          metin: "Kapalı (10:00)",
-        });
-      }
-
-      // LSE (Londra): TR Saatiyle 11:00 - 19:30
-      setLseAcik(haftaIci && saatDakika >= 660 && saatDakika < 1170);
-
-      // NYSE (New York): TR Saatiyle 16:30 - 23:00
-      setNyseAcik(haftaIci && saatDakika >= 990 && saatDakika < 1380);
-    }
-
-    guncelle();
-    const interval = setInterval(guncelle, 1000);
+    const update = () => setNow(new Date());
+    update();
+    const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
   }, []);
+  const sessions = now ? marketSessions(now) : EXCHANGES.map(exchange => ({ name: exchange.name, isOpen: false, countdown: null }));
+  const clock = now?.toLocaleTimeString("tr-TR", {
+    timeZone: "Europe/Istanbul", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  }) || "--:--:--";
 
   return (
     <header className="site-header">
-      {/* ÜST BİLGİ & STATUS BARI */}
       <div className="topbar">
         <div className="topbar-inner">
-          {/* Sol: Borsa Saatleri & Dinamik Statü */}
-          <div className="exchange-status flex items-center gap-3 text-[11px] font-mono text-slate-400 overflow-x-auto whitespace-nowrap">
-            {/* BIST */}
-            <div className="flex items-center gap-1.5">
-              <span
-                className={`text-[8px] leading-none ${
-                  bistDurum.acik ? "text-emerald-400" : "text-rose-500"
-                }`}
-              >
-                ●
+          <div className="exchange-status">
+            {sessions.map(session => (
+              <span key={session.name} className={`exchange-badge ${session.isOpen ? "exchange-open" : "exchange-closed"}`}
+                title="Normal hafta içi seans saatleri; resmî tatil ve yarım günler dahil değildir.">
+                <span className="exchange-dot" aria-hidden="true">●</span>
+                <span className="font-semibold">{session.name}</span>
+                <span>{!now ? "--" : session.isOpen ? "Açık" : "Kapalı"}</span>
+                {session.countdown && <span className="exchange-countdown tabular-nums" aria-label={`Kapanışa ${session.countdown}`}>
+                  <span className="exchange-countdown-label">Kapanışa </span>{session.countdown}
+                </span>}
               </span>
-              <span className="font-semibold text-slate-300">BIST</span>
-              <span className="tabular-nums text-slate-400">{bistDurum.metin}</span>
-            </div>
-
-            <span className="text-white/[0.08]">/</span>
-
-            {/* LSE */}
-            <div className="flex items-center gap-1.5">
-              <span
-                className={`text-[8px] leading-none ${
-                  lseAcik ? "text-emerald-400" : "text-slate-600"
-                }`}
-              >
-                ●
-              </span>
-              <span className="font-semibold text-slate-300">LSE</span>
-              <span className="text-slate-400">{lseAcik ? "Açık" : "Kapalı (11:00)"}</span>
-            </div>
-
-            <span className="text-white/[0.08]">/</span>
-
-            {/* NYSE */}
-            <div className="flex items-center gap-1.5">
-              <span
-                className={`text-[8px] leading-none ${
-                  nyseAcik ? "text-emerald-400" : "text-slate-600"
-                }`}
-              >
-                ●
-              </span>
-              <span className="font-semibold text-slate-300">NYSE</span>
-              <span className="text-slate-400">{nyseAcik ? "Açık" : "Kapalı (16:30)"}</span>
-            </div>
-          </div>
-
-          {/* Sağ: Status Pill (Canlı Saat + Dönen Hava Durumu) */}
-          <div className="header-clock-weather bg-[#0c1322] border border-white/[0.08] rounded px-2.5 py-1 flex items-center gap-3 text-xs text-slate-300 shadow-sm shrink-0">
-            {/* Canlı Saat (Solundaki yeşil nokta kaldırıldı) */}
-            <div suppressHydrationWarning className="font-mono tabular-nums text-slate-200 font-semibold tracking-wider text-xs">
-              {saat || getInitialTime()}
-            </div>
-
-            {/* Dikey İnce Ayırıcı Çizgi */}
-            <div className="border-r border-slate-700/60 h-3" />
-
-            {/* Dönen Hava Durumu Sistemi (Ankara, İst, İzmir) */}
-            <Weather />
+            ))}
           </div>
         </div>
       </div>
-
-      {/* MARKA ÇUBUĞU */}
       <div className="mainbar">
         <div className="mainbar-inner">
           <div className="brand-group">
             <Link href="/" className="brand">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/logo.png"
-                alt="BPT Finans"
-                className="brand-logo"
-              />
+              <img src="/logo.png" alt="BPT Finans" className="brand-logo" />
             </Link>
-            <div className="terminal-badge-wrap">
-              <span className="terminal-tag">TERMINAL</span>
-            </div>
+            <div className="terminal-badge-wrap"><span className="terminal-tag">TERMINAL</span></div>
+          </div>
+          <div className="header-clock-weather">
+            <div className="header-clock font-mono tabular-nums">{clock}</div>
+            <Weather />
           </div>
         </div>
       </div>
-
-      {/* PİYASA ŞERİDİ */}
       <MarketBar />
     </header>
   );
