@@ -86,7 +86,7 @@ export default function Header() {
       <div className="topbar">
         <div className="topbar-inner">
           {/* Sol: Borsa Saatleri & Dinamik Statü */}
-          <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400 overflow-x-auto whitespace-nowrap">
+          <div className="exchange-status flex items-center gap-3 text-[11px] font-mono text-slate-400 overflow-x-auto whitespace-nowrap">
             {/* BIST */}
             <div className="flex items-center gap-1.5">
               <span
@@ -132,7 +132,7 @@ export default function Header() {
           </div>
 
           {/* Sağ: Status Pill (Canlı Saat + Dönen Hava Durumu) */}
-          <div className="bg-[#0c1322] border border-white/[0.08] rounded px-2.5 py-1 flex items-center gap-3 text-xs text-slate-300 shadow-sm shrink-0">
+          <div className="header-clock-weather bg-[#0c1322] border border-white/[0.08] rounded px-2.5 py-1 flex items-center gap-3 text-xs text-slate-300 shadow-sm shrink-0">
             {/* Canlı Saat (Solundaki yeşil nokta kaldırıldı) */}
             <div suppressHydrationWarning className="font-mono tabular-nums text-slate-200 font-semibold tracking-wider text-xs">
               {saat || getInitialTime()}

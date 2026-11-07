@@ -1130,7 +1130,7 @@ export default function TerminalWorkspace() {
         {/* SÜTUN 3: KAP Bildirimleri + Resmi Kurumlar */}
         <div className="terminal-stack">
           {/* Üst: KAP Bildirimleri */}
-          <section className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[255px] overflow-hidden">
+          <section className="pane-kap rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[255px] overflow-hidden">
             <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
               <div className="flex items-center">
                 <h2 className="font-mono text-xs font-semibold tracking-wider text-slate-200">
@@ -1199,7 +1199,7 @@ export default function TerminalWorkspace() {
           </section>
 
           {/* Alt: Resmi Kurumlar */}
-          <section className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[255px] overflow-hidden">
+          <section className="pane-resmi rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[255px] overflow-hidden">
             <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
               <div className="flex items-center">
                 <h2 className="font-mono text-xs font-semibold tracking-wider text-slate-200">

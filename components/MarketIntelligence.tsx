@@ -393,7 +393,7 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
   }, []);
 
   return (
-    <div className="terminal-grid">
+    <div className="terminal-grid terminal-secondary-grid">
       {/* ================= 1. KOLON: / BIST Sektör (h-[380px]) ================= */}
       <div className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[380px] overflow-hidden">
         <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
