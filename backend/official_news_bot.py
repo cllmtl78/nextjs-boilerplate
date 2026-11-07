@@ -31,7 +31,7 @@ _started = False
 
 def instances():
     result = []
-    for value in os.getenv('NITTER_INSTANCES', 'https://nitter.click').split(','):
+    for value in os.getenv('NITTER_INSTANCES', 'https://nitter.mizuki.st').split(','):
         value = value.strip().rstrip('/')
         parsed = urlparse(value)
         if parsed.scheme == 'https' and parsed.hostname and not parsed.username and not parsed.password and not parsed.query and not parsed.fragment:

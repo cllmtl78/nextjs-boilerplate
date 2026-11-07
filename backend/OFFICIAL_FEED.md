@@ -6,11 +6,11 @@ paylaşımlarını, hesap bazlı durum ve hata bilgisini döndürür. Retweet ve
 `R to` etiketlediği yanıtlar alınmaz. Metinler çevrilmez, HTML çalıştırılmaz;
 kaynak bağlantısı asıl X paylaşımına gider. Görsel/video indirilmez.
 
-Varsayılan sunucu: `https://nitter.click`. Render backend ortam değişkeniyle
+Varsayılan sunucu: `https://nitter.mizuki.st` (kullanıcının RSS erişimini doğruladığı sunucu). Render backend ortam değişkeniyle
 sunucu değiştirilebilir veya en fazla üç sunucu sırasıyla denenebilir:
 
 ```
-NITTER_INSTANCES=https://nitter.click,https://another-verified-instance.example
+NITTER_INSTANCES=https://nitter.mizuki.st,https://another-verified-instance.example
 ```
 
 İkinci adres sadece biçim örneğidir; çalışan sunucu olarak eklemeyin. Herhangi
@@ -32,7 +32,8 @@ Birden fazla Uvicorn worker ayrı bot çalıştırır; mevcut tek worker kullan�
 python -m unittest discover -s backend -p test_official_news_bot.py
 ```
 
-Bu geliştirme ortamından nitter.click bağlantısı Cloud ağ filtresinde CONNECT
-403 ile engellendi. Canlı Nitter akışı doğrulanmadı. Deploy sonrası backend
+Önceki nitter.click kaynağının RSS adresi kullanıcıda 403 döndürdü.
+Yeni mizuki.st kaynağı kullanıcı tarafından erişilebilir olarak bildirildi;
+bu ortamdan canlı Nitter akışı doğrulanmadı. Deploy sonrası backend
 logları ve `/api/official-news` yanıtı kontrol edilmeli. Backend ve frontend
 birlikte deploy edilmelidir.
