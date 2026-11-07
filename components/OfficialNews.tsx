@@ -22,12 +22,12 @@ export default function OfficialNews({ backendUrl, onSelect }: {
         const body = await response.json();
         if (!Array.isArray(body.data)) throw new Error("Invalid feed");
         if (!disposed) {
-          setItems(body.data.filter(isCurrentNewsItem));
+          setItems(body.data.filter((item: TerminalHaber) => isCurrentNewsItem(item)));
           setState(body.status);
         }
       } catch {
         if (!disposed) {
-          setItems(current => current.filter(isCurrentNewsItem));
+          setItems(current => current.filter(item => isCurrentNewsItem(item)));
           setState("unavailable");
         }
       }
@@ -35,7 +35,7 @@ export default function OfficialNews({ backendUrl, onSelect }: {
     void load();
     const interval = setInterval(() => void load(), 60000);
     const unwatch = watchIstanbulDay(() => {
-      setItems(current => current.filter(isCurrentNewsItem));
+      setItems(current => current.filter(item => isCurrentNewsItem(item)));
       void load();
     });
     return () => { disposed = true; controller.abort(); clearInterval(interval); unwatch(); };
