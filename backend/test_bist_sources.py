@@ -46,6 +46,16 @@ class SourceTests(unittest.TestCase):
             if 'categories' not in source:
                 self.assertTrue(bot.matches_source_category(entry(link='https://example.com/article'),source))
 
+    def test_new_sources_and_fortune_finance_only(self):
+        sources={source['badge']:source for source in bot.SOURCES}
+        self.assertEqual(sources['CNN TÜRK']['url'],'https://www.cnnturk.com/feed/rss/ekonomi/news')
+        self.assertEqual(sources['FORBES TÜRKİYE']['url'],'https://www.forbes.com.tr/rss')
+        fortune=sources['FORTUNE TÜRKİYE']
+        self.assertTrue(bot.matches_source_category(entry(link='https://www.fortuneturkey.com/haber-123',category='Finans'),fortune))
+        self.assertTrue(bot.matches_source_category(entry(link='https://fortuneturkey.com/finans/haber-123'),fortune))
+        self.assertFalse(bot.matches_source_category(entry(link='https://www.fortuneturkey.com/haber-123',category='Teknoloji'),fortune))
+        self.assertFalse(bot.matches_source_category(entry(link='https://www.fortuneturkey.com/haber-123'),fortune))
+
     def fetch_fixture(self, entries):
         response = Mock(content=b'fixture')
         with patch.object(bot.requests,'get',return_value=response), patch.object(bot.feedparser,'parse',return_value=feedparser.FeedParserDict(entries=entries)), patch.object(bot,'datetime') as clock:

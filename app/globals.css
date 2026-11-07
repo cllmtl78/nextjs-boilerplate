@@ -448,9 +448,9 @@ body {
 }
 
 .row-headline {
-  font-size: 12px;
-  line-height: 1.35;
-  font-weight: 500;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 400;
   color: #e2e8f0;
 }
 

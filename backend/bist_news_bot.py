@@ -22,6 +22,9 @@ SOURCES = [
     {"badge": "FOREKS", "url": "https://www.foreks.com/rss"},
     {"badge": "NTV PARA", "url": "https://www.ntv.com.tr/ntvpara.rss"},
     {"badge": "TRT HABER", "url": "https://www.trthaber.com/sondakika.rss", "categories": ("ekonomi",), "host": "trthaber.com"},
+    {"badge": "CNN TÜRK", "url": "https://www.cnnturk.com/feed/rss/ekonomi/news"},
+    {"badge": "FORBES TÜRKİYE", "url": "https://www.forbes.com.tr/rss"},
+    {"badge": "FORTUNE TÜRKİYE", "url": "https://www.fortuneturkey.com/feed", "categories": ("finans",), "host": "fortuneturkey.com"},
 ]
 
 HEADERS = {

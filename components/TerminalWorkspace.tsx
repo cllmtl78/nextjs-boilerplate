@@ -1056,7 +1056,7 @@ export default function TerminalWorkspace() {
                       )}
                     </div>
 
-                    <h3 className="row-headline font-medium text-slate-200 group-hover:text-[#38bdf8] cursor-pointer transition text-xs leading-snug">
+                    <h3 className="row-headline font-normal text-slate-200 group-hover:text-[#38bdf8] cursor-pointer transition text-xs leading-4">
                       {h.baslik}
                     </h3>
                   </article>
