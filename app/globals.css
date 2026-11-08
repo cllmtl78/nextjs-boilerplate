@@ -6,6 +6,7 @@
    ======================================================== */
 
 :root {
+  --terminal-gap: 7px;
   --bg-canvas: #090d16;
   --bg-surface-0: #0d1322;
   --bg-surface-1: #111a2e;
@@ -424,15 +425,18 @@ body {
 .terminal-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: var(--terminal-gap);
   align-items: stretch;
-  margin-bottom: 16px;
+}
+
+.terminal-secondary-wrap {
+  margin-top: var(--terminal-gap);
 }
 
 .terminal-stack {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--terminal-gap);
   height: 520px;
 }
 
@@ -448,11 +452,11 @@ body {
 }
 
 .terminal-stack .pane-kap {
-  height: 255px;
+  height: calc((520px - var(--terminal-gap)) / 2);
 }
 
 .terminal-stack .pane-resmi {
-  height: 255px;
+  height: calc((520px - var(--terminal-gap)) / 2);
 }
 
 .pane-header {
@@ -920,11 +924,11 @@ body {
 
   .terminal-stack {
     display: grid;
-    gap: 12px;
+    gap: var(--terminal-gap);
   }
 
   .terminal-grid {
-    gap: 12px;
+    gap: var(--terminal-gap);
   }
 
   .footer {

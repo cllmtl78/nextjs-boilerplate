@@ -1219,7 +1219,7 @@ export default function TerminalWorkspace() {
       </div>
 
       {/* ALT SIRA: 3 KOLONLU GRID */}
-      <div className="w-full mt-4" style={{ marginTop: "16px" }}>
+      <div className="w-full terminal-secondary-wrap">
         <MarketIntelligence backendUrl={BACKEND_URL} onSelectNews={setSeciliHaber} />
       </div>
 

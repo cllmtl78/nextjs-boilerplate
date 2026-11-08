@@ -41,7 +41,7 @@ function playBell() {
   if (!enabled || !context || context.state !== "running") return;
   const audio = context;
   const start = audio.currentTime;
-  for (const [frequency, volume, decay] of [[1046, 0.075, 0.8], [2092, 0.025, 0.4], [2814, 0.009, 0.24]]) {
+  for (const [frequency, volume, decay] of [[1046, 0.18, 0.8], [2092, 0.06, 0.4], [2814, 0.022, 0.24]]) {
     const oscillator = audio.createOscillator();
     const gain = audio.createGain();
     oscillator.type = "sine";
