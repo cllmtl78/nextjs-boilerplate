@@ -1,4 +1,5 @@
 import os
+from macroradar import start_macroradar_bot, get_insights
 from fred_macro import start_fred_macro_bot, get_macro_data, get_turkey_research
 from tcmb_rates import get_tcmb_rates
 from fastapi import FastAPI
@@ -28,6 +29,7 @@ start_global_news_bot()
 start_official_news_bot()
 start_crypto_news_bot()
 start_fred_macro_bot()
+start_macroradar_bot()
 
 @app.get("/")
 def health():
@@ -58,6 +60,11 @@ def api_global_news():
 @app.get("/api/crypto-news")
 def api_crypto_news():
     return get_crypto_news_data()
+
+
+@app.get("/api/macro/insights")
+def api_macro_insights():
+    return get_insights()
 
 
 @app.get("/api/macro/turkey-series")

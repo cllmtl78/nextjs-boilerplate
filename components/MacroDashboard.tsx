@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ArrowDownRight, ArrowUpRight, RefreshCw, X } from "lucide-react";
+import MacroInsights from "./MacroInsights";
 import MacroHistoryChart from "./MacroHistoryChart";
 import { MACRO_COLORS, macroDate, macroHistory, macroNumber, type MacroMetric, type MacroRange, type MacroSnapshot } from "@/lib/macro-data";
 
@@ -52,8 +53,8 @@ export default function MacroDashboard() {
   const state = snapshot?.status;
   const warning = unavailable || state === "unavailable" || state === "not_configured" || state === "partial" || state === "stale";
   return <div className="macro-page">
-    <div className="macro-page-heading"><div><span className="macro-eyebrow">BPT FİNANS / MAKRO</span><h1>Ekonominin sayısal görünümü</h1><p>ABD faizleri, fiyatlar ve istihdam · Son açıklanan veriler</p></div><div className="macro-page-actions"><button type="button" aria-label="Makro verilerini yenile" title="Makro verilerini yenile" onClick={() => setRefresh(value => value + 1)}><RefreshCw size={14} /></button></div></div>
-    <div className="macro-statusbar"><span>{snapshot?.count ?? 0} / 9 gösterge</span><span>{snapshot?.last_checked ? `Son kontrol: ${new Date(snapshot.last_checked).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul", dateStyle: "short", timeStyle: "short" })}` : "Veri kaynağı kontrol ediliyor"}</span><div role="group" aria-label="Makro grafik dönemi">{([['1Y','1Y'],['3Y','3Y'],['ALL','Tümü']] as const).map(([value,label]) => <button key={value} type="button" aria-pressed={range === value} onClick={() => setRange(value)}>{label}</button>)}</div></div>
+    <div className="macro-page-heading"><div><span className="macro-eyebrow">BPT FİNANS / MAKRO</span><h1>Ekonominin sayısal görünümü</h1><p>ABD makro göstergeleri ve küresel tarihsel karşılaştırmalar</p></div><div className="macro-page-actions"><button type="button" aria-label="Makro verilerini yenile" title="Makro verilerini yenile" onClick={() => setRefresh(value => value + 1)}><RefreshCw size={14} /></button></div></div>
+    <div className="macro-statusbar"><span>{snapshot?.count ?? 0} / 9 temel gösterge</span><span>{snapshot?.last_checked ? `Son kontrol: ${new Date(snapshot.last_checked).toLocaleString("tr-TR", { timeZone: "Europe/Istanbul", dateStyle: "short", timeStyle: "short" })}` : "Veri kaynağı kontrol ediliyor"}</span><div role="group" aria-label="Makro grafik dönemi">{([['1Y','1Y'],['3Y','3Y'],['ALL','Tümü']] as const).map(([value,label]) => <button key={value} type="button" aria-pressed={range === value} onClick={() => setRange(value)}>{label}</button>)}</div></div>
     {warning && <div className="macro-alert" role="status">{snapshot?.count ? "Bazı veriler yenilenemiyor; son alınan değerler tarihleriyle gösteriliyor." : "Makro verileri şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin."}</div>}
     {state === "starting" && !snapshot?.count && <div className="macro-alert" role="status">Ekonomik göstergeler hazırlanıyor...</div>}
     {!snapshot && !unavailable ? <div className="macro-card-grid" aria-label="Makro verileri yükleniyor">{Array.from({ length: 8 }, (_,index) => <div key={index} className="macro-skeleton animate-pulse"><span /><strong /><div /></div>)}</div> : GROUPS.map(group => {
@@ -67,6 +68,7 @@ export default function MacroDashboard() {
       </button>)}</div></section>;
     })}
     {unavailable && !snapshot && <div className="macro-empty"><h2>Makro veri akışına ulaşılamıyor</h2><p>Bağlantı yeniden kurulduğunda göstergeler burada görünecek.</p><button type="button" onClick={() => setRefresh(value => value + 1)}>Tekrar dene</button></div>}
+    <MacroInsights />
     <p className="macro-footnote">Bunlar gün içi fiyatlar değildir. Her gösterge kendi yayın sıklığına ve veri dönemine göre güncellenir. Geçmiş değerler revize edilebilir. Artış ve azalış renkleri yönü belirtir; ekonomik değerlendirme içermez.</p>
     <dialog ref={dialog} className="currency-converter-dialog macro-detail-dialog" aria-labelledby="macro-detail-title" onClose={() => setSelectedId(null)} onClick={event => { if (event.target === event.currentTarget) dialog.current?.close(); }}>
       <div className="converter-heading"><div><h2 id="macro-detail-title">{selected?.title || 'Gösterge geçmişi'}</h2><p>{selected?.frequency}</p></div><button type="button" className="converter-close" aria-label="Makro grafiğini kapat" onClick={() => dialog.current?.close()}><X size={18} /></button></div>
