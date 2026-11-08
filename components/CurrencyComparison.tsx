@@ -83,11 +83,7 @@ export default function CurrencyComparison() {
         {(failed || current?.stale) && <p className="comparison-warning">{current?.series.length ? "Güncellenemedi; son grafik gösteriliyor." : "Geçmiş kur verisi alınamadı."} <button type="button" onClick={() => { setFailedKey(null); setRetry(value => value + 1); }}>Tekrar dene</button></p>}
         {current?.series.length ? <CurrencyComparisonChart key={`${key}:${current.start}:${current.end}`} data={current} /> : <div className="comparison-empty">{!current && !failed ? "Kur geçmişi yükleniyor..." : !failed ? "Bu seçimler için yeterli ortak geçmiş veri bulunamadı." : "Kaynak yeniden erişilebilir olduğunda grafik güncellenecek."}</div>}
       </div>
-      <div className="comparison-note">
-        <span>Günlük referans kur · Frankfurter{range === "5Y" ? " · Haftalık veri" : ""}</span>
-        <span>Yükseliş, seçilen paranın {base} karşısında değer kazanmasıdır.</span>
-        {!!current?.missing.length && <span className="text-amber-400/80">Yeterli veri yok: {current.missing.join(", ")}</span>}
-      </div>
+      {!!current?.missing.length && <div className="comparison-note text-amber-400/80">Yeterli veri yok: {current.missing.join(", ")}</div>}
     </section>
     <dialog ref={dialog} className="currency-converter-dialog comparison-dialog" aria-labelledby="comparison-settings-title" onClose={() => setSettings(false)}
       onClick={event => { if (event.target === event.currentTarget) dialog.current?.close(); }}>

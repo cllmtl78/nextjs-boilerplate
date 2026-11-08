@@ -1,7 +1,8 @@
 # Kur karşılaştırması
 
-Masaüstünde Kripto kutucuğunun altındaki sağ sütunda, aynı 380px yükseklik ve
-aynı sütun genişliğinde SVG grafik bulunur. Soldaki iki sütun Kur dönüştürücü,
+Masaüstünde Kripto kutucuğunun altındaki sağ sütunda, en az 380px yükseklik ve
+aynı sütun genişliğinde SVG grafik bulunur. Alt sıradaki sol bölümle grafik
+ayrı içerik yüksekliklerinde de aynı alt kenarda biter; BPT Finans boşluğu doldurur. Soldaki iki sütun Kur dönüştürücü,
 TCMB Kurlar ve BPT Finans'a ayrılır. Aralıklar ortak 7px değişkenini kullanır.
 1200px ve altında grafik Kripto'nun ardından gelir, sol bölümler altına sıralanır.
 Kur dönüştürücü artık header'da değildir; mevcut modalını korur.
