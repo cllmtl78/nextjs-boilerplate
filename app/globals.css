@@ -455,7 +455,7 @@ body {
   padding: 12px;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--bg-canvas);
+  background: var(--bg-surface-0);
   scroll-snap-align: start;
   overflow-wrap: anywhere;
 }
