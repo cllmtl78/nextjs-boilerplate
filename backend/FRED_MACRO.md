@@ -54,3 +54,19 @@ Enflasyon takvim ayı, birimler, eksik değerler, hedef aralığının ortak tar
 anahtarsız istek yapılmaması ve hata metninde anahtar sızmaması doğrulanır.
 Tarayıcı testlerinde kontrollü veri kullanıldı; 320/390/768/1024/1440px,
 aktif sekme, detay dialog'u ve not_configured görünümü doğrulandı.
+
+## Türkiye seri araştırması
+
+`GET /api/macro/turkey-series` mevcut backend anahtarını kullanarak Turkey ve
+Türkiye için iki sabit FRED seri araması yapar. Makro göstergelerini değiştirmez.
+Enflasyon, istihdam, büyüme, sanayi, faiz ve döviz başlıkları için en fazla dörder
+adayın kod, başlık, birim, sıklık, mevsimsellik, başlangıç/son gözlem ve güncelleme
+alanlarını döndürür. Başlıkta veya açık notta discontinued olanlar işaretlenir
+ve aktif adayların arkasına sıralanır. Aday gözlem tarihi otomatik olarak
+"güncel veri" veya "kesin açıklama tarihi" sayılmaz. Özellikle bankalararası
+faiz, TCMB politika faizi olarak yeniden etiketlenmemelidir.
+
+Başarılı arama 24 saat, kısmi arama 5 dakika önbelleklenir. Hatalı aramalar
+arasında en az 60 saniye beklenir. API anahtarı ve ham hata gövdeleri dönmez.
+Bu araştırma endpoint'inin canlı sonucu Cloud ağ engeli nedeniyle okunamadı;
+seri güncelliği endpoint çıktısıyla ayrıca değerlendirilecek.

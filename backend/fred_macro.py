@@ -140,3 +140,81 @@ def start_fred_macro_bot():
                 threading.Event().wait(30 * 60)
         _worker = threading.Thread(target=run, name='fred-macro', daemon=True)
         _worker.start()
+
+
+# Read-only discovery for the next Turkey dashboard; does not modify US metrics.
+_research_lock = threading.Lock()
+_research_cache = None
+_research_retry = 0
+TOPICS = {
+    'Enflasyon': ('consumer price', 'inflation', 'cpi'),
+    'İstihdam': ('unemployment', 'employment rate'),
+    'Büyüme': ('gross domestic', 'gdp'),
+    'Sanayi üretimi': ('industrial production', 'production: industry', 'production of total industry', 'production in total manufacturing'),
+    'Faiz': ('interest rate', 'policy rate', 'immediate rate', 'interbank'),
+    'Döviz': ('exchange rate', 'currency conversion'),
+}
+
+
+def summarize_turkey_series(rows):
+    series = {}
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get('id'), str):
+            continue
+        title = str(row.get('title', ''))
+        lowered = title.casefold()
+        if not any(country in lowered for country in ('turkey', 'türkiye', 'turkiye')):
+            continue
+        series[row['id']] = {
+            'id': row['id'], 'title': title,
+            'frequency': row.get('frequency'), 'units': row.get('units'),
+            'seasonal_adjustment': row.get('seasonal_adjustment'),
+            'observation_start': row.get('observation_start'),
+            'observation_end': row.get('observation_end'),
+            'last_updated': row.get('last_updated'),
+            'discontinued': 'discontinued' in lowered or 'this series has been discontinued' in str(row.get('notes','')).lower(),
+        }
+    ordered = sorted(series.values(), key=lambda item: (not item['discontinued'], item['observation_end'] or '', item['last_updated'] or ''), reverse=True)
+    groups = {topic: [item for item in ordered if any(word in item['title'].lower() for word in words)][:4] for topic, words in TOPICS.items()}
+    return {'candidate_count': len(series), 'groups': groups}
+
+
+def get_turkey_research():
+    import time
+    global _research_cache, _research_retry
+    with _research_lock:
+        if _research_cache and time.monotonic() < _research_cache['expires']:
+            return _research_cache['data']
+        if time.monotonic() < _research_retry:
+            if _research_cache:
+                return {**_research_cache['data'], 'status':'stale'}
+            return {'status':'unavailable','groups':{},'error':'Türkiye serileri şu anda araştırılamıyor.'}
+        key = os.getenv('FRED_API_KEY','').strip()
+        if not key:
+            return {'status':'not_configured','groups':{},'error':'FRED bağlantısı yapılandırılmamış.'}
+        rows, failures = [], 0
+        for country in ('Turkey', 'Türkiye'):
+            try:
+                response = requests.get('https://api.stlouisfed.org/fred/series/search',
+                    params={'api_key':key,'file_type':'json','search_text':country,'limit':200,'order_by':'popularity','sort_order':'desc'},timeout=(5,15))
+                if response.status_code != 200:
+                    logger.warning('[Makro TR] Arama alınamadı (HTTP %s)',response.status_code)
+                    failures += 1
+                    continue
+                batch = response.json().get('seriess')
+                if not isinstance(batch,list):
+                    raise ValueError('Invalid series search')
+                rows.extend(batch)
+            except (requests.RequestException,ValueError,TypeError,AttributeError) as exc:
+                logger.warning('[Makro TR] Arama hatası (%s)',type(exc).__name__)
+                failures += 1
+        if not rows:
+            _research_retry = time.monotonic() + 60
+            if _research_cache:
+                return {**_research_cache['data'],'status':'stale'}
+            return {'status':'unavailable','groups':{},'error':'FRED Türkiye arama yanıtı alınamadı.'}
+        data = {'status':'partial' if failures else 'ok','checked_at':datetime.now(timezone.utc).isoformat(),
+                **summarize_turkey_series(rows),
+                'note':'Gözlem sonu, yayın tarihi değildir. Adaylar değerlendirme içindir; gösterge seçimleri henüz değişmedi.'}
+        _research_cache = {'data':data,'expires':time.monotonic()+(300 if failures else 86400)}
+        return data
