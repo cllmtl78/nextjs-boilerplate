@@ -1,4 +1,5 @@
 import os
+from fred_macro import start_fred_macro_bot, get_macro_data
 from tcmb_rates import get_tcmb_rates
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +27,7 @@ start_kap_bot()
 start_global_news_bot()
 start_official_news_bot()
 start_crypto_news_bot()
+start_fred_macro_bot()
 
 @app.get("/")
 def health():
@@ -56,6 +58,11 @@ def api_global_news():
 @app.get("/api/crypto-news")
 def api_crypto_news():
     return get_crypto_news_data()
+
+
+@app.get("/api/macro")
+def api_macro():
+    return get_macro_data()
 
 
 @app.get("/api/tcmb-rates")

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import NotificationBell from "./NotificationBell";
 import Weather from "./Weather";
@@ -8,6 +9,7 @@ import MarketBar from "./MarketBar";
 import { EXCHANGES, marketSessions } from "@/lib/market-sessions";
 
 export default function Header() {
+  const pathname = usePathname();
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
     const update = () => setNow(new Date());
@@ -41,12 +43,18 @@ export default function Header() {
       </div>
       <div className="mainbar">
         <div className="mainbar-inner">
-          <div className="brand-group">
-            <Link href="/" className="brand">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.png" alt="BPT Finans" className="brand-logo" />
-            </Link>
-            <div className="terminal-badge-wrap"><span className="terminal-tag">TERMINAL</span></div>
+          <div className="header-brand-nav">
+            <div className="brand-group">
+              <Link href="/" className="brand">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo.png" alt="BPT Finans" className="brand-logo" />
+              </Link>
+              <div className="terminal-badge-wrap"><span className="terminal-tag">TERMINAL</span></div>
+            </div>
+            <nav className="header-nav" aria-label="Ana gezinme">
+              <Link href="/" aria-current={pathname === "/" ? "page" : undefined}>Ana sayfa</Link>
+              <Link href="/makro" aria-current={pathname === "/makro" ? "page" : undefined}>Makro</Link>
+            </nav>
           </div>
           <div className="header-tools">
             <NotificationBell />
