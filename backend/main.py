@@ -1,4 +1,5 @@
 import os
+from tcmb_rates import get_tcmb_rates
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -55,6 +56,11 @@ def api_global_news():
 @app.get("/api/crypto-news")
 def api_crypto_news():
     return get_crypto_news_data()
+
+
+@app.get("/api/tcmb-rates")
+def api_tcmb_rates():
+    return get_tcmb_rates()
 
 
 @app.get("/api/bpt-news")

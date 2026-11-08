@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import MarketIntelligence from "@/components/MarketIntelligence";
 import { observeFeedArrivals } from "@/lib/notification-sound";
+import TcmbRates from "@/components/TcmbRates";
 import BptFeed from "@/components/BptFeed";
 import OfficialNews from "@/components/OfficialNews";
 import KapContent, { type KapContentBlock } from "@/components/KapContent";
@@ -1224,6 +1225,7 @@ export default function TerminalWorkspace() {
         <MarketIntelligence backendUrl={BACKEND_URL} onSelectNews={setSeciliHaber} />
       </div>
 
+      <TcmbRates backendUrl={BACKEND_URL} />
       <BptFeed backendUrl={BACKEND_URL} />
 
       {/* HABER DETAY MODALI */}

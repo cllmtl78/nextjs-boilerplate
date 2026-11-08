@@ -433,6 +433,32 @@ body {
   margin-top: var(--terminal-gap);
 }
 
+.tcmb-panel {
+  margin-top: var(--terminal-gap);
+}
+
+.tcmb-rates-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: var(--terminal-gap);
+  padding: 0 10px 10px;
+}
+
+.tcmb-rate {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+}
+
+@media (max-width: 1200px) {
+  .tcmb-rates-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 600px) {
+  .tcmb-rates-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 .bpt-feed {
   margin-top: var(--terminal-gap);
 }
