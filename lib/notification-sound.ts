@@ -36,26 +36,26 @@ async function unlockAudio() {
   if (context.state !== "running") throw new Error("Ses etkinleştirilemedi. Zile tekrar dokun.");
 }
 
-// A soft two-note sine chime: short attack, low gain and a smooth decay.
+// One bell strike: simultaneous partials, a clear attack and a soft ringing tail.
 function playBell() {
   if (!enabled || !context || context.state !== "running") return;
   const audio = context;
   const start = audio.currentTime;
-  for (const [frequency, offset, volume] of [[660, 0, 0.035], [880, 0.12, 0.022]]) {
+  for (const [frequency, volume, decay] of [[1046, 0.075, 0.8], [2092, 0.025, 0.4], [2814, 0.009, 0.24]]) {
     const oscillator = audio.createOscillator();
     const gain = audio.createGain();
     oscillator.type = "sine";
     oscillator.frequency.value = frequency;
-    gain.gain.setValueAtTime(0, start + offset);
-    gain.gain.linearRampToValueAtTime(volume, start + offset + 0.025);
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + 0.55);
-    gain.gain.linearRampToValueAtTime(0, start + offset + 0.6);
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(volume, start + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + decay);
+    gain.gain.linearRampToValueAtTime(0, start + decay + 0.025);
     oscillator.connect(gain);
     gain.connect(audio.destination);
     voices.add(oscillator);
     oscillator.onended = () => { voices.delete(oscillator); oscillator.disconnect(); gain.disconnect(); };
-    oscillator.start(start + offset);
-    oscillator.stop(start + offset + 0.61);
+    oscillator.start(start);
+    oscillator.stop(start + decay + 0.03);
   }
   lastPlayed = performance.now();
 }
