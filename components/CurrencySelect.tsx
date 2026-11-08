@@ -52,7 +52,7 @@ export default function CurrencySelect({ id, label, value, options, onChange }: 
     <button ref={trigger} type="button" id={id} className="converter-select-button" aria-haspopup="listbox" aria-expanded={open}
       aria-controls={`${id}-list`} aria-labelledby={`${id}-label ${id}-value`} disabled={!options.length}
       onClick={() => { if (open) setOpen(false); else show(); }}>
-      <span id={`${id}-value`}><strong>{value}</strong>{selected && <span> · {selected.name}</span>}</span><ChevronDown size={14} aria-hidden="true" />
+      <span id={`${id}-value`}><strong>{value || "Birim seç"}</strong>{selected && <span> · {selected.name}</span>}</span><ChevronDown size={14} aria-hidden="true" />
     </button>
     {open && <div className="converter-dropdown-menu">
       <div className="converter-dropdown-search"><Search size={13} aria-hidden="true" />

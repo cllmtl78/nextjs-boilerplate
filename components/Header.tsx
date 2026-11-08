@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import CurrencyConverter from "./CurrencyConverter";
 import NotificationBell from "./NotificationBell";
 import Weather from "./Weather";
 import MarketBar from "./MarketBar";
@@ -49,7 +48,6 @@ export default function Header() {
             </Link>
             <div className="terminal-badge-wrap"><span className="terminal-tag">TERMINAL</span></div>
           </div>
-          <div className="header-converter"><CurrencyConverter /></div>
           <div className="header-tools">
             <NotificationBell />
             <div className="header-clock-weather">

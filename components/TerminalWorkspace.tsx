@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import MarketIntelligence from "@/components/MarketIntelligence";
 import { observeFeedArrivals } from "@/lib/notification-sound";
+import CurrencyConverter from "@/components/CurrencyConverter";
+import CurrencyComparison from "@/components/CurrencyComparison";
 import TcmbRates from "@/components/TcmbRates";
 import BptFeed from "@/components/BptFeed";
 import OfficialNews from "@/components/OfficialNews";
@@ -1225,8 +1227,14 @@ export default function TerminalWorkspace() {
         <MarketIntelligence backendUrl={BACKEND_URL} onSelectNews={setSeciliHaber} />
       </div>
 
-      <TcmbRates backendUrl={BACKEND_URL} />
-      <BptFeed backendUrl={BACKEND_URL} />
+      <div className="terminal-bottom-grid">
+        <div className="terminal-bottom-left">
+          <div className="terminal-converter-panel"><CurrencyConverter /></div>
+          <TcmbRates backendUrl={BACKEND_URL} />
+          <BptFeed backendUrl={BACKEND_URL} />
+        </div>
+        <CurrencyComparison />
+      </div>
 
       {/* HABER DETAY MODALI */}
       {seciliHaber && (

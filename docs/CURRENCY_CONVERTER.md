@@ -1,6 +1,6 @@
 # Kur dönüştürücü
 
-Header'daki turkuaz düğme native dialog açar. Frankfurter aktif kataloğunun tamamı, Türkçe
+TCMB Kurlar'ın hemen üstündeki turkuaz düğme native dialog açar. Frankfurter aktif kataloğunun tamamı, Türkçe
 binlik/ondalık girişi (`1.000,50`), birimleri değiştirme ve sonucu kopyalama
 bulunur. Tutar değişimi yerel hesaplanır; API'ye tutar gönderilmez. Negatif,
 geçersiz, 6'dan fazla ondalıklı veya 1 trilyondan büyük tutarlar reddedilir.

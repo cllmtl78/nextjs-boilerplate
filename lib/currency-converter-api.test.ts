@@ -15,6 +15,7 @@ test("converter API validates pairs, deduplicates requests, caches and marks fal
       { iso_code: "USD", name: "US Dollar", type: "currency" },
       { iso_code: "TRY", name: "Turkish Lira", type: "currency" },
       { iso_code: "EUR", name: "Euro", type: "currency" },
+      { iso_code: "GBP", name: "Pound", type: "currency" },
       { iso_code: "DZD", name: "Algerian Dinar", type: "currency" },
     ]);
     hits++;
