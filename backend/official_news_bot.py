@@ -13,7 +13,7 @@ import requests
 from bs4 import BeautifulSoup
 from news_day import TR, only_today
 
-ACCOUNTS = {
+OFFICIAL_ACCOUNTS = {
     'memetsimsek': 'Mehmet Şimşek',
     'HMBakanligi': 'Hazine ve Maliye Bakanlığı',
     '_cevdetyilmaz': 'Cevdet Yılmaz',
@@ -23,6 +23,7 @@ ACCOUNTS = {
     'BDDKResmi': 'BDDK',
     'tuikbilgi': 'TÜİK',
 }
+ACCOUNTS = {**OFFICIAL_ACCOUNTS, 'bptfinans': 'BPT FİNANS'}
 _lock = threading.Lock()
 _items = {}
 _states = {}
@@ -110,12 +111,20 @@ def poll_once():
         _items.update(dict(sorted(current.items(), key=lambda pair: pair[1]['timestamp'], reverse=True)[:300]))
 
 
-def get_official_news_data():
+def snapshot(accounts):
     with _lock:
-        data = sorted(only_today(list(_items.values())), key=lambda item: item['timestamp'], reverse=True)
-        states = dict(_states)
+        data = sorted(only_today([item for item in _items.values() if item['account'] in accounts]), key=lambda item: item['timestamp'], reverse=True)
+        states = {account: state for account, state in _states.items() if account in accounts}
     status = 'starting' if not states else 'unavailable' if all(s['status'] == 'error' for s in states.values()) else 'partial' if any(s['status'] == 'error' for s in states.values()) else 'ok'
     return {'status': status, 'count': len(data), 'data': data, 'accounts': states}
+
+
+def get_official_news_data():
+    return snapshot(OFFICIAL_ACCOUNTS)
+
+
+def get_bpt_news_data():
+    return snapshot({'bptfinans'})
 
 
 def start_official_news_bot():

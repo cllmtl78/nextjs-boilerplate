@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import MarketIntelligence from "@/components/MarketIntelligence";
 import { observeFeedArrivals } from "@/lib/notification-sound";
+import BptFeed from "@/components/BptFeed";
 import OfficialNews from "@/components/OfficialNews";
 import KapContent, { type KapContentBlock } from "@/components/KapContent";
 import { cleanWireText as cleanGlobalWireText, istanbulDay } from "@/lib/wire-text";
@@ -1222,6 +1223,8 @@ export default function TerminalWorkspace() {
       <div className="w-full terminal-secondary-wrap">
         <MarketIntelligence backendUrl={BACKEND_URL} onSelectNews={setSeciliHaber} />
       </div>
+
+      <BptFeed backendUrl={BACKEND_URL} />
 
       {/* HABER DETAY MODALI */}
       {seciliHaber && (

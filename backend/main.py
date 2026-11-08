@@ -7,7 +7,7 @@ from bist_news_bot import start_bist_news_bot, get_bist_news_data
 from kap_bot import start_kap_bot, get_kap_data
 from global_news_bot import start_global_news_bot, get_global_news_data
 from crypto_news_bot import start_crypto_news_bot, get_crypto_news_data
-from official_news_bot import start_official_news_bot, get_official_news_data
+from official_news_bot import start_official_news_bot, get_official_news_data, get_bpt_news_data
 
 app = FastAPI(title="BPT Terminal Engine")
 
@@ -55,6 +55,11 @@ def api_global_news():
 @app.get("/api/crypto-news")
 def api_crypto_news():
     return get_crypto_news_data()
+
+
+@app.get("/api/bpt-news")
+def api_bpt_news():
+    return get_bpt_news_data()
 
 
 @app.get("/api/official-news")

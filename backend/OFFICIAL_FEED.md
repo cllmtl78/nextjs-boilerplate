@@ -37,3 +37,16 @@ Yeni mizuki.st kaynağı kullanıcı tarafından erişilebilir olarak bildirildi
 bu ortamdan canlı Nitter akışı doğrulanmadı. Deploy sonrası backend
 logları ve `/api/official-news` yanıtı kontrol edilmeli. Backend ve frontend
 birlikte deploy edilmelidir.
+
+## BPT Finans
+
+Aynı toplayıcı `bptfinans` hesabını da beş dakikada bir kontrol eder.
+`GET /api/bpt-news` yalnızca bu hesabı döndürür; resmî hesaplar ve BPT durumları
+birbirinden ayrıdır. BPT kayıtları `/api/official-news` içine karışmaz.
+Metin ve orijinal X bağlantısı kullanılır; görseller, retweetler ve yanıtlar
+alınmaz. Diğer akışlar gibi yalnızca Türkiye saatine göre bugünün kayıtları
+gösterilir. Ön yüzde en yeni kart soldadır ve yatay kaydırılır; kart bağlantısı
+modal açmadan yeni sekmede asıl tweete gider. Kaynak etiketi `[BPT FİNANS] X`.
+Yeni kayıtlar mevcut isteğe bağlı haber zilini kullanır, ilk yükleme sessizdir.
+Kullanıcı mizuki.st üzerindeki `/bptfinans/rss` adresinin çalıştığını doğruladı;
+bu değişiklik canlı ağ yerine örnek RSS ve tarayıcı test verileriyle doğrulandı.

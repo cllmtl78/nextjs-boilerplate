@@ -433,6 +433,43 @@ body {
   margin-top: var(--terminal-gap);
 }
 
+.bpt-feed {
+  margin-top: var(--terminal-gap);
+}
+
+.bpt-feed-track {
+  display: flex;
+  gap: var(--terminal-gap);
+  padding: 10px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  scrollbar-color: #1e293b #070b14;
+}
+
+.bpt-post {
+  flex: 0 0 clamp(260px, 30vw, 360px);
+  max-width: 100%;
+  align-self: stretch;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-canvas);
+  scroll-snap-align: start;
+  overflow-wrap: anywhere;
+}
+
+.bpt-post:hover {
+  background: var(--bg-surface-1);
+}
+
+.bpt-post:focus-visible,
+.bpt-feed-track:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: -2px;
+}
+
 .terminal-stack {
   display: flex;
   flex-direction: column;
