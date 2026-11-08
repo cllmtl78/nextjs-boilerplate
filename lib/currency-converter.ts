@@ -1,4 +1,4 @@
-export const CONVERTER_CURRENCIES = [
+export const COMMON_CURRENCY_NAMES = [
   ["TRY", "Türk Lirası"], ["USD", "ABD Doları"], ["EUR", "Euro"], ["GBP", "İngiliz Sterlini"],
   ["CHF", "İsviçre Frangı"], ["JPY", "Japon Yeni"], ["CAD", "Kanada Doları"],
   ["AUD", "Avustralya Doları"], ["CNY", "Çin Yuanı"], ["SAR", "Suudi Arabistan Riyali"],
@@ -8,7 +8,6 @@ export const CONVERTER_CURRENCIES = [
   ["KRW", "Güney Kore Wonu"], ["SGD", "Singapur Doları"], ["HKD", "Hong Kong Doları"],
 ] as const;
 export type ConversionQuote = { base: string; quote: string; rate: number; date: string | null; stale?: boolean };
-export const supportedCurrency = (code: string) => CONVERTER_CURRENCIES.some(([currency]) => currency === code);
 
 export function parseConversionAmount(input: string): number | null {
   const text = input.trim();

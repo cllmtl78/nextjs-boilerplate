@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeftRight, ChevronDown, Copy, X } from "lucide-react";
-import { CONVERTER_CURRENCIES, conversionNumber, parseConversionAmount, parseConversionQuote, type ConversionQuote } from "@/lib/currency-converter";
+import { ArrowLeftRight, Copy, X } from "lucide-react";
+import { conversionNumber, parseConversionAmount, parseConversionQuote, type ConversionQuote } from "@/lib/currency-converter";
+
+import CurrencySelect from "./CurrencySelect";
+import type { CurrencyOption } from "@/lib/currency-catalog";
 
 export default function CurrencyConverter() {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -14,10 +17,32 @@ export default function CurrencyConverter() {
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [copyState, setCopyState] = useState("");
+  const [currencies, setCurrencies] = useState<CurrencyOption[]>([]);
+  const [catalogError, setCatalogError] = useState(false);
+  const [catalogAttempt, setCatalogAttempt] = useState(0);
   const matching = quote?.base === from && quote?.quote === to;
   const current = from === to ? { rate: 1, date: null, stale: false } : matching ? quote : null;
   const amount = parseConversionAmount(input);
   const result = amount !== null && current ? amount * current.rate : null;
+
+  useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    let disposed = false;
+    const load = async () => {
+      try {
+        const response = await fetch("/api/currency-converter/currencies", {
+          cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]),
+        });
+        if (!response.ok) throw new Error("No catalog");
+        const body = await response.json();
+        if (!Array.isArray(body.data) || !body.data.length) throw new Error("Invalid catalog");
+        if (!disposed) { setCurrencies(body.data); setCatalogError(body.stale === true); }
+      } catch { if (!disposed) setCatalogError(true); }
+    };
+    void load();
+    return () => { disposed = true; controller.abort(); };
+  }, [open, catalogAttempt]);
 
   useEffect(() => {
     if (!open || from === to) return;
@@ -56,10 +81,12 @@ export default function CurrencyConverter() {
         <div className="converter-amount-wrap"><input id="converter-amount" autoFocus inputMode="decimal" autoComplete="off" maxLength={24}
           value={input} aria-invalid={amount === null} aria-describedby="converter-amount-hint" onChange={event => { setInput(event.target.value); setCopyState(""); }} /><span>{from}</span></div>
         <p id="converter-amount-hint" className={amount === null ? "converter-error" : "converter-hint"}>{amount === null ? "Geçerli bir tutar girin (0–1 trilyon). Örnek: 1.000,50" : "Örnek: 1.000,50 · En fazla 6 ondalık basamak"}</p>
+        {catalogError && <p className="converter-error">{currencies.length ? "Para birimi listesi güncellenemedi; son alınan liste gösteriliyor." : "Para birimi listesi alınamadı."} <button type="button" onClick={() => { setCatalogError(false); setCatalogAttempt(value => value + 1); }}>Listeyi tekrar yükle</button></p>}
+        {!currencies.length && !catalogError && <p className="converter-hint">Tüm para birimleri yükleniyor...</p>}
         <div className="converter-pair">
-          <div><label className="converter-label" htmlFor="converter-from">Çevrilen</label><div className="converter-select-wrap"><select id="converter-from" value={from} onChange={event => { changed(); setFrom(event.target.value); }}>{CONVERTER_CURRENCIES.map(([code, name]) => <option key={code} value={code}>{code} · {name}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></div></div>
+          <CurrencySelect key={`from-${open}`} id="converter-from" label="Çevrilen" value={from} options={currencies} onChange={value => { changed(); setFrom(value); }} />
           <button type="button" className="converter-swap" aria-label="Para birimlerini değiştir" title="Para birimlerini değiştir" onClick={() => { changed(); setFrom(to); setTo(from); }}><ArrowLeftRight size={18} /></button>
-          <div><label className="converter-label" htmlFor="converter-to">Hedef</label><div className="converter-select-wrap"><select id="converter-to" value={to} onChange={event => { changed(); setTo(event.target.value); }}>{CONVERTER_CURRENCIES.map(([code, name]) => <option key={code} value={code}>{code} · {name}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></div></div>
+          <CurrencySelect key={`to-${open}`} id="converter-to" label="Hedef" value={to} options={currencies} onChange={value => { changed(); setTo(value); }} />
         </div>
         <div className="converter-result" aria-live="polite" aria-atomic="true">
           <span className="converter-label">Karşılığı</span>

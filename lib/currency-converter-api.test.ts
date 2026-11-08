@@ -10,7 +10,13 @@ test("converter API validates pairs, deduplicates requests, caches and marks fal
   Date.now = () => clock;
   let hits = 0;
   let failing = false;
-  globalThis.fetch = (async () => {
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    if (String(url).endsWith("/currencies")) return Response.json([
+      { iso_code: "USD", name: "US Dollar", type: "currency" },
+      { iso_code: "TRY", name: "Turkish Lira", type: "currency" },
+      { iso_code: "EUR", name: "Euro", type: "currency" },
+      { iso_code: "DZD", name: "Algerian Dinar", type: "currency" },
+    ]);
     hits++;
     if (failing) throw new Error("Upstream offline");
     await Promise.resolve();
@@ -22,6 +28,8 @@ test("converter API validates pairs, deduplicates requests, caches and marks fal
     assert.equal(identity.rate, 1);
     assert.equal(identity.date, null);
     assert.equal(hits, 0);
+    assert.equal((await GET(request("ZZZ", "TRY"))).status, 400);
+    assert.equal((await GET(request("DZD", "DZD"))).status, 200);
     const responses = await Promise.all([GET(request("USD", "TRY")), GET(request("USD", "TRY"))]);
     assert.equal(hits, 1);
     assert.equal((await responses[0].json()).rate, 43.25);
