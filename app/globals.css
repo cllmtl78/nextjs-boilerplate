@@ -217,6 +217,7 @@ body {
 
 .header-clock-weather {
   display: flex;
+  width: 128px;
   flex-direction: column;
   align-items: flex-end;
   gap: 3px;
@@ -873,6 +874,7 @@ body {
   }
 
   .header-clock-weather {
+    width: 100px;
     gap: 2px;
     font-size: 10px;
   }
