@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { observeFeedArrivals } from "@/lib/notification-sound";
 import type { TerminalHaber } from "./TerminalWorkspace";
 import { isCurrentNewsItem, watchIstanbulDay } from "@/lib/news-day";
 
@@ -26,7 +27,9 @@ export default function OfficialNews({ backendUrl, onSelect, endpoint = "officia
         const body = await response.json();
         if (!Array.isArray(body.data)) throw new Error("Invalid feed");
         if (!disposed) {
-          setItems(body.data.filter((item: TerminalHaber) => isCurrentNewsItem(item)));
+          const fresh: TerminalHaber[] = body.data.filter((item: TerminalHaber) => isCurrentNewsItem(item));
+          observeFeedArrivals(endpoint, fresh);
+          setItems(fresh);
           setState(body.status);
           setPending(Number(body.pending) > 0);
         }

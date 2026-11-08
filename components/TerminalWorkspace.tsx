@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import MarketIntelligence from "@/components/MarketIntelligence";
+import { observeFeedArrivals } from "@/lib/notification-sound";
 import OfficialNews from "@/components/OfficialNews";
 import KapContent, { type KapContentBlock } from "@/components/KapContent";
 import { cleanWireText as cleanGlobalWireText, istanbulDay } from "@/lib/wire-text";
@@ -847,6 +848,7 @@ export default function TerminalWorkspace() {
         .filter((item: GlobalNewsItem) => item.baslik)
         .sort((a: GlobalNewsItem, b: GlobalNewsItem) => b.timestamp - a.timestamp)
         .slice(0, 200);
+      observeFeedArrivals("global", items);
       setGlobalHaberler(items);
       try { localStorage.setItem(CACHE_KEY_GLOBAL, JSON.stringify(items)); } catch { /* Cache is optional. */ }
     } catch {
@@ -891,6 +893,7 @@ export default function TerminalWorkspace() {
             if (item.id) knownIdsRef.current.add(item.id);
           });
 
+          observeFeedArrivals("bist", freshData);
           setBistHaberleri(freshData);
           try {
             localStorage.setItem(CACHE_KEY_BIST, JSON.stringify(freshData));
@@ -967,6 +970,7 @@ export default function TerminalWorkspace() {
               };
             });
             if (isMounted) {
+              observeFeedArrivals("kap", mapped);
               setKapBildirimleri(mapped);
               try { localStorage.setItem(CACHE_KEY_KAP_V4, JSON.stringify(mapped)); } catch { /* Cache is optional. */ }
             }

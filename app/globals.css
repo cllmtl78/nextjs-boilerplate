@@ -183,6 +183,38 @@ body {
   border-radius: 2px;
 }
 
+.header-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.notification-bell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  color: #64748b;
+}
+
+.notification-bell:hover,
+.notification-bell:focus-visible {
+  background: rgb(255 255 255 / 5%);
+  color: #cbd5e1;
+}
+
+.notification-bell:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.notification-bell-on {
+  color: #38bdf8;
+}
+
 .header-clock-weather {
   display: flex;
   flex-direction: column;
@@ -834,6 +866,10 @@ body {
 
   .exchange-countdown-label {
     display: none;
+  }
+
+  .header-tools {
+    gap: 2px;
   }
 
   .header-clock-weather {
