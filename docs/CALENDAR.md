@@ -1,35 +1,38 @@
 # Ekonomik takvim
 
-Terminaldeki etkin takvim `components/EconomicCalendar.tsx` içindeki resmi
-Investing iframe'idir. Ziyaretçi tarayıcısı `sslecal2.investing.com` adresini
-doğrudan yükler; uygulama sunucusu bu tabloyu kazımaz ve takvim kutusu
-`/api/calendar` yolunu çağırmaz.
+Açık terminal sayfası `/api/calendar` yolunu her 60 saniyede kontrol eder.
+Sunucu, aynı Türkiye günü için istekleri 60 saniyelik ortak bellek önbelleğinde
+birleştirir; aynı anda gelen ziyaretçiler aynı Promise'ı bekler. Başarısız
+istekler de bir dakika tutulur. Bu önbellek sunucu süreci başınadır; ayrı sunucular
+veya serverless örnekleri birbirlerinin önbelleğini paylaşmaz. Ziyaretçi yokken
+arka planda çalışan bir cron değildir.
 
-Bu yol kullanıcı tarafından tarayıcıda açılarak doğrulandı. Önceki canlı tanılama
-Investing'in hem HTML servisine hem widget'ına uygulama sunucusundan erişimin
-HTTP 403 ile engellendiğini gösterdi. TradingView'ın gerçek yanıtındaki `actual`
-ve `actualRaw` alanları da boştu. FXStreet denemesi HTTP 401 döndürdü. Bu nedenle
-bu kaynakları sunucudan art arda denemek kullanıcıya sonuç sağlamıyordu.
+`fetchedAt` kaynağın gerçekten sorgulandığı zamanı gösterir. Türkiye günü
+değiştiğinde eski önbellek kullanılmaz. API hataları örnek veri üretmez;
+tarayıcı aynı güne ait son başarılı sonuçları korur ve hata mesajı gösterir.
 
-Iframe Türkiye, ABD, Euro Bölgesi, Çin ve Japonya için günlük takvimi; açıklanan,
-beklenti ve önceki sütunları gösterir. `lang=10` Türkçe, `timeZone=18` sabit GMT+3
-ayarlarıdır. Kutu 380px yüksekliğindedir; içerik sağlayıcının kendi tablosudur.
-Koyu renk parametreleri sağlayıcıya iletilir, çapraz kaynak içeriğine CSS veya
-JavaScript enjekte edilmez. Sağlayıcı bağlantısı görünür tutulur ve ayrıca ayrı
-sekmede açma imkânı verir.
+Birincil kaynak Investing'dir. Önce genel ekonomik takvim servisi POST formuyla
+sorgulanır; sayfalar bildirim kimlikleriyle birleştirilir. Servis erişilemezse
+Investing'in genel takvim widget'ının HTML yanıtı denenir. İkisinden de yanıt
+alınamazsa aynı gün alınmış Investing sonuçları korunur. Henüz Investing yanıtı
+yoksa TradingView yedeği kullanılır; API `degraded: true` döndürür ve arayüz
+sonuçların eksik olabileceğini bildirir. Bir sonraki dakikada yeniden Investing
+denenir. Önceki günün sonuçları yeni güne taşınmaz.
 
-Açık sayfada iframe her 60 saniyede yeni `_refresh` parametresiyle yeniden
-oluşturulur. Başlıktaki yenile düğmesi aynı işlemi hemen yapar. Bu tarayıcı
-yenilemesidir; sağlayıcının bir sonucu yayımlama hızına ilişkin garanti vermez.
-Arka plandaki sekmeler tarayıcı tarafından yavaşlatılabilir.
+Türkiye, ABD, Euro Bölgesi, Çin ve Japonya sorgulanır. Investing'in sabit GMT+3
+saat dilimi (18) kullanılır; tablo parçaları `cheerio/slim` ile ayrıştırılır.
+`eventActual_`, `eventForecast_`, `eventPrevious_` hücreleri ayrı ayrı okunur.
+Boş actual hücresi forecast/previous değerleriyle doldurulmaz. Zamanı belirsiz
+satırlar için saat uydurulmaz. API anahtarı veya oturum açma gerekmez; erişim
+engelleri aşılmaya çalışılmaz.
 
-Eski JSON adaptörü `/api/calendar` tanılama ve gelecekteki doğrudan veri
-entegrasyonları için tutulmaktadır. Bu API'nin kaynak/başarı durumu ekranda
-gösterilen resmi iframe'in durumunu temsil etmez. Tarayıcıdan Investing'e erişim
-ve üçüncü taraf iframe yükleme izni gerekir. Resmi tablonun gerçek içeriği
-çapraz kaynak güvenliği nedeniyle üst sayfadan okunamaz.
+`/api/calendar?diagnostics=1` seçilen kaynak adresini, varsa yedek kaynağa geçiş
+nedenini ve API eşlemesinden önceki ilk yedi kaydı gösterir. Investing kayıtları
+bu aşamada HTML hücrelerinden ortak kayıt yapısına çevrilmiş durumdadır.
 
-Kontrollü tarayıcı testi resmi iframe adresi/ülke/saat ayarlarını, sonuç hücresinin
-görüntülenmesini, 60 saniyede yenilemeyi, elle yenilemeyi, eski JSON API'sinin
-çağrılmadığını ve mobil sınırları doğrular. Bu testte iframe yanıtı sentetiktir;
-üretimdeki gömülü içeriğin gerçek sonuçları ayrıca sağlayıcıya bağlıdır.
+İstek biçimi ve hücreler açık kaynak `alvarobartt/investpy` istemcisiyle
+karşılaştırıldı. Ayrıştırma, sayfalama, sıfır sonuç, kaynak sırası ve arıza
+senaryoları sentetik HTML ile test edildi; bu bir canlı erişim doğrulaması değildir. FXStreet, Myfxbook,
+Trading Economics ve Investing için bu Cloud ortamından yapılan canlı denemeler
+ortamın ağ kısıtında engellendi. İlgili alan adları ortam taslağına eklendi;
+taslağın kaydedilip yayınlanması henüz uygulanmış ağ erişimi anlamına gelmez.

@@ -3,7 +3,11 @@
 import { useState, useEffect } from "react";
 import OfficialNews from "@/components/OfficialNews";
 import type { TerminalHaber } from "@/components/TerminalWorkspace";
-import EconomicCalendar from "@/components/EconomicCalendar";
+import { displayCalendarTitle } from "@/lib/calendar-titles";
+import { formatCalendarValue, type CalendarUnits } from "@/lib/calendar-values";
+import { istanbulDay } from "@/lib/wire-text";
+import { isCurrentNewsItem, watchIstanbulDay } from "@/lib/news-day";
+import { mergeCalendarReadings } from "@/lib/calendar-feed";
 
 interface StockMover {
   symbol: string;
@@ -19,7 +23,66 @@ interface SectorItem {
   change: number;
 }
 
+export interface EconomicCalendarItem extends CalendarUnits {
+  id: string;
+  title: string;
+  originalTitle?: string;
+  country: "TR" | "US" | "EU" | "CN" | "JP";
+  date: string;
+  time: string;
+  timestamp: number;
+  actual: string | number | null;
+  forecast: string | number | null;
+  previous: string | number | null;
+  importance: number;
+  isCompleted: boolean;
+}
+
+const CACHE_CALENDAR_DATE = "bpt_calendar_date";
+const CACHE_CALENDAR_DATA = "bpt_calendar_data";
 const CACHE_BIST_DATA = "bpt_bist_market_data_v2";
+
+// Ülke rozeti renklendirme (TR: kırmızı, US: mavi, EU: lacivert/mavi, CN: amber, JP: indigo)
+const renderCountryBadge = (country: "TR" | "US" | "EU" | "CN" | "JP") => {
+  switch (country) {
+    case "TR":
+      return (
+        <span className="text-[10px] font-bold leading-3 px-0.5 py-0 rounded bg-rose-950/70 border border-rose-800/60 text-rose-300 font-mono shrink-0">
+          TR
+        </span>
+      );
+    case "US":
+      return (
+        <span className="text-[10px] font-bold leading-3 px-0.5 py-0 rounded bg-sky-950/70 border border-sky-800/60 text-sky-300 font-mono shrink-0">
+          US
+        </span>
+      );
+    case "EU":
+      return (
+        <span className="text-[10px] font-bold leading-3 px-0.5 py-0 rounded bg-blue-950/70 border border-blue-800/60 text-blue-300 font-mono shrink-0">
+          EU
+        </span>
+      );
+    case "CN":
+      return (
+        <span className="text-[10px] font-bold leading-3 px-0.5 py-0 rounded bg-amber-950/70 border border-amber-800/60 text-amber-300 font-mono shrink-0">
+          CN
+        </span>
+      );
+    case "JP":
+      return (
+        <span className="text-[10px] font-bold leading-3 px-0.5 py-0 rounded bg-indigo-950/70 border border-indigo-800/60 text-indigo-300 font-mono shrink-0">
+          JP
+        </span>
+      );
+    default:
+      return (
+        <span className="text-[10px] font-bold leading-3 px-0.5 py-0 rounded bg-slate-800 border border-slate-700 text-slate-300 font-mono shrink-0">
+          {country}
+        </span>
+      );
+  }
+};
 
 interface RawBistStock {
   kod?: string;
@@ -167,6 +230,49 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
     return [];
   });
 
+  // Canlı Takvim State (Önbellek varsa anında başlat)
+  const [calendarEvents, setCalendarEvents] = useState<EconomicCalendarItem[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const todayStr = istanbulDay(Date.now());
+      const storedDate = localStorage.getItem(CACHE_CALENDAR_DATE);
+      if (storedDate === todayStr) {
+        const raw = localStorage.getItem(CACHE_CALENDAR_DATA);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed.filter(item => !String(item.id).startsWith("fb_") && isCurrentNewsItem(item));
+        }
+      } else if (storedDate && storedDate !== todayStr) {
+        localStorage.removeItem(CACHE_CALENDAR_DATA);
+        localStorage.setItem(CACHE_CALENDAR_DATE, todayStr);
+      }
+    } catch {
+      // ignore
+    }
+    return [];
+  });
+
+  const [loadingCalendar, setLoadingCalendar] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      const todayStr = istanbulDay(Date.now());
+      const storedDate = localStorage.getItem(CACHE_CALENDAR_DATE);
+      if (storedDate === todayStr) {
+        const raw = localStorage.getItem(CACHE_CALENDAR_DATA);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) return false;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return true;
+  });
+
+  const [calendarError, setCalendarError] = useState(false);
+  const [calendarFallback, setCalendarFallback] = useState(false);
+
   // 1 & 4. BIST CANLI VERİ ÇEKME & 20 SANİYEDE BİR GÜNCELLEME:
   useEffect(() => {
     let isMounted = true;
@@ -246,6 +352,68 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
     return () => {
       isMounted = false;
       clearInterval(interval);
+    };
+  }, []);
+
+  // 2. Canlı Takvim Verisi Çekme (TradingView API /api/calendar + Günlük Otomatik Sıfırlama)
+  useEffect(() => {
+    let isMounted = true;
+    let fetching = false;
+
+    const fetchCalendar = async () => {
+      if (fetching) return;
+      fetching = true;
+      try {
+        const res = await fetch("/api/calendar", { cache: "no-store", signal: AbortSignal.timeout(25_000) });
+        if (!res.ok) throw new Error("Takvim güncellenemedi");
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          if (data.success !== true || !Array.isArray(data.events)) throw new Error("Geçersiz takvim yanıtı");
+          if (isMounted && data.date === istanbulDay(Date.now())) {
+            setCalendarError(data.stale === true || data.degraded === true);
+            setCalendarFallback(data.degraded === true);
+            setCalendarEvents(current => {
+              const events = mergeCalendarReadings(current, data.events as EconomicCalendarItem[]);
+              try {
+                localStorage.setItem(CACHE_CALENDAR_DATE, data.date);
+                localStorage.setItem(CACHE_CALENDAR_DATA, JSON.stringify(events));
+              } catch {
+                // ignore
+              }
+              return events;
+            });
+          }
+        }
+      } catch {
+        // Ağ kesintisinde mevcut veriler korunur
+        if (isMounted) {
+          setCalendarError(true);
+          setCalendarFallback(false);
+          setCalendarEvents(current => current.filter(item => isCurrentNewsItem(item)));
+        }
+      } finally {
+        fetching = false;
+        if (isMounted) setLoadingCalendar(false);
+      }
+    };
+
+    const stopDayWatch = watchIstanbulDay(() => {
+      setCalendarEvents([]);
+      try {
+        localStorage.removeItem(CACHE_CALENDAR_DATA);
+        localStorage.setItem(CACHE_CALENDAR_DATE, istanbulDay(Date.now()));
+      } catch { /* Storage is optional. */ }
+      void fetchCalendar();
+    });
+    void fetchCalendar();
+    const interval = setInterval(() => {
+      void fetchCalendar();
+    }, 60000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      stopDayWatch();
     };
   }, []);
 
@@ -335,7 +503,109 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
         </div>
       </div>
 
-      <EconomicCalendar />
+      {/* ================= 2. KOLON: / TAKVİM (Ferah Tipografi & Skeleton Loader) ================= */}
+      <div className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[380px] overflow-hidden">
+        <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
+          <div className="flex items-center">
+            <span className="font-mono text-xs font-bold tracking-wider text-slate-200">
+              <span className="text-[#38bdf8] mr-1.5 font-bold">/</span>
+              TAKVİM
+            </span>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto flex-1 pane-scroll p-0 flex flex-col gap-0">
+          {calendarError && <div role="status" className="px-2 py-1 text-[10px] text-amber-400 border-b border-white/[0.05]">{calendarFallback ? "Takvim yedek kaynaktan gösteriliyor; sonuçlar eksik olabilir." : <>Takvim güncellenemedi. {calendarEvents.length > 0 ? "Son alınan veriler gösteriliyor. " : ""}Yeniden deneniyor.</>}</div>}
+          {loadingCalendar && calendarEvents.length === 0 ? (
+            [...Array(5)].map((_, i) => (
+              <div
+                key={i}
+                className="px-1 py-0.5 border-b border-white/[0.05] flex items-center justify-between gap-3 animate-pulse"
+              >
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-10 bg-slate-800 rounded" />
+                    <div className="h-4 w-6 bg-slate-800 rounded" />
+                    <div className="h-3 w-40 bg-slate-800/80 rounded" />
+                  </div>
+                  <div className="h-2.5 w-32 bg-slate-800/50 rounded ml-7" />
+                </div>
+                <div className="w-20 flex flex-col items-end gap-1.5">
+                  <div className="h-3 w-12 bg-slate-800 rounded" />
+                  <div className="h-3.5 w-16 bg-slate-800/60 rounded" />
+                </div>
+              </div>
+            ))
+          ) : calendarEvents.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500 font-mono text-xs select-none">
+              <span>{calendarError ? "Takvim bağlantısı bekleniyor..." : "Bugüne ait açıklanacak makro veri bulunmuyor..."}</span>
+            </div>
+          ) : (
+            calendarEvents.map((item) => {
+              const trTitle = displayCalendarTitle(item.title);
+              const actualText = formatCalendarValue(item.actual, item);
+              const hasActual = actualText !== "--";
+
+              return (
+                <div
+                  key={item.id}
+                  className="px-1 py-0.5 shrink-0 border-b border-white/[0.07] last:border-b-0 hover:bg-[#131f38] transition-colors flex items-center justify-between gap-2"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0">
+                      <span className="text-xs font-mono tabular-nums text-slate-300 font-bold shrink-0">
+                        {item.time}
+                      </span>
+                      {renderCountryBadge(item.country)}
+                      <span className="text-xs font-semibold text-slate-100 truncate leading-snug">
+                        {trTitle}
+                      </span>
+                    </div>
+
+                    <div className="text-[11px] font-mono text-slate-400 flex items-center gap-1 mt-0">
+                      <span>
+                        Bekl:{" "}
+                        <span className="text-slate-200 font-medium tabular-nums">
+                          {formatCalendarValue(item.forecast, item)}
+                        </span>
+                      </span>
+                      <span className="text-slate-600">|</span>
+                      <span>
+                        Önceki:{" "}
+                        <span className="text-slate-300 tabular-nums">
+                          {formatCalendarValue(item.previous, item)}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="min-w-12 text-right shrink-0 flex flex-col items-end justify-center">
+                    {hasActual ? (
+                      <>
+                        <span className="text-xs font-mono font-bold text-emerald-400 block tabular-nums">
+                          {actualText}
+                        </span>
+                        <span className="text-[9px] font-mono font-bold tracking-wider text-emerald-400 bg-emerald-950/60 border border-emerald-800/50 px-0.5 py-0 rounded-sm uppercase block leading-3 mt-0">
+                          AÇIKLANDI
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-xs font-mono text-slate-500 block tabular-nums">
+                          --
+                        </span>
+                        <span className="text-[9px] font-mono font-medium tracking-wider text-slate-400 bg-slate-900 border border-slate-800 px-0.5 py-0 rounded-sm uppercase block leading-3 mt-0">
+                          BEKLENİYOR
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
 
       {/* Kripto haber akışı */}
       <div className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[380px] overflow-hidden">
