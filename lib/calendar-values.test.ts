@@ -1,8 +1,11 @@
-import { test } from "node:test";
+import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { formatCalendarValue } from "./calendar-values";
 import { GET } from "../app/api/calendar/route";
 import { istanbulDay } from "./wire-text";
+import { calendarSourceCache } from "./calendar-cache";
+
+beforeEach(() => calendarSourceCache.clear());
 
 test("percentages and payroll counts are distinct across all three displayed values", () => {
   const earnings={originalTitle:'Average Hourly Earnings MoM',country:'US'};

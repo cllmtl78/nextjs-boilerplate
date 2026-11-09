@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { istanbulDay } from "@/lib/wire-text";
 import { translateCalendarTitles } from "@/lib/translate-calendar";
 import type { CalendarUnits } from "@/lib/calendar-values";
+import { calendarSourceCache } from "@/lib/calendar-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -30,14 +31,18 @@ export async function GET(request?: Request) {
   try {
     const url = new URL("https://economic-calendar.tradingview.com/events");
     url.search = new URLSearchParams({ from, to, countries: ALLOWED_COUNTRIES.join(","), minImportance: "-1" }).toString();
-    const response = await fetch(url, {
-      headers: { Accept: "application/json", Origin: "https://www.tradingview.com", Referer: "https://www.tradingview.com/" },
-      cache: "no-store",
-      signal: AbortSignal.timeout(10_000),
+    const upstream = await calendarSourceCache.get(day, async () => {
+      const response = await fetch(url, {
+        headers: { Accept: "application/json", Origin: "https://www.tradingview.com", Referer: "https://www.tradingview.com/" },
+        cache: "no-store",
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) throw new Error(`Upstream HTTP ${response.status}`);
+      const data: unknown = await response.json();
+      if (!data || typeof data !== "object" || !("result" in data) || !Array.isArray(data.result)) throw new Error("Invalid calendar response");
+      return { data, status: response.status, fetchedAt: new Date().toISOString() };
     });
-    if (!response.ok) throw new Error(`Upstream HTTP ${response.status}`);
-    const data = await response.json();
-    if (!Array.isArray(data?.result)) throw new Error("Invalid calendar response");
+    const data = upstream.data as { result: Record<string, unknown>[] };
     const rows = data.result.filter((row: Record<string, unknown>) => row &&
       ALLOWED_COUNTRIES.includes(row.country as EconomicCalendarEvent["country"]) &&
       typeof row.date === "string" && Number.isFinite(Date.parse(row.date)) &&
@@ -64,9 +69,9 @@ export async function GET(request?: Request) {
       };
     });
     events.sort((a, b) => a.timestamp - b.timestamp);
-    return NextResponse.json({ success: true, date: day, source: "tradingview", fetchedAt: new Date().toISOString(), count: events.length, events,
+    return NextResponse.json({ success: true, date: day, source: "tradingview", fetchedAt: upstream.fetchedAt, count: events.length, events,
       ...(diagnostics ? { diagnostics: {
-        upstreamStatus: response.status,
+        upstreamStatus: upstream.status,
         totalRows: data.result.length,
         completedRows: events.filter(event => event.isCompleted).length,
         // These are public economic records, before any mapping or translation.

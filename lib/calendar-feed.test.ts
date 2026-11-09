@@ -1,9 +1,12 @@
-import { test } from "node:test";
+import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { mergeCalendarReadings } from "./calendar-feed";
 import { mergeKapFeed } from "./kap-feed";
 import { GET } from "../app/api/calendar/route";
 import { istanbulDay } from "./wire-text";
+import { calendarSourceCache } from "./calendar-cache";
+
+beforeEach(() => calendarSourceCache.clear());
 
 test("calendar result arrives, survives a schedule-only refresh, and clears at Istanbul midnight", () => {
   const timestamp = Date.parse("2026-11-09T04:30:00+03:00");
@@ -41,6 +44,7 @@ test("calendar requests uncached Istanbul-day bounds and picks up newly publishe
   }) as typeof fetch;
   try {
     assert.equal((await (await GET()).json()).events[0].isCompleted, false);
+    calendarSourceCache.clear();
     const response = await GET();
     const body = await response.json();
     assert.equal(body.events[0].actual, 0);
@@ -53,12 +57,14 @@ test("calendar empty day is valid, malformed responses and outages never produce
   const saved = globalThis.fetch;
   try {
     for (const body of [{ result: [] }, {}, { result: "invalid" }]) {
+      calendarSourceCache.clear();
       globalThis.fetch = (async () => Response.json(body)) as typeof fetch;
       const response = await GET();
       const result = await response.json();
       assert.equal(response.status, Array.isArray(body.result) ? 200 : 503);
       assert.deepEqual(result.events, []);
     }
+    calendarSourceCache.clear();
     globalThis.fetch = (async () => { throw new Error("offline"); }) as typeof fetch;
     const response = await GET();
     assert.equal(response.status, 503);

@@ -1,9 +1,12 @@
-import { describe, test } from "node:test";
+import { describe, test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { displayCalendarTitle, localizeCalendarTitle } from "./calendar-titles";
 import { translateCalendarTitles } from "./translate-calendar";
 import { GET } from "../app/api/calendar/route";
 import { istanbulDay } from "./wire-text";
+import { calendarSourceCache } from "./calendar-cache";
+
+beforeEach(() => calendarSourceCache.clear());
 
 describe("Turkish economic calendar titles", () => {
   test("translates every English title in the screenshot and retains the period", () => {

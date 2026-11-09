@@ -405,7 +405,7 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
     void fetchCalendar();
     const interval = setInterval(() => {
       void fetchCalendar();
-    }, 45000);
+    }, 60000);
 
     return () => {
       isMounted = false;
