@@ -65,3 +65,17 @@ test("calendar empty day is valid, malformed responses and outages never produce
     assert.equal((await response.json()).success, false);
   } finally { globalThis.fetch = saved; }
 });
+
+test("opt-in diagnostics preserve raw provider field names and types", async () => {
+  const saved = globalThis.fetch;
+  const row = { id: "raw", country: "CN", title: "CPI YoY", date: `${istanbulDay(Date.now())}T01:30:00Z`, actual: null, actualRaw: 0, providerStatus: "example" };
+  globalThis.fetch = (async () => Response.json({ result: [row] })) as typeof fetch;
+  try {
+    const normal = await (await GET()).json();
+    assert.equal(normal.diagnostics, undefined);
+    const diagnostic = await (await GET(new Request("https://example.com/api/calendar?diagnostics=1"))).json();
+    assert.deepEqual(diagnostic.diagnostics.rawSample, [row]);
+    assert.equal(diagnostic.diagnostics.upstreamStatus, 200);
+    assert.equal(diagnostic.diagnostics.completedRows, 0);
+  } finally { globalThis.fetch = saved; }
+});

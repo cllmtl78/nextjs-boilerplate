@@ -22,7 +22,8 @@ export interface EconomicCalendarEvent extends CalendarUnits {
 
 const ALLOWED_COUNTRIES = ["TR", "US", "EU", "CN", "JP"] as const;
 
-export async function GET() {
+export async function GET(request?: Request) {
+  const diagnostics = request ? new URL(request.url).searchParams.get("diagnostics") === "1" : false;
   const day = istanbulDay(Date.now());
   const from = new Date(`${day}T00:00:00+03:00`).toISOString();
   const to = new Date(Date.parse(from) + 86_400_000 - 1).toISOString();
@@ -63,10 +64,22 @@ export async function GET() {
       };
     });
     events.sort((a, b) => a.timestamp - b.timestamp);
-    return NextResponse.json({ success: true, date: day, source: "tradingview", fetchedAt: new Date().toISOString(), count: events.length, events }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ success: true, date: day, source: "tradingview", fetchedAt: new Date().toISOString(), count: events.length, events,
+      ...(diagnostics ? { diagnostics: {
+        upstreamStatus: response.status,
+        totalRows: data.result.length,
+        completedRows: events.filter(event => event.isCompleted).length,
+        // These are public economic records, before any mapping or translation.
+        // Preserve keys and value types to distinguish absent/renamed fields
+        // from a provider actually returning null.
+        rawSample: rows.slice(0, 7),
+      } } : {}),
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.warn("[Takvim] Güncel veriler alınamadı:", error instanceof Error ? error.message : "Bilinmeyen hata");
-    return NextResponse.json({ success: false, date: day, count: 0, events: [], error: "Takvim bağlantısı kurulamadı. Yeniden deneniyor." }, { status: 503, headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ success: false, date: day, count: 0, events: [], error: "Takvim bağlantısı kurulamadı. Yeniden deneniyor.",
+      ...(diagnostics ? { diagnostics: { error: error instanceof Error ? error.message : "Bilinmeyen hata" } } : {}),
+    }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 }
 
