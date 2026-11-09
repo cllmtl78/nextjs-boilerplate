@@ -271,6 +271,7 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
   });
 
   const [calendarError, setCalendarError] = useState(false);
+  const [calendarFallback, setCalendarFallback] = useState(false);
 
   // 1 & 4. BIST CANLI VERİ ÇEKME & 20 SANİYEDE BİR GÜNCELLEME:
   useEffect(() => {
@@ -363,13 +364,14 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
       if (fetching) return;
       fetching = true;
       try {
-        const res = await fetch("/api/calendar", { cache: "no-store", signal: AbortSignal.timeout(15_000) });
+        const res = await fetch("/api/calendar", { cache: "no-store", signal: AbortSignal.timeout(25_000) });
         if (!res.ok) throw new Error("Takvim güncellenemedi");
         if (res.ok && isMounted) {
           const data = await res.json();
           if (data.success !== true || !Array.isArray(data.events)) throw new Error("Geçersiz takvim yanıtı");
           if (isMounted && data.date === istanbulDay(Date.now())) {
-            setCalendarError(false);
+            setCalendarError(data.stale === true || data.degraded === true);
+            setCalendarFallback(data.degraded === true);
             setCalendarEvents(current => {
               const events = mergeCalendarReadings(current, data.events as EconomicCalendarItem[]);
               try {
@@ -386,6 +388,7 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
         // Ağ kesintisinde mevcut veriler korunur
         if (isMounted) {
           setCalendarError(true);
+          setCalendarFallback(false);
           setCalendarEvents(current => current.filter(item => isCurrentNewsItem(item)));
         }
       } finally {
@@ -512,7 +515,7 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
         </div>
 
         <div className="overflow-y-auto flex-1 pane-scroll p-0 flex flex-col gap-0">
-          {calendarError && <div role="status" className="px-2 py-1 text-[10px] text-amber-400 border-b border-white/[0.05]">Takvim güncellenemedi. {calendarEvents.length > 0 ? "Son alınan veriler gösteriliyor. " : ""}Yeniden deneniyor.</div>}
+          {calendarError && <div role="status" className="px-2 py-1 text-[10px] text-amber-400 border-b border-white/[0.05]">{calendarFallback ? "Takvim yedek kaynaktan gösteriliyor; sonuçlar eksik olabilir." : <>Takvim güncellenemedi. {calendarEvents.length > 0 ? "Son alınan veriler gösteriliyor. " : ""}Yeniden deneniyor.</>}</div>}
           {loadingCalendar && calendarEvents.length === 0 ? (
             [...Array(5)].map((_, i) => (
               <div

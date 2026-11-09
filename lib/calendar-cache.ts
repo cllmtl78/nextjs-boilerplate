@@ -1,3 +1,5 @@
+import type { CalendarUpstream } from "./calendar-sources";
+
 // One shared request per minute per server process, including concurrent visitors.
 // Cache failures too so an unavailable source is not hammered by every visitor.
 export class CalendarMinuteCache<T> {
@@ -16,4 +18,4 @@ export class CalendarMinuteCache<T> {
   clear(): void { this.entry = undefined; }
 }
 
-export const calendarSourceCache = new CalendarMinuteCache<{ data: unknown; status: number; fetchedAt: string }>();
+export const calendarSourceCache = new CalendarMinuteCache<CalendarUpstream>();

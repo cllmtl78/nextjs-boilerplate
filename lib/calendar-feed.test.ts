@@ -5,8 +5,9 @@ import { mergeKapFeed } from "./kap-feed";
 import { GET } from "../app/api/calendar/route";
 import { istanbulDay } from "./wire-text";
 import { calendarSourceCache } from "./calendar-cache";
+import { clearCalendarSourceHistory } from "./calendar-sources";
 
-beforeEach(() => calendarSourceCache.clear());
+beforeEach(() => { calendarSourceCache.clear(); clearCalendarSourceHistory(); });
 
 test("calendar result arrives, survives a schedule-only refresh, and clears at Istanbul midnight", () => {
   const timestamp = Date.parse("2026-11-09T04:30:00+03:00");
@@ -36,6 +37,7 @@ test("calendar requests uncached Istanbul-day bounds and picks up newly publishe
   let count = 0;
   globalThis.fetch = (async (input, options) => {
     const url = new URL(String(input));
+    if (url.hostname !== "economic-calendar.tradingview.com") return new Response("Unavailable", { status: 503 });
     assert.equal(options?.cache, "no-store");
     assert.equal(options?.method ?? "GET", "GET");
     assert.equal(url.searchParams.get("from"), new Date(`${day}T00:00:00+03:00`).toISOString());

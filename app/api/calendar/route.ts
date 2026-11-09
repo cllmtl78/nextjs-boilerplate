@@ -3,6 +3,7 @@ import { istanbulDay } from "@/lib/wire-text";
 import { translateCalendarTitles } from "@/lib/translate-calendar";
 import type { CalendarUnits } from "@/lib/calendar-values";
 import { calendarSourceCache } from "@/lib/calendar-cache";
+import { fetchCalendarSource } from "@/lib/calendar-sources";
 
 export const dynamic = "force-dynamic";
 
@@ -26,23 +27,9 @@ const ALLOWED_COUNTRIES = ["TR", "US", "EU", "CN", "JP"] as const;
 export async function GET(request?: Request) {
   const diagnostics = request ? new URL(request.url).searchParams.get("diagnostics") === "1" : false;
   const day = istanbulDay(Date.now());
-  const from = new Date(`${day}T00:00:00+03:00`).toISOString();
-  const to = new Date(Date.parse(from) + 86_400_000 - 1).toISOString();
   try {
-    const url = new URL("https://economic-calendar.tradingview.com/events");
-    url.search = new URLSearchParams({ from, to, countries: ALLOWED_COUNTRIES.join(","), minImportance: "-1" }).toString();
-    const upstream = await calendarSourceCache.get(day, async () => {
-      const response = await fetch(url, {
-        headers: { Accept: "application/json", Origin: "https://www.tradingview.com", Referer: "https://www.tradingview.com/" },
-        cache: "no-store",
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (!response.ok) throw new Error(`Upstream HTTP ${response.status}`);
-      const data: unknown = await response.json();
-      if (!data || typeof data !== "object" || !("result" in data) || !Array.isArray(data.result)) throw new Error("Invalid calendar response");
-      return { data, status: response.status, fetchedAt: new Date().toISOString() };
-    });
-    const data = upstream.data as { result: Record<string, unknown>[] };
+    const upstream = await calendarSourceCache.get(day, () => fetchCalendarSource(day));
+    const data = upstream.data;
     const rows = data.result.filter((row: Record<string, unknown>) => row &&
       ALLOWED_COUNTRIES.includes(row.country as EconomicCalendarEvent["country"]) &&
       typeof row.date === "string" && Number.isFinite(Date.parse(row.date)) &&
@@ -69,14 +56,16 @@ export async function GET(request?: Request) {
       };
     });
     events.sort((a, b) => a.timestamp - b.timestamp);
-    return NextResponse.json({ success: true, date: day, source: "tradingview", fetchedAt: upstream.fetchedAt, count: events.length, events,
+    return NextResponse.json({ success: true, date: day, source: upstream.source, fetchedAt: upstream.fetchedAt, count: events.length, events,
+      stale: upstream.stale === true, degraded: upstream.degraded === true,
       ...(diagnostics ? { diagnostics: {
         upstreamStatus: upstream.status,
+        sourceUrl: upstream.sourceUrl,
+        fallbackReason: upstream.fallbackReason,
         totalRows: data.result.length,
         completedRows: events.filter(event => event.isCompleted).length,
-        // These are public economic records, before any mapping or translation.
-        // Preserve keys and value types to distinguish absent/renamed fields
-        // from a provider actually returning null.
+        // Provider records before API mapping/translation. Investing HTML has
+        // already been converted into records by the source adapter.
         rawSample: rows.slice(0, 7),
       } } : {}),
     }, { headers: { "Cache-Control": "no-store" } });

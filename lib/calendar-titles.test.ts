@@ -5,8 +5,9 @@ import { translateCalendarTitles } from "./translate-calendar";
 import { GET } from "../app/api/calendar/route";
 import { istanbulDay } from "./wire-text";
 import { calendarSourceCache } from "./calendar-cache";
+import { clearCalendarSourceHistory } from "./calendar-sources";
 
-beforeEach(() => calendarSourceCache.clear());
+beforeEach(() => { calendarSourceCache.clear(); clearCalendarSourceHistory(); });
 
 describe("Turkish economic calendar titles", () => {
   test("translates every English title in the screenshot and retains the period", () => {
