@@ -5,6 +5,9 @@ import OfficialNews from "@/components/OfficialNews";
 import type { TerminalHaber } from "@/components/TerminalWorkspace";
 import { displayCalendarTitle } from "@/lib/calendar-titles";
 import { formatCalendarValue, type CalendarUnits } from "@/lib/calendar-values";
+import { istanbulDay } from "@/lib/wire-text";
+import { isCurrentNewsItem, watchIstanbulDay } from "@/lib/news-day";
+import { mergeCalendarReadings } from "@/lib/calendar-feed";
 
 interface StockMover {
   symbol: string;
@@ -231,14 +234,13 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
   const [calendarEvents, setCalendarEvents] = useState<EconomicCalendarItem[]>(() => {
     if (typeof window === "undefined") return [];
     try {
-      const today = new Date();
-      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      const todayStr = istanbulDay(Date.now());
       const storedDate = localStorage.getItem(CACHE_CALENDAR_DATE);
       if (storedDate === todayStr) {
         const raw = localStorage.getItem(CACHE_CALENDAR_DATA);
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed.filter(item => !String(item.id).startsWith("fb_") && isCurrentNewsItem(item));
         }
       } else if (storedDate && storedDate !== todayStr) {
         localStorage.removeItem(CACHE_CALENDAR_DATA);
@@ -253,8 +255,7 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
   const [loadingCalendar, setLoadingCalendar] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
     try {
-      const today = new Date();
-      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      const todayStr = istanbulDay(Date.now());
       const storedDate = localStorage.getItem(CACHE_CALENDAR_DATE);
       if (storedDate === todayStr) {
         const raw = localStorage.getItem(CACHE_CALENDAR_DATA);
@@ -268,6 +269,8 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
     }
     return true;
   });
+
+  const [calendarError, setCalendarError] = useState(false);
 
   // 1 & 4. BIST CANLI VERİ ÇEKME & 20 SANİYEDE BİR GÜNCELLEME:
   useEffect(() => {
@@ -354,33 +357,51 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
   // 2. Canlı Takvim Verisi Çekme (TradingView API /api/calendar + Günlük Otomatik Sıfırlama)
   useEffect(() => {
     let isMounted = true;
+    let fetching = false;
 
     const fetchCalendar = async () => {
+      if (fetching) return;
+      fetching = true;
       try {
-        const res = await fetch("/api/calendar", { cache: "no-store" });
+        const res = await fetch("/api/calendar", { cache: "no-store", signal: AbortSignal.timeout(15_000) });
+        if (!res.ok) throw new Error("Takvim güncellenemedi");
         if (res.ok && isMounted) {
           const data = await res.json();
-          if (Array.isArray(data.events)) {
-            setCalendarEvents(data.events);
-            if (typeof window !== "undefined" && data.events.length > 0) {
+          if (data.success !== true || !Array.isArray(data.events)) throw new Error("Geçersiz takvim yanıtı");
+          if (isMounted && data.date === istanbulDay(Date.now())) {
+            setCalendarError(false);
+            setCalendarEvents(current => {
+              const events = mergeCalendarReadings(current, data.events as EconomicCalendarItem[]);
               try {
-                const today = new Date();
-                const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-                localStorage.setItem(CACHE_CALENDAR_DATE, todayStr);
-                localStorage.setItem(CACHE_CALENDAR_DATA, JSON.stringify(data.events));
+                localStorage.setItem(CACHE_CALENDAR_DATE, data.date);
+                localStorage.setItem(CACHE_CALENDAR_DATA, JSON.stringify(events));
               } catch {
                 // ignore
               }
-            }
+              return events;
+            });
           }
         }
       } catch {
         // Ağ kesintisinde mevcut veriler korunur
+        if (isMounted) {
+          setCalendarError(true);
+          setCalendarEvents(current => current.filter(item => isCurrentNewsItem(item)));
+        }
       } finally {
+        fetching = false;
         if (isMounted) setLoadingCalendar(false);
       }
     };
 
+    const stopDayWatch = watchIstanbulDay(() => {
+      setCalendarEvents([]);
+      try {
+        localStorage.removeItem(CACHE_CALENDAR_DATA);
+        localStorage.setItem(CACHE_CALENDAR_DATE, istanbulDay(Date.now()));
+      } catch { /* Storage is optional. */ }
+      void fetchCalendar();
+    });
     void fetchCalendar();
     const interval = setInterval(() => {
       void fetchCalendar();
@@ -389,6 +410,7 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
     return () => {
       isMounted = false;
       clearInterval(interval);
+      stopDayWatch();
     };
   }, []);
 
@@ -490,6 +512,7 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
         </div>
 
         <div className="overflow-y-auto flex-1 pane-scroll p-0 flex flex-col gap-0">
+          {calendarError && <div role="status" className="px-2 py-1 text-[10px] text-amber-400 border-b border-white/[0.05]">Takvim güncellenemedi. {calendarEvents.length > 0 ? "Son alınan veriler gösteriliyor. " : ""}Yeniden deneniyor.</div>}
           {loadingCalendar && calendarEvents.length === 0 ? (
             [...Array(5)].map((_, i) => (
               <div
@@ -512,7 +535,7 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
             ))
           ) : calendarEvents.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500 font-mono text-xs select-none">
-              <span>Bugüne ait açıklanacak makro veri bulunmuyor...</span>
+              <span>{calendarError ? "Takvim bağlantısı bekleniyor..." : "Bugüne ait açıklanacak makro veri bulunmuyor..."}</span>
             </div>
           ) : (
             calendarEvents.map((item) => {

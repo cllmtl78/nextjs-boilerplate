@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { displayCalendarTitle, localizeCalendarTitle } from "./calendar-titles";
 import { translateCalendarTitles } from "./translate-calendar";
 import { GET } from "../app/api/calendar/route";
+import { istanbulDay } from "./wire-text";
 
 describe("Turkish economic calendar titles", () => {
   test("translates every English title in the screenshot and retains the period", () => {
@@ -70,8 +71,8 @@ describe("Turkish economic calendar titles", () => {
   test("API localizes titles without changing values, IDs or event ordering", async () => {
     const saved = globalThis.fetch;
     globalThis.fetch = (async () => Response.json({result: [
-      {id: 2, title: "Average Hourly Earnings YoY", country: "US", date: "2026-11-06T13:30:00Z", actual: 0, previous: 3.2, forecast: 2.9},
-      {id: 1, title: "Retail Sales MoM", country: "EU", date: "2026-11-06T10:00:00Z", actual: null, previous: .4, forecast: -.1},
+      {id: 2, title: "Average Hourly Earnings YoY", country: "US", date: `${istanbulDay(Date.now())}T13:30:00Z`, actual: 0, previous: 3.2, forecast: 2.9},
+      {id: 1, title: "Retail Sales MoM", country: "EU", date: `${istanbulDay(Date.now())}T10:00:00Z`, actual: null, previous: .4, forecast: -.1},
     ]})) as typeof fetch;
     try {
       const response = await GET();

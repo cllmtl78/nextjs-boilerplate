@@ -15,6 +15,7 @@ from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 import requests
 from bs4 import BeautifulSoup, NavigableString, UnicodeDammit
 from news_day import only_today, publication_time
+from kap_archive import KapArchive, default_path, merge_disclosures
 
 logger = logging.getLogger(__name__)
 TR = timezone(timedelta(hours=3))
@@ -113,7 +114,7 @@ def parse_listing(html):
                 url = article_url(value)
                 if url and url not in urls:
                     urls.append(url)
-    return urls[:40]
+    return urls
 
 
 def decode_response_html(response):
@@ -341,7 +342,7 @@ class YeniSafakCollector:
         self.cache = {url: value for url, value in self.cache.items() if url in urls}
         if not records:
             logger.warning("[KAP] Liste okundu ama resmî KAP bağlantısı içeren kayıt elde edilemedi")
-        return sorted(records.values(), key=lambda item: item["id"], reverse=True)[:40]
+        return sorted(records.values(), key=lambda item: item["id"], reverse=True)
 
 
 _collector = YeniSafakCollector()
@@ -383,7 +384,7 @@ def fetch_official_kap():
             "timestamp": int(published.timestamp() * 1000) if published else None,
             "date": published.isoformat() if published else None,
         }
-    return sorted(results.values(), key=lambda item: item["id"], reverse=True)[:40]
+    return sorted(results.values(), key=lambda item: item["id"], reverse=True)
 
 
 def fetch_fast_kap():
@@ -403,18 +404,37 @@ def fetch_fast_kap():
 def run_kap_worker():
     global KAP_CACHE
     failures = 0
+    archive = None
+    try:
+        archive = KapArchive(default_path())
+        KAP_CACHE = archive.update(KAP_CACHE)
+    except Exception:
+        logger.exception("[KAP] Disk arşivi açılamadı; gün içi kayıtlar bellekte tutulacak")
+    # The official response can include today's older disclosures missing from
+    # the publisher's rolling front page. Backfill once on startup.
+    try:
+        KAP_CACHE = merge_disclosures(only_today(fetch_official_kap()), KAP_CACHE)
+        if archive is not None:
+            KAP_CACHE = archive.update(KAP_CACHE)
+    except Exception:
+        logger.warning("[KAP] Açılış geçmişi alınamadı; mevcut kayıtlarla devam ediliyor")
     while True:
         try:
             KAP_CACHE = only_today(KAP_CACHE)
             data = only_today(fetch_fast_kap())
             if data:
-                KAP_CACHE = data
+                KAP_CACHE = merge_disclosures(KAP_CACHE, data)
                 failures = 0
                 # Uvicorn does not necessarily configure this module's INFO logger.
                 # Keep successful ingestion visible in hosting-provider logs too.
                 print(f"[KAP] {len(data)} bildirim güncellendi; kaynak: {data[0].get('source', 'KAP')}", flush=True)
             else:
                 failures += 1
+            if archive is not None:
+                try:
+                    KAP_CACHE = archive.update(KAP_CACHE)
+                except Exception:
+                    logger.exception("[KAP] Disk arşivi yazılamadı; bellek kayıtları korunuyor")
         except Exception:
             failures += 1
             logger.exception("[KAP] Worker hatası; son başarılı veriler korunuyor")

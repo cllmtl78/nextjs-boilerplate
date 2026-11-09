@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { formatCalendarValue } from "./calendar-values";
 import { GET } from "../app/api/calendar/route";
+import { istanbulDay } from "./wire-text";
 
 test("percentages and payroll counts are distinct across all three displayed values", () => {
   const earnings={originalTitle:'Average Hourly Earnings MoM',country:'US'};
@@ -49,7 +50,7 @@ test("cached Turkish titles retain units and unknown indicators receive no inven
 
 test("API preserves upstream metadata without changing numeric data", async () => {
   const saved=globalThis.fetch;
-  globalThis.fetch=(async()=>Response.json({result:[{id:'units-1',title:'Government Payrolls',country:'US',date:'2026-11-06T13:30:00Z',actual:6,forecast:5,previous:-18,unit:'K',scale:null,currency:'USD'}]})) as typeof fetch;
+  globalThis.fetch=(async()=>Response.json({result:[{id:'units-1',title:'Government Payrolls',country:'US',date:`${istanbulDay(Date.now())}T13:30:00Z`,actual:6,forecast:5,previous:-18,unit:'K',scale:null,currency:'USD'}]})) as typeof fetch;
   try {
     const response=await GET();
     const body=await response.json();

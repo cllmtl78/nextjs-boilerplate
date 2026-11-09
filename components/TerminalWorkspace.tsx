@@ -1,4 +1,5 @@
 "use client";
+import { mergeKapFeed } from "@/lib/kap-feed";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import MarketIntelligence from "@/components/MarketIntelligence";
@@ -975,8 +976,11 @@ export default function TerminalWorkspace() {
             });
             if (isMounted) {
               observeFeedArrivals("kap", mapped);
-              setKapBildirimleri(mapped);
-              try { localStorage.setItem(CACHE_KEY_KAP_V4, JSON.stringify(mapped)); } catch { /* Cache is optional. */ }
+              setKapBildirimleri(current => {
+                const merged = mergeKapFeed(current, mapped);
+                try { localStorage.setItem(CACHE_KEY_KAP_V4, JSON.stringify(merged)); } catch { /* Cache is optional. */ }
+                return merged;
+              });
             }
           }
         }

@@ -56,7 +56,9 @@ class NewsDayTests(unittest.TestCase):
             old = {'id':'WalterBloomberg/1','timestamp':int(BEFORE.timestamp()*1000),'zaman':'23:59:59','rawText':'Yesterday news'}
             store.upsert([old])
             store.save_translations(store.pending(BEFORE), [{'id':old['id'],'text':'Dünkü haber.'}])
-            with patch('bist_news_bot.start_bist_news_bot'), patch('kap_bot.start_kap_bot'), patch('global_news_bot.start_global_news_bot'):
+            with patch('bist_news_bot.start_bist_news_bot'), patch('kap_bot.start_kap_bot'), patch('global_news_bot.start_global_news_bot'), \
+                 patch('official_news_bot.start_official_news_bot'), patch('crypto_news_bot.start_crypto_news_bot'), \
+                 patch('fred_macro.start_fred_macro_bot'), patch('macroradar.start_macroradar_bot'):
                 main = importlib.import_module('main')
             with patch('bist_news_bot.NEWS_CACHE',[{'id':'bist1','timestamp':int(BEFORE.timestamp()*1000)}]), \
                  patch('kap_bot.KAP_CACHE',[{'id':1694413,'timestamp':int(BEFORE.timestamp()*1000)}]), \
