@@ -1,10 +1,11 @@
 // htmlparser2 preserves the bare <tr> fragments returned by the JSON service.
 import { load } from "cheerio/slim";
 import { istanbulDay } from "./wire-text";
+import { fetchEulerpoolCalendar } from "./eulerpool-calendar";
 
 export interface CalendarUpstream {
   data: { result: Record<string, unknown>[] };
-  source: "investing" | "tradingview";
+  source: "eulerpool" | "investing" | "tradingview";
   sourceUrl: string;
   status: number;
   fetchedAt: string;
@@ -104,6 +105,8 @@ let lastInvesting: { day: string; response: CalendarUpstream } | undefined;
 export function clearCalendarSourceHistory(): void { lastInvesting = undefined; }
 
 export async function fetchCalendarSource(day: string): Promise<CalendarUpstream> {
+  const eulerpoolKey = process.env.EULERPOOL_API_KEY?.trim();
+  if (eulerpoolKey) return fetchEulerpoolCalendar(day, eulerpoolKey);
   if (lastInvesting?.day !== day) lastInvesting = undefined;
   let fallbackReason: string;
   try {

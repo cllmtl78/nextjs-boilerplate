@@ -46,8 +46,9 @@ export async function GET(request?: Request) {
         originalTitle,
         country: row.country as EconomicCalendarEvent["country"],
         date, timestamp,
-        time: new Date(timestamp).toLocaleTimeString("tr-TR", { timeZone: "Europe/Istanbul", hour: "2-digit", minute: "2-digit", hour12: false }),
+        time: row.fullDay === true ? "Gün boyu" : new Date(timestamp).toLocaleTimeString("tr-TR", { timeZone: "Europe/Istanbul", hour: "2-digit", minute: "2-digit", hour12: false }),
         actual, forecast: calendarValue(row.forecast), previous: calendarValue(row.previous),
+        preformatted: row.preformatted === true,
         unit: typeof row.unit === "string" ? row.unit : null,
         scale: typeof row.scale === "string" || typeof row.scale === "number" ? row.scale : null,
         currency: typeof row.currency === "string" ? row.currency : null,
@@ -60,6 +61,7 @@ export async function GET(request?: Request) {
       stale: upstream.stale === true, degraded: upstream.degraded === true,
       ...(diagnostics ? { diagnostics: {
         upstreamStatus: upstream.status,
+        eulerpoolKeyConfigured: Boolean(process.env.EULERPOOL_API_KEY?.trim()),
         sourceUrl: upstream.sourceUrl,
         fallbackReason: upstream.fallbackReason,
         totalRows: data.result.length,

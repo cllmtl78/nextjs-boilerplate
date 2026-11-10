@@ -1,4 +1,5 @@
 export interface CalendarUnits {
+  preformatted?: boolean;
   unit?: string | null;
   scale?: string | number | null;
   currency?: string | null;
@@ -49,6 +50,7 @@ export function formatCalendarValue(value: string | number | null | undefined, e
   if (value === null || value === undefined || String(value).trim() === "") return "--";
   const text = String(value).trim();
   if (/^(?:--?|n\/a|null|nan)$/i.test(text)) return "--";
+  if (event.preformatted) return text;
   // Values already supplied as 6K, -1.5M, %0.3 or currency amounts stay intact.
   if (/[%$€£¥₺]|(?:\d\s*[KMBT])(?:\s|$)|\b(?:USD|EUR|TRY|JPY|CNY|puan|kişi|varil)\b/i.test(text)) return text;
   const unit = calendarUnit(event);
