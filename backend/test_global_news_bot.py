@@ -138,6 +138,17 @@ class GlobalBotTests(unittest.TestCase):
         self.assertEqual(translator.call_count, 1)
         self.assertEqual(self.store.snapshot(NOW)["count"], 1)
 
+    def test_first_visible_batch_precedes_full_history_backfill(self):
+        session = Mock()
+        session.get.return_value = response("".join(message(i, f"Company news {i}") for i in range(30, 10, -1)))
+        translator = Mock(side_effect=lambda batch: [{"id": item["id"], "text": "Şirket haberini açıkladı."} for item in batch])
+        bot = GlobalNewsBot(self.store, session=session, translator=translator)
+        bot.cycle(NOW)
+        self.assertEqual(session.get.call_count, 1)
+        self.assertEqual(len(translator.call_args.args[0]), 6)
+        self.assertEqual(self.store.snapshot(NOW)["count"], 6)
+        self.assertFalse(bot.history_complete)
+
     def test_model_failure_preserves_ready_news_and_defers_retry(self):
         self.store.upsert(self.posts(message(1, "News one")))
         batch = self.store.pending(NOW)
@@ -163,7 +174,9 @@ class GlobalBotTests(unittest.TestCase):
         self.store.upsert(self.posts(message(1, "Company begins talks")))
         batch = self.store.pending(NOW)
         self.store.save_translations(batch, [{"id": batch[0]["id"], "text": "Şirket görüşmelere başladı."}])
-        with patch("bist_news_bot.start_bist_news_bot"), patch("kap_bot.start_kap_bot"), patch("global_news_bot.start_global_news_bot"):
+        with patch("bist_news_bot.start_bist_news_bot"), patch("kap_bot.start_kap_bot"), patch("global_news_bot.start_global_news_bot"), \
+             patch("official_news_bot.start_official_news_bot"), patch("crypto_news_bot.start_crypto_news_bot"), \
+             patch("fred_macro.start_fred_macro_bot"), patch("macroradar.start_macroradar_bot"):
             main = importlib.import_module("main")
         with patch("global_news_bot.get_store", return_value=self.store), patch("global_news_bot.day_bounds", return_value=day_bounds(NOW)):
             with patch("requests.Session.get", side_effect=AssertionError("Network in API")), patch("requests.Session.post", side_effect=AssertionError("Translation in API")):

@@ -274,7 +274,7 @@ class GlobalNewsBot:
         self.history_complete = False
         self.before = None
 
-    def collect(self, now=None):
+    def collect(self, now=None, max_pages=12):
         start, end = day_bounds(now)
         if start != self.day:
             self.day, self.history_complete, self.before = start, False, None
@@ -282,7 +282,7 @@ class GlobalNewsBot:
         cursor = None
         seen_today = set()
         deadline = time.monotonic() + 25
-        for page in range(12):
+        for page in range(max_pages):
             response = self.session.get(self.source, params={"before": cursor} if cursor is not None else {},
                                         headers={"User-Agent": "Mozilla/5.0", "Accept": "text/html"}, timeout=(5, 15))
             if response.status_code != 200:
@@ -331,11 +331,19 @@ class GlobalNewsBot:
         return json.loads(text).get("translations")
 
     def cycle(self, now=None):
+        day = day_bounds(now)[0]
+        can_translate = (os.environ.get("GEMINI_API_KEY") or self.translator != self.translate) and self.store.translation_retry_at() <= time.time()
+        initial = not self.store.snapshot(now)["count"] and can_translate and getattr(self, "fast_start_day", None) != day
+        if initial:
+            self.fast_start_day = day
         try:
-            self.collect(now)
+            # Publish the newest small batch before backfilling the whole day.
+            self.collect(now, max_pages=1 if initial else 12)
         except Exception as exc:
             logger.warning("[%s] Telegram toplama başarısız (%s); kayıtlı haberler korunuyor", self.label, failure_category(exc))
         batch = self.store.pending(now) if self.store.translation_retry_at() <= time.time() else []
+        if initial:
+            batch = batch[:6]
         if batch and (os.environ.get("GEMINI_API_KEY") or self.translator != self.translate):
             try:
                 count = self.store.save_translations(batch, self.translator(batch))

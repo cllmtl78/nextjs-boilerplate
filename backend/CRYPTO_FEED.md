@@ -26,6 +26,13 @@ Europe/Istanbul bugününü gösterir. Gece yarısında ve sekmeye dönüşte ek
 filtresi yenilenir. Başlığa tıklanınca mevcut haber modalı açılır; Kaynağında Oku
 orijinal yayıncıya gider. Yayıncının haber gövdesi kazınmaz.
 
+Arayüz günün çevrilmiş haberlerini tarayıcı önbelleğinde tutar; sayfa yenilenince
+ağ yanıtını beklemeden son haberleri gösterir. Boş/geçici başarısız yanıt aynı
+günün haberlerini silmez. Arayüz 15 saniyede bir hazır veriyi kontrol eder;
+bu istekler Gemini çağrısı başlatmaz. İlk hazırlıkta önce en yeni sayfa ve altı
+haber çevrilir; ardından normal geçmiş toplama ve 20'lik gruplar devam eder.
+Kota beklemesi veya çeviri anahtarı yokken geçmiş toplama normal biçimde sürer.
+
 Testler: `python -m unittest discover -s backend`.
 Bu ortamın ağ filtresi t.me bağlantısını CONNECT 403 ile engellediği için canlı
 kanal doğrulaması yapılmadı. HTML ayrıştırma, bağlantı saklama, çeviri önbelleği

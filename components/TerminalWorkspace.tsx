@@ -1,7 +1,8 @@
 "use client";
 import { mergeKapFeed } from "@/lib/kap-feed";
+import { emptyFeedCache, mergeFeedCache, readFeedCache, subscribeFeedCache, writeFeedCache } from "@/lib/feed-cache";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import MarketIntelligence from "@/components/MarketIntelligence";
 import { observeFeedArrivals } from "@/lib/notification-sound";
 import CurrencyConverter from "@/components/CurrencyConverter";
@@ -729,19 +730,10 @@ export default function TerminalWorkspace() {
     return [];
   });
 
-  const [globalHaberler, setGlobalHaberler] = useState<GlobalNewsItem[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const cached = localStorage.getItem(CACHE_KEY_GLOBAL);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed.filter((item: GlobalNewsItem) => item.id?.startsWith("WalterBloomberg/") && Number.isFinite(item.timestamp) && istanbulDay(item.timestamp) === istanbulDay(Date.now()));
-      }
-    } catch {
-      // ignore
-    }
-    return [];
-  });
+  const [globalLive, setGlobalLive] = useState<GlobalNewsItem[] | null>(null);
+  const cachedGlobal = useSyncExternalStore(subscribeFeedCache,
+    useCallback(() => readFeedCache<GlobalNewsItem>(CACHE_KEY_GLOBAL), []), emptyFeedCache<GlobalNewsItem>);
+  const globalHaberler = globalLive ?? cachedGlobal;
 
   const [loadingBist, setLoadingBist] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
@@ -763,19 +755,7 @@ export default function TerminalWorkspace() {
     return true;
   });
 
-  const [loadingGlobal, setLoadingGlobal] = useState<boolean>(() => {
-    if (typeof window === "undefined") return true;
-    try {
-      const cached = localStorage.getItem(CACHE_KEY_GLOBAL);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.some((item: GlobalNewsItem) => Number.isFinite(item.timestamp) && istanbulDay(item.timestamp) === istanbulDay(Date.now()))) return false;
-      }
-    } catch {
-      // ignore
-    }
-    return true;
-  });
+  const [loadingGlobal, setLoadingGlobal] = useState(true);
 
   const [seciliHaber, setSeciliHaber] = useState<TerminalHaber | null>(null);
   const [selectedKap, setSelectedKap] = useState<KapItem | null>(null);
@@ -827,7 +807,8 @@ export default function TerminalWorkspace() {
 
   useEffect(() => watchIstanbulDay(() => {
     setBistHaberleri(current => current.filter(item => isCurrentNewsItem(item)));
-    setGlobalHaberler(current => current.filter(item => isCurrentNewsItem(item)));
+    setGlobalLive([]);
+    writeFeedCache(CACHE_KEY_GLOBAL, []);
     setKapBildirimleri(current => current.filter(item => isCurrentNewsItem(item)));
     setSelectedKap(null);
     setSeciliHaber(null);
@@ -854,12 +835,13 @@ export default function TerminalWorkspace() {
         .sort((a: GlobalNewsItem, b: GlobalNewsItem) => b.timestamp - a.timestamp)
         .slice(0, 200);
       observeFeedArrivals("global", items);
-      setGlobalHaberler(items);
-      try { localStorage.setItem(CACHE_KEY_GLOBAL, JSON.stringify(items)); } catch { /* Cache is optional. */ }
+      const merged = mergeFeedCache(readFeedCache<GlobalNewsItem>(CACHE_KEY_GLOBAL), items);
+      setGlobalLive(merged);
+      writeFeedCache(CACHE_KEY_GLOBAL, merged);
     } catch {
       // Retain already translated news during temporary service failures.
       setGlobalFeedUnavailable(true);
-      setGlobalHaberler(current => current.filter(item => istanbulDay(item.timestamp) === istanbulDay(Date.now())));
+      setGlobalLive(current => (current ?? readFeedCache<GlobalNewsItem>(CACHE_KEY_GLOBAL)).filter(item => isCurrentNewsItem(item)));
     } finally {
       globalRequestRef.current = false;
       setLoadingGlobal(false);
@@ -1091,7 +1073,7 @@ export default function TerminalWorkspace() {
           </div>
 
           <div className="flex flex-col gap-3 p-3 overflow-y-auto pane-scroll flex-1 min-h-0">
-            {loadingGlobal ? (
+            {loadingGlobal && globalHaberler.length === 0 ? (
               Array.from({ length: 6 }).map((_, i) => (
                 <div
                   key={i}
@@ -1152,7 +1134,7 @@ export default function TerminalWorkspace() {
               </div>
             </div>
 
-            <div className="pane-scroll px-1 py-0">
+            <div className="pane-scroll px-1 py-0 overflow-x-hidden">
               {loadingKap && kapBildirimleri.length === 0 ? (
                 <TerminalSkeletonList count={3} />
               ) : kapBildirimleri.length === 0 ? (
@@ -1170,16 +1152,16 @@ export default function TerminalWorkspace() {
                       onClick={() => setSelectedKap(item)}
                       className="cursor-pointer group hover:bg-slate-900/50 transition border-b border-white/[0.04] py-0.5 last:border-b-0"
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[#38bdf8] font-mono font-bold text-xs">
+                      <div className="flex items-center justify-between gap-2 min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <span title={item.code} className="text-[#38bdf8] font-mono font-bold text-xs truncate min-w-0">
                             {item.code}
                           </span>
-                          <span className="text-[10px] font-mono text-slate-500 bg-slate-800/80 px-1 rounded">
+                          <span className="text-[10px] font-mono text-slate-500 bg-slate-800/80 px-1 rounded shrink-0">
                             {item.type}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 shrink-0">
                           <span className="text-[11px] font-mono text-slate-500 tabular-nums">
                             {item.time}
                           </span>
@@ -1200,7 +1182,7 @@ export default function TerminalWorkspace() {
                         </div>
                       </div>
 
-                      <p className="text-xs text-slate-200 line-clamp-2 leading-4 group-hover:text-white">
+                      <p className="text-xs text-slate-200 line-clamp-2 leading-4 group-hover:text-white [overflow-wrap:anywhere]">
                         {displaySubject}
                       </p>
                     </article>

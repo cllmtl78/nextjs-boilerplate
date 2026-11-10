@@ -41,6 +41,14 @@ Testler kontrollü kaynak HTML'i ve çeviri yanıtları kullanır; canlı çevir
 
 Prompt içeriği çeviri önbelleği anahtarına dahildir. Prompt veya biçim sürümü değiştiğinde eski düz metin çevirileri yeni kurallarla tekrar üretilir. Haberler kademeli çevrildiği için yeniden dağıtımdan sonra geçmişin dolması birkaç dakika sürebilir.
 
+Yenilemede aynı güne ait tarayıcı önbelleği anında gösterilir; arka plandaki
+boş/geçici başarısız yanıtlar hazır haberleri silmez. Terminal tarayıcıda
+başlatılır; sunucunun boş HTML'i ile tarayıcı önbelleğinin farklı olması yüzünden
+haber alanının yeniden kurulması önlenir. Soğuk başlangıçta ilk çevrilebilir
+altı haber, günün tüm geçmişi toplanmadan hazırlanır. Sonrasında normal
+20'lik gruplar ve geçmiş toplama devam eder. Gerçek ilk hazırlık süresi kaynak,
+çeviri servisi ve kota durumuna bağlıdır.
+
 ## Gemini 429 (kota / hız sınırı)
 
 HTTP 429, Gemini'nin kota veya hız sınırı yanıtıdır. Tek başına API anahtarının geçersiz olduğunu göstermez. Uygulamanın `/api/global-news` için HTTP 200 vermesi ise yalnızca haber API'sine erişilebildiğini gösterir; hazır haber sayısı `count`, bekleyen çeviri sayısı `pending` alanındadır.

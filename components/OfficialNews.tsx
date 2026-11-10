@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore, useCallback } from "react";
 import { observeFeedArrivals } from "@/lib/notification-sound";
 import type { TerminalHaber } from "./TerminalWorkspace";
 import { isCurrentNewsItem, watchIstanbulDay } from "@/lib/news-day";
+import { emptyFeedCache, mergeFeedCache, readFeedCache, subscribeFeedCache, writeFeedCache } from "@/lib/feed-cache";
 
 export default function OfficialNews({ backendUrl, onSelect, endpoint = "official-news", feedName = "Nitter", bistStyle = false }: {
   backendUrl: string;
@@ -12,13 +13,17 @@ export default function OfficialNews({ backendUrl, onSelect, endpoint = "officia
   feedName?: string;
   onSelect: (item: TerminalHaber) => void;
 }) {
-  const [items, setItems] = useState<TerminalHaber[]>([]);
+  const cacheKey = `bpt_feed_${endpoint}_v1`;
+  const items = useSyncExternalStore(subscribeFeedCache, useCallback(() => readFeedCache<TerminalHaber>(cacheKey), [cacheKey]), emptyFeedCache<TerminalHaber>);
   const [state, setState] = useState("starting");
   const [pending, setPending] = useState(false);
   useEffect(() => {
     let disposed = false;
     const controller = new AbortController();
+    let fetching = false;
     const load = async () => {
+      if (fetching) return;
+      fetching = true;
       try {
         const response = await fetch(`${backendUrl}/api/${endpoint}`, {
           cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]),
@@ -29,25 +34,27 @@ export default function OfficialNews({ backendUrl, onSelect, endpoint = "officia
         if (!disposed) {
           const fresh: TerminalHaber[] = body.data.filter((item: TerminalHaber) => isCurrentNewsItem(item));
           observeFeedArrivals(endpoint, fresh);
-          setItems(fresh);
+          writeFeedCache(cacheKey, mergeFeedCache(readFeedCache<TerminalHaber>(cacheKey), fresh));
           setState(body.status);
           setPending(Number(body.pending) > 0);
         }
       } catch {
         if (!disposed) {
-          setItems(current => current.filter(item => isCurrentNewsItem(item)));
+          writeFeedCache(cacheKey, readFeedCache<TerminalHaber>(cacheKey).filter(item => isCurrentNewsItem(item)));
           setState("unavailable");
         }
+      } finally {
+        fetching = false;
       }
     };
     void load();
-    const interval = setInterval(() => void load(), 60000);
+    const interval = setInterval(() => void load(), 15000);
     const unwatch = watchIstanbulDay(() => {
-      setItems(current => current.filter(item => isCurrentNewsItem(item)));
+      writeFeedCache(cacheKey, readFeedCache<TerminalHaber>(cacheKey).filter(item => isCurrentNewsItem(item)));
       void load();
     });
     return () => { disposed = true; controller.abort(); clearInterval(interval); unwatch(); };
-  }, [backendUrl, endpoint]);
+  }, [backendUrl, endpoint, cacheKey]);
 
   return <div className="pane-scroll flex-1 min-h-0">
     {(state === "unavailable" || state === "partial") && <p className="px-4 py-2 text-xs text-slate-500">Paylaşım kaynağına erişimde sorun var.</p>}
