@@ -11,12 +11,12 @@ test("Next.js uses the Render key through the backend and reports that key locat
   delete process.env.EULERPOOL_API_KEY;
   calendarSourceCache.clear();
   const day = istanbulDay(Date.now());
-  const records = fixture.slice(0, 2).map(row => ({ ...row, timestamp: String(Date.parse(`${day}T01:30:00Z`)) }));
+  const records = fixture.slice(0, 2).map(row => ({ ...row, actual_source: "tradingview", timestamp: String(Date.parse(`${day}T01:30:00Z`)) }));
   globalThis.fetch = (async input => {
     const url = new URL(String(input));
     assert.equal(url.pathname, "/api/macro/calendar");
     assert.equal(url.searchParams.has("token"), false);
-    return Response.json({ success: true, date: day, eulerpoolKeyConfigured: true, records, stale: false });
+    return Response.json({ success: true, date: day, eulerpoolKeyConfigured: true, records, stale: false, resultSource: "tradingview", matching: { matched: 2, updated: 2, tradingviewAvailable: true } });
   }) as typeof fetch;
   try {
     const response = await GET(new Request("https://example.com/api/calendar?diagnostics=1"));
@@ -27,6 +27,9 @@ test("Next.js uses the Render key through the backend and reports that key locat
     assert.equal(body.diagnostics.keyLocation, "backend");
     assert.equal(body.events[1].actual, "0%");
     assert.equal(body.events[1].isCompleted, true);
+    assert.equal(body.resultSource, "tradingview");
+    assert.equal(body.events[1].actualSource, "tradingview");
+    assert.equal(body.diagnostics.matching.updated, 2);
   } finally { globalThis.fetch = saved; calendarSourceCache.clear(); if (previous !== undefined) process.env.EULERPOOL_API_KEY = previous; }
 });
 

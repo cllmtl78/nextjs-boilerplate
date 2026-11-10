@@ -17,7 +17,7 @@ function reading(row: Record<string, unknown>, prefix: string): string | null {
   // multiplier is 48.44B, not 48.44 or 48.44e9B. Each column has its own unit.
   const numeric = !scale && Number(multiplier) > 1 ? Number(raw) * Number(multiplier) : raw;
   const inferred = calendarUnit({ originalTitle: String(row.name), country: COUNTRIES[String(row.country_code)] });
-  const suffix = currency ? ` ${currency.toUpperCase()}` : !scale && inferred !== "K" ? inferred || "" : "";
+  const suffix = currency === "%" ? "%" : currency ? ` ${currency.toUpperCase()}` : !scale && inferred !== "K" ? inferred || "" : "";
   return `${numeric}${scale}${suffix}`;
 }
 
@@ -43,6 +43,7 @@ export function normalizeEulerpoolCalendar(payload: unknown, day: string): Recor
       actual: reading(row, "actual"), forecast, previous: reading(row, "previous"),
       preformatted: true, unit: null, scale: null, currency: null,
       fullDay: row.full_day === true,
+      actualSource: typeof row.actual_source === "string" ? row.actual_source : "eulerpool",
     });
   }
   return [...records.values()].sort((a, b) => Date.parse(String(a.date)) - Date.parse(String(b.date)));
@@ -84,5 +85,7 @@ export async function fetchBackendEulerpoolCalendar(day: string) {
   if (payload.date !== day || !Array.isArray(payload.records)) throw new CalendarBackendError("Takvim backend gün/veri yanıtı geçersiz", configured);
   return { data: { result: normalizeEulerpoolCalendar(payload.records, day) }, source: "eulerpool" as const,
     sourceUrl: `${base}/api/macro/calendar`, status: response.status, fetchedAt: typeof payload.fetchedAt === "string" ? payload.fetchedAt : new Date().toISOString(),
-    stale: payload.stale === true, eulerpoolKeyConfigured: configured, keyLocation: "backend" as const };
+    stale: payload.stale === true, eulerpoolKeyConfigured: configured, keyLocation: "backend" as const,
+    resultSource: payload.resultSource === "tradingview" ? "tradingview" : undefined,
+    matching: payload.matching && typeof payload.matching === "object" ? payload.matching as Record<string, unknown> : undefined };
 }

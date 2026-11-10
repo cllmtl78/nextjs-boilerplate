@@ -17,6 +17,24 @@ FIXTURE = json.loads((Path(__file__).parent.parent / "lib/fixtures/eulerpool-cal
 class CalendarBackendTests(unittest.TestCase):
     now = datetime(2026, 11, 9, 12, tzinfo=TR)
 
+    def setUp(self):
+        patcher = patch("eulerpool_calendar.fetch_tradingview_results", return_value=[])
+        self.tradingview = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_hybrid_endpoint_keeps_eulerpool_schedule_and_reports_tradingview_results(self):
+        hybrid = json.loads((Path(__file__).parent / "fixtures/calendar_hybrid.json").read_text())
+        response = SimpleNamespace(status_code=200, json=lambda: hybrid["eulerpool"])
+        self.tradingview.return_value = hybrid["tradingview"]
+        with patch.dict(os.environ, {"EULERPOOL_API_KEY": "private-key"}), patch("eulerpool_calendar.requests.get", return_value=response):
+            body, status = EulerpoolCalendar().get(datetime(2026, 11, 10, 12, tzinfo=TR))
+        self.assertEqual(status, 200)
+        self.assertEqual(body["source"], "eulerpool")
+        self.assertEqual(body["resultSource"], "tradingview")
+        self.assertEqual(body["matching"]["updated"], 4)
+        self.assertTrue(body["matching"]["tradingviewAvailable"])
+        self.assertTrue(all(row["actual_source"] == "tradingview" for row in body["records"]))
+
     def test_backend_key_and_exact_day_bounds_cached_for_all_visitors(self):
         calendar = EulerpoolCalendar()
         response = SimpleNamespace(status_code=200, json=lambda: FIXTURE)

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { istanbulDay } from "@/lib/wire-text";
 import { translateCalendarTitles } from "@/lib/translate-calendar";
 import type { CalendarUnits } from "@/lib/calendar-values";
-import { calendarSourceCache } from "@/lib/calendar-cache";
 import { fetchCalendarSource } from "@/lib/calendar-sources";
 import { CalendarBackendError } from "@/lib/eulerpool-calendar";
 
@@ -21,6 +20,7 @@ export interface EconomicCalendarEvent extends CalendarUnits {
   previous: string | number | null;
   importance: number;
   isCompleted: boolean;
+  actualSource?: string;
 }
 
 const ALLOWED_COUNTRIES = ["TR", "US", "EU", "CN", "JP"] as const;
@@ -29,11 +29,8 @@ export async function GET(request?: Request) {
   const diagnostics = request ? new URL(request.url).searchParams.get("diagnostics") === "1" : false;
   const day = istanbulDay(Date.now());
   try {
-    // Render owns the shared 60-second cache. A second TTL in Next.js can
-    // otherwise keep a nearly-expired Render response for another whole minute.
-    const upstream = process.env.EULERPOOL_API_KEY?.trim()
-      ? await calendarSourceCache.get(day, () => fetchCalendarSource(day))
-      : await fetchCalendarSource(day);
+    // Render owns matching, credentials and the shared 60-second cache.
+    const upstream = await fetchCalendarSource(day);
     const data = upstream.data;
     const rows = data.result.filter((row: Record<string, unknown>) => row &&
       ALLOWED_COUNTRIES.includes(row.country as EconomicCalendarEvent["country"]) &&
@@ -59,11 +56,12 @@ export async function GET(request?: Request) {
         currency: typeof row.currency === "string" ? row.currency : null,
         importance: typeof row.importance === "number" ? row.importance : 0,
         isCompleted: actual !== null,
+        actualSource: typeof row.actualSource === "string" ? row.actualSource : undefined,
       };
     });
     events.sort((a, b) => a.timestamp - b.timestamp);
     return NextResponse.json({ success: true, date: day, source: upstream.source, fetchedAt: upstream.fetchedAt, count: events.length, events,
-      stale: upstream.stale === true, degraded: upstream.degraded === true,
+      stale: upstream.stale === true, degraded: upstream.degraded === true, resultSource: upstream.resultSource,
       ...(diagnostics ? { diagnostics: {
         upstreamStatus: upstream.status,
         eulerpoolKeyConfigured: upstream.eulerpoolKeyConfigured ?? Boolean(process.env.EULERPOOL_API_KEY?.trim()),
@@ -72,6 +70,7 @@ export async function GET(request?: Request) {
         fallbackReason: upstream.fallbackReason,
         totalRows: data.result.length,
         completedRows: events.filter(event => event.isCompleted).length,
+        matching: upstream.matching,
         // Provider records before API mapping/translation. Investing HTML has
         // already been converted into records by the source adapter.
         rawSample: rows.slice(0, 7),

@@ -8,7 +8,12 @@ Takvim mevcut terminal tasarımında gösterilir; iframe kullanılmaz. Açık sa
 `EULERPOOL_API_KEY`, Render'daki **Python backend servisinin** Environment
 ayarına eklenir. Next.js'e anahtar eklemek gerekmez. İstek akışı şöyledir:
 
-`Tarayıcı → Next.js /api/calendar → Render /api/macro/calendar → Eulerpool`
+`Tarayıcı → Next.js /api/calendar → Render /api/macro/calendar`
+
+Render aynı dakikada paralel olarak Eulerpool'dan takvim listesini, TradingView'dan
+açıklanan sonuçları alır. Listede görünen olay, başlık, saat, önceki değer ve
+beklenti Eulerpool'dandır. TradingView eşleşen kaydın yalnızca açıklanan sonucunu
+doldurur; kendi ek olaylarını listeye katmaz.
 
 Next.js backend adresini `BACKEND_URL`, ardından `NEXT_PUBLIC_BACKEND_URL`
 değişkeninden okur. İkisi de yoksa mevcut diğer haber servisleriyle aynı
@@ -40,9 +45,27 @@ boşsa `forecast_value` kullanılır. Sonuç tahminle doldurulmaz; sıfır geçe
 sonuçtur. Her sütunun kendi para birimi ve çarpanı kullanılır. `48.44 × 1e9`
 ekranda `48.44B $` gösterilir. Gün boyu olaylarda kesin saat gösterilmez.
 
+## Sonuç eşleştirme
+
+Ülke, normalize edilmiş İngilizce gösterge adı, Türkiye yayın günü ve referans
+dönemi birlikte karşılaştırılır. Örneğin Eulerpool `reference_date=10` ile
+TradingView `referencePeriod=Oct 2026` eşleşir. Bilinen eşanlamlılar (CPI YoY /
+Inflation Rate YoY gibi) sınırlı ve açık kurallarla eşlenir. YoY/MoM/QoQ, core,
+mevsimsellik ve preliminary/final ayrımları korunur. İki tarafta da dönem
+biliniyorsa aynı dönem zorunludur; dönem eksikse saat farkı en fazla 15 dakika
+olabilir. Birden fazla aday varsa veya tek TradingView kaydı birden fazla farklı
+Eulerpool olayına karşılık geliyorsa sonuç aktarılmaz.
+
+TradingView'ın `actualRaw`, `actual`, `scale` ve `unit` alanlarıyla sayı, para
+birimi ve büyüklük birlikte dönüştürülür. Yüzde, bin/milyar ve para birimleri
+karıştırılmaz. Eşleşen gerçek TradingView sonucu varsa Eulerpool sonucunun yerine
+kullanılır. TradingView sonucu boşsa Eulerpool'un mevcut sonucu veya aynı gün
+daha önce doğrulanmış TradingView sonucu korunur. İki kaynakta da sonuç yoksa
+sonuç üretilmez. Her kaydın `actualSource` alanı sonucun kaynağını belirtir.
+
 Kaynak kesintisinde Render aynı günün son başarılı yanıtını `stale: true` ile
 korur; gün değişiminde eski veri taşınmaz. Anahtar eksikliği ve diğer hatalar
-503 döndürür. Etkin rota Investing/TradingView'a dönmez. Eski ayrıştırıcılar
+503 döndürür. Takvim listesi Investing/TradingView listesine dönmez. Eski ayrıştırıcılar
 geçmiş regresyon testleri için ayrı `fetchLegacyCalendarSource` fonksiyonunda
 tutulur ve etkin takvim tarafından çağrılmaz.
 
@@ -53,12 +76,20 @@ anahtarı okuyup okuyamadığını belirtir. Site `/api/calendar?diagnostics=1`
 yanıtında `source: eulerpool`, `keyLocation: backend` ve
 `eulerpoolKeyConfigured: true` görünmelidir. Anahtarın kendisi gösterilmez.
 
-Uyumluluk için Next.js'te ayrıca `EULERPOOL_API_KEY` tanımlıysa doğrudan Eulerpool
-sorgusu da desteklenir; bu yolda Next.js'in kendi 60 saniyelik önbelleği kullanılır.
-Varsayılan ve önerilen mevcut kurulum Render backend yoludur.
+`resultSource: tradingview` sonuç tamamlayıcısını belirtir. `diagnostics.matching`
+içindeki `matched/updated/total` ve `tradingviewAvailable` alanları eşleşen olay,
+aktarılmış sonuç ve TradingView erişimini gösterir. Sonuç yokluğu takvim listesi
+yokluğu ile aynı kabul edilmez.
+
+Etkin takvim tüm durumlarda Render üzerinden geçer; Next.js'teki bir anahtar,
+sonuç eşleştirmesini atlayan doğrudan bir yola geçirmez.
 
 Regresyon testleri kullanıcının gerçek yanıtından alınmış kayıtları kullanır;
 `lib/fixtures/eulerpool-calendar.json` API anahtarı içermez. Backend testleri
 ortak önbellek/eşzamanlı ziyaretçi, anahtar konumu, token gizliliği, kesinti ve gün
 sınırını; Next.js testleri Render üzerinden gerçek alanların dönüştürülmesini
 kontrol eder.
+
+`backend/fixtures/calendar_hybrid.json`, kullanıcının gerçek Eulerpool ve
+TradingView yanıtlarından dört takvim olayı ile yedi sonuç kaydını içerir.
+Testlerde bu dört olayın sonuçları doğru eşleşir; saat/başlık/beklenti korunur.

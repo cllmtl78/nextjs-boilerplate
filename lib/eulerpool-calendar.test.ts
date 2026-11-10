@@ -2,7 +2,6 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fixture from "./fixtures/eulerpool-calendar.json";
 import { fetchEulerpoolCalendar, normalizeEulerpoolCalendar } from "./eulerpool-calendar";
-import { fetchCalendarSource } from "./calendar-sources";
 import { formatCalendarValue } from "./calendar-values";
 import { istanbulDay } from "./wire-text";
 import { calendarSourceCache } from "./calendar-cache";
@@ -60,7 +59,7 @@ test("configured Eulerpool key selects correct endpoint, Istanbul bounds and exa
     return Response.json(fixture);
   }) as typeof fetch;
   try {
-    const result = await fetchCalendarSource("2026-11-09");
+    const result = await fetchEulerpoolCalendar("2026-11-09", key);
     assert.equal(result.source, "eulerpool");
     assert.equal(calls, 1);
     assert.ok(result.data.result.some(row => row.actual === "0.7%"));
@@ -91,7 +90,7 @@ test("API returns native-calendar readings and completed zero without exposing t
   const rows = fixture.slice(0, 2).map(row => ({ ...row, timestamp }));
   process.env.EULERPOOL_API_KEY = key;
   calendarSourceCache.clear();
-  globalThis.fetch = (async () => Response.json(rows)) as typeof fetch;
+  globalThis.fetch = (async () => Response.json({ success: true, date: day, records: rows, eulerpoolKeyConfigured: true, resultSource: "tradingview" })) as typeof fetch;
   try {
     const response = await GET(new Request("https://example.com/api/calendar?diagnostics=1"));
     const body = await response.json();

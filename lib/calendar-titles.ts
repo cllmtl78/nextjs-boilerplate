@@ -33,6 +33,8 @@ const INDICATORS: [RegExp, string][] = [
   [/^Retail Sales/i, "Perakende Satışlar"],
   [/^Personal Income/i, "Kişisel Gelirler"],
   [/^Personal Spending/i, "Kişisel Harcamalar"],
+  [/^Household Spending/i, "Hanehalkı Harcamaları"],
+  [/^Bank Lending/i, "Banka Kredileri"],
   [/^Real Personal Consumption/i, "Reel Kişisel Tüketim"],
   [/^Consumer Confidence/i, "Tüketici Güven Endeksi"],
   [/^(?:Leading Economic Index|Leading Index|Leading Indicators)/i, "Öncü Ekonomik Göstergeler Endeksi"],
