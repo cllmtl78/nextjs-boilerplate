@@ -71,6 +71,7 @@ export async function GET(request?: Request) {
         totalRows: data.result.length,
         completedRows: events.filter(event => event.isCompleted).length,
         matching: upstream.matching,
+        scheduleFetchedAt: upstream.scheduleFetchedAt,
         // Provider records before API mapping/translation. Investing HTML has
         // already been converted into records by the source adapter.
         rawSample: rows.slice(0, 7),

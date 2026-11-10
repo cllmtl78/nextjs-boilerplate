@@ -16,6 +16,7 @@ export interface CalendarUpstream {
   keyLocation?: "backend";
   resultSource?: string;
   matching?: Record<string, unknown>;
+  scheduleFetchedAt?: string;
 }
 
 const SERVICE = "https://www.investing.com/economic-calendar/Service/getCalendarFilteredData";

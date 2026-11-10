@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -55,7 +56,8 @@ class CalendarBackendTests(unittest.TestCase):
             self.assertEqual(get.call_count, 1)
             clock.return_value = 60
             calendar.get(self.now)
-            self.assertEqual(get.call_count, 2)
+            self.assertEqual(get.call_count, 1)
+            self.assertEqual(self.tradingview.call_count, 2)
 
     def test_missing_key_is_explicit_and_does_not_contact_eulerpool(self):
         with patch.dict(os.environ, {"EULERPOOL_API_KEY": ""}), patch("eulerpool_calendar.requests.get") as get:
@@ -73,9 +75,38 @@ class CalendarBackendTests(unittest.TestCase):
             clock.return_value = 60
             stale, status = calendar.get(self.now)
             self.assertEqual(status, 200)
-            self.assertTrue(stale["stale"])
+            self.assertFalse(stale["stale"])
             self.assertEqual(stale["records"], original["records"])
+            self.assertEqual(get.call_count, 1)
             failed, status = calendar.get(self.now + timedelta(days=1))
             self.assertEqual(status, 503)
             self.assertNotIn("records", failed)
             self.assertNotIn("private-key", json.dumps(failed))
+
+    def test_daily_schedule_survives_restart_and_refreshes_once_after_midnight(self):
+        response = SimpleNamespace(status_code=200, json=lambda: FIXTURE)
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"EULERPOOL_API_KEY": "private-key"}), patch("eulerpool_calendar.requests.get", return_value=response) as get:
+            path = Path(directory) / "calendar.json"
+            first, _ = EulerpoolCalendar(path).get(self.now)
+            restarted = EulerpoolCalendar(path)
+            second, _ = restarted.get(self.now)
+            self.assertEqual(get.call_count, 1)
+            self.assertEqual(first["scheduleFetchedAt"], second["scheduleFetchedAt"])
+            self.assertNotIn("private-key", path.read_text())
+            restarted.get(self.now + timedelta(days=1))
+            restarted.get(self.now + timedelta(days=1, minutes=10))
+            self.assertEqual(get.call_count, 2)
+
+    def test_failed_daily_fetch_retries_after_fifteen_minutes_not_on_every_visit(self):
+        calendar = EulerpoolCalendar()
+        with patch.dict(os.environ, {"EULERPOOL_API_KEY": "private-key"}), patch("eulerpool_calendar.requests.get", side_effect=requests.ConnectionError("token=private-key")) as get, patch("eulerpool_calendar.time.monotonic", return_value=0) as clock:
+            calendar.get(self.now)
+            for minute in range(1, 15):
+                clock.return_value = minute * 60
+                body, status = calendar.get(self.now)
+                self.assertEqual(status, 503)
+                self.assertNotIn("private-key", json.dumps(body))
+            self.assertEqual(get.call_count, 1)
+            clock.return_value = 900
+            calendar.get(self.now)
+            self.assertEqual(get.call_count, 2)

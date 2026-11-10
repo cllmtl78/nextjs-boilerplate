@@ -87,5 +87,6 @@ export async function fetchBackendEulerpoolCalendar(day: string) {
     sourceUrl: `${base}/api/macro/calendar`, status: response.status, fetchedAt: typeof payload.fetchedAt === "string" ? payload.fetchedAt : new Date().toISOString(),
     stale: payload.stale === true, eulerpoolKeyConfigured: configured, keyLocation: "backend" as const,
     resultSource: payload.resultSource === "tradingview" ? "tradingview" : undefined,
-    matching: payload.matching && typeof payload.matching === "object" ? payload.matching as Record<string, unknown> : undefined };
+    matching: payload.matching && typeof payload.matching === "object" ? payload.matching as Record<string, unknown> : undefined,
+    scheduleFetchedAt: typeof payload.scheduleFetchedAt === "string" ? payload.scheduleFetchedAt : undefined };
 }

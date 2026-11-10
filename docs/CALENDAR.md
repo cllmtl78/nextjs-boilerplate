@@ -10,8 +10,8 @@ ayarına eklenir. Next.js'e anahtar eklemek gerekmez. İstek akışı şöyledir
 
 `Tarayıcı → Next.js /api/calendar → Render /api/macro/calendar`
 
-Render aynı dakikada paralel olarak Eulerpool'dan takvim listesini, TradingView'dan
-açıklanan sonuçları alır. Listede görünen olay, başlık, saat, önceki değer ve
+Render günün ilk açılışında Eulerpool'dan takvim listesini alır; TradingView'dan
+açıklanan sonuçları 60 saniyede bir kontrol eder. Listede görünen olay, başlık, saat, önceki değer ve
 beklenti Eulerpool'dandır. TradingView eşleşen kaydın yalnızca açıklanan sonucunu
 doldurur; kendi ek olaylarını listeye katmaz.
 
@@ -33,12 +33,21 @@ ve `language=en` ile gönderilir. Kullanıcının Calendar/Properties yanıtlar�
 Euro Bölgesi ayrı ülke kodu olarak bulunmadığından Euro Bölgesi üretilmez.
 Properties her dakika sorgulanmaz.
 
-Render'daki kilit ve ortak 60 saniyelik önbellek eşzamanlı ziyaretçileri birleştirir;
-anahtarlı dış API sorgusu dakikada en fazla bir defa yapılır (backend süreci
-başına). Next.js bu backend yanıtına ikinci bir dakikalık TTL eklemez. Ziyaretçi
-olmayan dönemde çalışan bir cron değildir. Birden çok backend süreci/örneği
-kendi önbelleğine sahiptir; toplam kota bunların toplamıdır. Tek süreç yaklaşık
-43.200 istek/30 gün kullanır.
+Render'daki kilit ve ortak 60 saniyelik sonuç önbelleği eşzamanlı ziyaretçileri
+birleştirir. Eulerpool'a başarılı takvim sorgusu **Türkiye günü başına bir defa**
+yapılır; sonraki dakika kontrolleri yalnızca TradingView'ı sorgular. Normal
+tek sunucu kurulumunda bu yaklaşık **30 Eulerpool isteği/30 gün** eder.
+Eulerpool sorgusu başarısızsa tekrar denemeler en az 15 dakika aralıklıdır.
+Next.js backend yanıtına ikinci bir dakikalık TTL eklemez. Ziyaretçi olmayan
+dönemde çalışan bir cron değildir.
+
+Takvim listesi `backend/.data/eulerpool-calendar.json` dosyasına atomik kaydedilir.
+`GLOBAL_NEWS_DB_PATH` ayarlıysa aynı klasörde saklanır; ayrı dosya yolu
+`EULERPOOL_CALENDAR_CACHE_PATH` ile seçilebilir. Anahtar dosyaya yazılmaz.
+Dosya korunduğunda süreç yeniden başlasa da aynı gün Eulerpool tekrar
+sorgulanmaz. Render geçici diski silerse, dosya yazılamazsa veya birbirinden
+bağımsız sunucular kullanılırsa ek başlangıç sorguları olabilir. Gün içi takvim
+listesi/saat değişiklikleri ertesi günün sorgusuna kadar otomatik alınmaz.
 
 `actual_value`, `previous_value` ve `consensus_value` ayrı okunur. Konsensüs
 boşsa `forecast_value` kullanılır. Sonuç tahminle doldurulmaz; sıfır geçerli
@@ -80,6 +89,10 @@ yanıtında `source: eulerpool`, `keyLocation: backend` ve
 içindeki `matched/updated/total` ve `tradingviewAvailable` alanları eşleşen olay,
 aktarılmış sonuç ve TradingView erişimini gösterir. Sonuç yokluğu takvim listesi
 yokluğu ile aynı kabul edilmez.
+
+`diagnostics.scheduleFetchedAt` Eulerpool'dan günlük listenin gerçekten alındığı
+zamandır; dakikalık kontrollerde değişmez. `fetchedAt` ise en son sonuç kontrolünün
+zamanıdır.
 
 Etkin takvim tüm durumlarda Render üzerinden geçer; Next.js'teki bir anahtar,
 sonuç eşleştirmesini atlayan doğrudan bir yola geçirmez.
