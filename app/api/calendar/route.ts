@@ -4,6 +4,7 @@ import { translateCalendarTitles } from "@/lib/translate-calendar";
 import type { CalendarUnits } from "@/lib/calendar-values";
 import { calendarSourceCache } from "@/lib/calendar-cache";
 import { fetchCalendarSource } from "@/lib/calendar-sources";
+import { CalendarBackendError } from "@/lib/eulerpool-calendar";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,11 @@ export async function GET(request?: Request) {
   const diagnostics = request ? new URL(request.url).searchParams.get("diagnostics") === "1" : false;
   const day = istanbulDay(Date.now());
   try {
-    const upstream = await calendarSourceCache.get(day, () => fetchCalendarSource(day));
+    // Render owns the shared 60-second cache. A second TTL in Next.js can
+    // otherwise keep a nearly-expired Render response for another whole minute.
+    const upstream = process.env.EULERPOOL_API_KEY?.trim()
+      ? await calendarSourceCache.get(day, () => fetchCalendarSource(day))
+      : await fetchCalendarSource(day);
     const data = upstream.data;
     const rows = data.result.filter((row: Record<string, unknown>) => row &&
       ALLOWED_COUNTRIES.includes(row.country as EconomicCalendarEvent["country"]) &&
@@ -61,7 +66,8 @@ export async function GET(request?: Request) {
       stale: upstream.stale === true, degraded: upstream.degraded === true,
       ...(diagnostics ? { diagnostics: {
         upstreamStatus: upstream.status,
-        eulerpoolKeyConfigured: Boolean(process.env.EULERPOOL_API_KEY?.trim()),
+        eulerpoolKeyConfigured: upstream.eulerpoolKeyConfigured ?? Boolean(process.env.EULERPOOL_API_KEY?.trim()),
+        keyLocation: upstream.keyLocation || "nextjs",
         sourceUrl: upstream.sourceUrl,
         fallbackReason: upstream.fallbackReason,
         totalRows: data.result.length,
@@ -74,7 +80,9 @@ export async function GET(request?: Request) {
   } catch (error) {
     console.warn("[Takvim] Güncel veriler alınamadı:", error instanceof Error ? error.message : "Bilinmeyen hata");
     return NextResponse.json({ success: false, date: day, count: 0, events: [], error: "Takvim bağlantısı kurulamadı. Yeniden deneniyor.",
-      ...(diagnostics ? { diagnostics: { error: error instanceof Error ? error.message : "Bilinmeyen hata" } } : {}),
+      ...(diagnostics ? { diagnostics: { error: error instanceof Error ? error.message : "Bilinmeyen hata",
+        ...(error instanceof CalendarBackendError ? { eulerpoolKeyConfigured: error.keyConfigured, keyLocation: "backend" } : {}),
+      } } : {}),
     }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 }

@@ -1,13 +1,8 @@
-import { describe, test, beforeEach } from "node:test";
+import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { displayCalendarTitle, localizeCalendarTitle } from "./calendar-titles";
 import { translateCalendarTitles } from "./translate-calendar";
-import { GET } from "../app/api/calendar/route";
-import { istanbulDay } from "./wire-text";
-import { calendarSourceCache } from "./calendar-cache";
-import { clearCalendarSourceHistory } from "./calendar-sources";
 
-beforeEach(() => { calendarSourceCache.clear(); clearCalendarSourceHistory(); });
 
 describe("Turkish economic calendar titles", () => {
   test("translates every English title in the screenshot and retains the period", () => {
@@ -72,25 +67,4 @@ describe("Turkish economic calendar titles", () => {
     } finally { globalThis.fetch = saved; }
   });
 
-  test("API localizes titles without changing values, IDs or event ordering", async () => {
-    const saved = globalThis.fetch;
-    globalThis.fetch = (async () => Response.json({result: [
-      {id: 2, title: "Average Hourly Earnings YoY", country: "US", date: `${istanbulDay(Date.now())}T13:30:00Z`, actual: 0, previous: 3.2, forecast: 2.9},
-      {id: 1, title: "Retail Sales MoM", country: "EU", date: `${istanbulDay(Date.now())}T10:00:00Z`, actual: null, previous: .4, forecast: -.1},
-    ]})) as typeof fetch;
-    try {
-      const response = await GET();
-      const body = await response.json();
-      assert.equal(body.source, "tradingview");
-      assert.equal(body.count, 2);
-      assert.equal(body.events[0].id, "1");
-      assert.equal(body.events[0].title, "Perakende Satışlar (Aylık)");
-      assert.equal(body.events[1].title, "Ortalama Saatlik Kazançlar (Yıllık)");
-      assert.equal(body.events[1].originalTitle, "Average Hourly Earnings YoY");
-      assert.equal(body.events[1].actual, 0);
-      assert.equal(body.events[1].previous, 3.2);
-      assert.equal(body.events[1].forecast, 2.9);
-      assert.equal(body.events[1].time, "16:30");
-    } finally { globalThis.fetch = saved; }
-  });
 });

@@ -1,64 +1,64 @@
 # Ekonomik takvim
 
-Açık terminal sayfası `/api/calendar` yolunu her 60 saniyede kontrol eder.
-Sunucu, aynı Türkiye günü için istekleri 60 saniyelik ortak bellek önbelleğinde
-birleştirir; aynı anda gelen ziyaretçiler aynı Promise'ı bekler. Başarısız
-istekler de bir dakika tutulur. Bu önbellek sunucu süreci başınadır; ayrı sunucular
-veya serverless örnekleri birbirlerinin önbelleğini paylaşmaz. Ziyaretçi yokken
-arka planda çalışan bir cron değildir.
+Takvim mevcut terminal tasarımında gösterilir; iframe kullanılmaz. Açık sayfa
+`/api/calendar` yolunu 60 saniyede bir sorgular.
 
-`fetchedAt` kaynağın gerçekten sorgulandığı zamanı gösterir. Türkiye günü
-değiştiğinde eski önbellek kullanılmaz. API hataları örnek veri üretmez;
-tarayıcı aynı güne ait son başarılı sonuçları korur ve hata mesajı gösterir.
+## Render kurulumu
 
-`EULERPOOL_API_KEY` tanımlandığında birincil kaynak **Eulerpool Macro Calendar**
-(`GET /api/1/macro/calendar`) olur. Anahtar, Next.js sunucusunun ortam değişkenine
-eklenmelidir; `NEXT_PUBLIC_` öneki kullanılmaz. Ortam değişikliği sonrası uygulama
-yeniden dağıtılmalıdır. Anahtar tarayıcıya veya tanılama çıktısına aktarılmaz.
+`EULERPOOL_API_KEY`, Render'daki **Python backend servisinin** Environment
+ayarına eklenir. Next.js'e anahtar eklemek gerekmez. İstek akışı şöyledir:
 
-Sorgu Türkiye gün sınırlarını milisaniye olarak `start/end` ile, `language=en`
-ve `countries=tr,us,cn,jp` parametreleriyle gönderir. Kullanıcının paylaştığı gerçek
-Calendar/Properties yanıtlarında Euro Bölgesi ayrı kod olarak bulunmadığı için
-Euro Bölgesi varmış gibi veri üretilmez. Properties her dakika sorgulanmaz.
+`Tarayıcı → Next.js /api/calendar → Render /api/macro/calendar → Eulerpool`
 
-`actual_value`, `previous_value` ve `consensus_value` ayrı okunur. Konsensüs boşsa
-`forecast_value` kullanılır; açıklanan sonuç asla tahminden doldurulmaz. Her
-sütunun kendi para birimi/çarpanı uygulanır: örneğin `48.44 × 1e9` ekranda
-`48.44B $` olur. Sıfır gerçek bir sonuçtur. Olay kimliği ülke, zaman, ad ve
-referans döneminden oluşturulur. Gün boyu olaylar için kesin saat gösterilmez.
+Next.js backend adresini `BACKEND_URL`, ardından `NEXT_PUBLIC_BACKEND_URL`
+değişkeninden okur. İkisi de yoksa mevcut diğer haber servisleriyle aynı
+`https://bpt-news-backend.onrender.com` adresi kullanılır. Kod değişikliği hem
+backend'e hem Next.js'e dağıtılmalıdır. Anahtarın eklenmesi/değişmesi sonrasında
+Render servisi yeniden dağıtılmalı/başlatılmalıdır.
 
-Eulerpool anahtarı tanımlıysa HTTP hataları açıkça başarısızlık olarak döner;
-boş sonuç veren eski kaynağa sessizce geçilmez. Tarayıcı aynı gün alınmış son
-sonuçları korur ve bağlantı uyarısı gösterir. `/api/calendar?diagnostics=1`
-anahtarın yalnızca tanımlı olup olmadığını ve seçilen kaynağı gösterir.
+Render endpoint'i sadece içinde bulunulan Türkiye gününü sorgular. İsteklerde
+anahtar tarayıcıdan veya Next.js'ten aktarılmaz; Render tarafından okunur.
+İstisnaların token içerebilecek ham URL'leri loglanmaz veya istemciye döndürülmez.
 
-Tek sunucu sürecinde bir sorgu/dakika yaklaşık 43.200 sorgu/30 gün eder. Birden
-fazla sunucu süreci/örneği kendi önbelleğine sahiptir; toplam kotaya bunların
-istekleri de dahildir. Gerçek kullanıcı yanıtından alınan beş kayıt
-`lib/fixtures/eulerpool-calendar.json` ile regresyon testlerinde kullanılır.
+## Veri ve yenileme
 
-Anahtar tanımlı değilse eski kaynak zinciri korunur. Önce Investing servisi POST formuyla
-sorgulanır; sayfalar bildirim kimlikleriyle birleştirilir. Servis erişilemezse
-Investing'in genel takvim widget'ının HTML yanıtı denenir. İkisinden de yanıt
-alınamazsa aynı gün alınmış Investing sonuçları korunur. Henüz Investing yanıtı
-yoksa TradingView yedeği kullanılır; API `degraded: true` döndürür ve arayüz
-sonuçların eksik olabileceğini bildirir. Bir sonraki dakikada yeniden Investing
-denenir. Önceki günün sonuçları yeni güne taşınmaz.
+Gerçek kaynak `GET https://api.eulerpool.com/api/1/macro/calendar` endpoint'idir.
+`start/end` Türkiye günü sınırlarını milisaniye olarak, `countries=tr,us,cn,jp`
+ve `language=en` ile gönderilir. Kullanıcının Calendar/Properties yanıtlarında
+Euro Bölgesi ayrı ülke kodu olarak bulunmadığından Euro Bölgesi üretilmez.
+Properties her dakika sorgulanmaz.
 
-Türkiye, ABD, Euro Bölgesi, Çin ve Japonya sorgulanır. Investing'in sabit GMT+3
-saat dilimi (18) kullanılır; tablo parçaları `cheerio/slim` ile ayrıştırılır.
-`eventActual_`, `eventForecast_`, `eventPrevious_` hücreleri ayrı ayrı okunur.
-Boş actual hücresi forecast/previous değerleriyle doldurulmaz. Zamanı belirsiz
-satırlar için saat uydurulmaz. API anahtarı veya oturum açma gerekmez; erişim
-engelleri aşılmaya çalışılmaz.
+Render'daki kilit ve ortak 60 saniyelik önbellek eşzamanlı ziyaretçileri birleştirir;
+anahtarlı dış API sorgusu dakikada en fazla bir defa yapılır (backend süreci
+başına). Next.js bu backend yanıtına ikinci bir dakikalık TTL eklemez. Ziyaretçi
+olmayan dönemde çalışan bir cron değildir. Birden çok backend süreci/örneği
+kendi önbelleğine sahiptir; toplam kota bunların toplamıdır. Tek süreç yaklaşık
+43.200 istek/30 gün kullanır.
 
-`/api/calendar?diagnostics=1` seçilen kaynak adresini, varsa yedek kaynağa geçiş
-nedenini ve API eşlemesinden önceki ilk yedi kaydı gösterir. Investing kayıtları
-bu aşamada HTML hücrelerinden ortak kayıt yapısına çevrilmiş durumdadır.
+`actual_value`, `previous_value` ve `consensus_value` ayrı okunur. Konsensüs
+boşsa `forecast_value` kullanılır. Sonuç tahminle doldurulmaz; sıfır geçerli
+sonuçtur. Her sütunun kendi para birimi ve çarpanı kullanılır. `48.44 × 1e9`
+ekranda `48.44B $` gösterilir. Gün boyu olaylarda kesin saat gösterilmez.
 
-İstek biçimi ve hücreler açık kaynak `alvarobartt/investpy` istemcisiyle
-karşılaştırıldı. Ayrıştırma, sayfalama, sıfır sonuç, kaynak sırası ve arıza
-senaryoları sentetik HTML ile test edildi; bu bir canlı erişim doğrulaması değildir. FXStreet, Myfxbook,
-Trading Economics ve Investing için bu Cloud ortamından yapılan canlı denemeler
-ortamın ağ kısıtında engellendi. İlgili alan adları ortam taslağına eklendi;
-taslağın kaydedilip yayınlanması henüz uygulanmış ağ erişimi anlamına gelmez.
+Kaynak kesintisinde Render aynı günün son başarılı yanıtını `stale: true` ile
+korur; gün değişiminde eski veri taşınmaz. Anahtar eksikliği ve diğer hatalar
+503 döndürür. Etkin rota Investing/TradingView'a dönmez. Eski ayrıştırıcılar
+geçmiş regresyon testleri için ayrı `fetchLegacyCalendarSource` fonksiyonunda
+tutulur ve etkin takvim tarafından çağrılmaz.
+
+## Tanılama
+
+Render `/api/macro/calendar` yanıtındaki `eulerpoolKeyConfigured` backend'in
+anahtarı okuyup okuyamadığını belirtir. Site `/api/calendar?diagnostics=1`
+yanıtında `source: eulerpool`, `keyLocation: backend` ve
+`eulerpoolKeyConfigured: true` görünmelidir. Anahtarın kendisi gösterilmez.
+
+Uyumluluk için Next.js'te ayrıca `EULERPOOL_API_KEY` tanımlıysa doğrudan Eulerpool
+sorgusu da desteklenir; bu yolda Next.js'in kendi 60 saniyelik önbelleği kullanılır.
+Varsayılan ve önerilen mevcut kurulum Render backend yoludur.
+
+Regresyon testleri kullanıcının gerçek yanıtından alınmış kayıtları kullanır;
+`lib/fixtures/eulerpool-calendar.json` API anahtarı içermez. Backend testleri
+ortak önbellek/eşzamanlı ziyaretçi, anahtar konumu, token gizliliği, kesinti ve gün
+sınırını; Next.js testleri Render üzerinden gerçek alanların dönüştürülmesini
+kontrol eder.

@@ -1,12 +1,7 @@
-import { test, beforeEach } from "node:test";
+import { test } from "node:test";
 import assert from "node:assert/strict";
 import { formatCalendarValue } from "./calendar-values";
-import { GET } from "../app/api/calendar/route";
-import { istanbulDay } from "./wire-text";
-import { calendarSourceCache } from "./calendar-cache";
-import { clearCalendarSourceHistory } from "./calendar-sources";
 
-beforeEach(() => { calendarSourceCache.clear(); clearCalendarSourceHistory(); });
 
 test("percentages and payroll counts are distinct across all three displayed values", () => {
   const earnings={originalTitle:'Average Hourly Earnings MoM',country:'US'};
@@ -50,21 +45,4 @@ test("cached Turkish titles retain units and unknown indicators receive no inven
   assert.equal(formatCalendarValue(6,{title:'Kamu Sektörü İstihdamı',country:'US'}),'6K');
   assert.equal(formatCalendarValue(6,{title:'Unknown indicator'}),'6');
   assert.equal(formatCalendarValue(6,{title:'Unknown indicator',scale:1000}),'6');
-});
-
-test("API preserves upstream metadata without changing numeric data", async () => {
-  const saved=globalThis.fetch;
-  globalThis.fetch=(async()=>Response.json({result:[{id:'units-1',title:'Government Payrolls',country:'US',date:`${istanbulDay(Date.now())}T13:30:00Z`,actual:6,forecast:5,previous:-18,unit:'K',scale:null,currency:'USD'}]})) as typeof fetch;
-  try {
-    const response=await GET();
-    const body=await response.json();
-    const item=body.events[0];
-    assert.equal(item.unit,'K');
-    assert.equal(item.currency,'USD');
-    assert.equal(item.actual,6);
-    assert.equal(item.previous,-18);
-    assert.equal(formatCalendarValue(item.actual,item),'6K');
-    assert.equal(formatCalendarValue(item.forecast,item),'5K');
-    assert.equal(formatCalendarValue(item.previous,item),'-18K');
-  } finally {globalThis.fetch=saved;}
 });

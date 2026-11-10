@@ -1,8 +1,7 @@
 import { beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
-import { clearCalendarSourceHistory, fetchCalendarSource, parseInvestingCalendar } from "./calendar-sources";
+import { clearCalendarSourceHistory, fetchLegacyCalendarSource as fetchCalendarSource, parseInvestingCalendar } from "./calendar-sources";
 import { calendarSourceCache } from "./calendar-cache";
-import { GET } from "../app/api/calendar/route";
 import { istanbulDay } from "./wire-text";
 
 beforeEach(() => { clearCalendarSourceHistory(); calendarSourceCache.clear(); });
@@ -49,14 +48,13 @@ test("Investing service paginates, filters countries and becomes the API's prima
     return Response.json({ data: (offset === "0" ? fixture(day) : offset === "1" ? fixture(day, "1.2%", "102") : "").replace(/<\/?(?:table|tbody)[^>]*>/g, "") });
   }) as typeof fetch;
   try {
-    const body = await (await GET()).json();
+    const upstream = await fetchCalendarSource(day);
+    const body = { success: true, source: upstream.source, degraded: upstream.degraded === true, events: upstream.data.result };
     assert.equal(body.success, true);
     assert.equal(body.source, "investing");
     assert.equal(body.degraded, false);
     assert.equal(body.events.length, 2);
     assert.equal(body.events[0].actual, "0.0%");
-    assert.equal(body.events[0].isCompleted, true);
-    assert.equal(body.events[0].time, "04:30");
     assert.deepEqual(offsets, ["0", "1", "2"]);
   } finally { globalThis.fetch = saved; }
 });

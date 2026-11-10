@@ -64,3 +64,25 @@ export async function fetchEulerpoolCalendar(day: string, apiKey: string) {
   return { data: { result: normalizeEulerpoolCalendar(payload, day) }, source: "eulerpool" as const,
     sourceUrl: "https://api.eulerpool.com/api/1/macro/calendar", status: response.status, fetchedAt: new Date().toISOString() };
 }
+
+export class CalendarBackendError extends Error {
+  constructor(message: string, public readonly keyConfigured?: boolean) { super(message); }
+}
+
+export async function fetchBackendEulerpoolCalendar(day: string) {
+  const base = (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "https://bpt-news-backend.onrender.com").replace(/\/$/, "");
+  let response: Response;
+  try {
+    response = await fetch(`${base}/api/macro/calendar`, { cache: "no-store", signal: AbortSignal.timeout(18_000) });
+  } catch { throw new CalendarBackendError("Takvim backend bağlantısı kurulamadı"); }
+  let payload;
+  try { payload = await response.json(); } catch { throw new CalendarBackendError(`Takvim backend HTTP ${response.status}; backend güncellemesini kontrol edin`); }
+  const configured = typeof payload.eulerpoolKeyConfigured === "boolean" ? payload.eulerpoolKeyConfigured : undefined;
+  if (!response.ok || payload.success !== true) {
+    throw new CalendarBackendError(configured === false ? "Render backend EULERPOOL_API_KEY değişkenini okuyamıyor" : `Takvim backend HTTP ${response.status}`, configured);
+  }
+  if (payload.date !== day || !Array.isArray(payload.records)) throw new CalendarBackendError("Takvim backend gün/veri yanıtı geçersiz", configured);
+  return { data: { result: normalizeEulerpoolCalendar(payload.records, day) }, source: "eulerpool" as const,
+    sourceUrl: `${base}/api/macro/calendar`, status: response.status, fetchedAt: typeof payload.fetchedAt === "string" ? payload.fetchedAt : new Date().toISOString(),
+    stale: payload.stale === true, eulerpoolKeyConfigured: configured, keyLocation: "backend" as const };
+}

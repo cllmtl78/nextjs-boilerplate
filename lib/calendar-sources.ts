@@ -1,7 +1,7 @@
 // htmlparser2 preserves the bare <tr> fragments returned by the JSON service.
 import { load } from "cheerio/slim";
 import { istanbulDay } from "./wire-text";
-import { fetchEulerpoolCalendar } from "./eulerpool-calendar";
+import { fetchEulerpoolCalendar, fetchBackendEulerpoolCalendar } from "./eulerpool-calendar";
 
 export interface CalendarUpstream {
   data: { result: Record<string, unknown>[] };
@@ -12,6 +12,8 @@ export interface CalendarUpstream {
   degraded?: boolean;
   stale?: boolean;
   fallbackReason?: string;
+  eulerpoolKeyConfigured?: boolean;
+  keyLocation?: "backend";
 }
 
 const SERVICE = "https://www.investing.com/economic-calendar/Service/getCalendarFilteredData";
@@ -107,6 +109,12 @@ export function clearCalendarSourceHistory(): void { lastInvesting = undefined; 
 export async function fetchCalendarSource(day: string): Promise<CalendarUpstream> {
   const eulerpoolKey = process.env.EULERPOOL_API_KEY?.trim();
   if (eulerpoolKey) return fetchEulerpoolCalendar(day, eulerpoolKey);
+  return fetchBackendEulerpoolCalendar(day);
+}
+
+// Retained only for existing parser regression tests; the live route no longer
+// falls back to either of these sources.
+export async function fetchLegacyCalendarSource(day: string): Promise<CalendarUpstream> {
   if (lastInvesting?.day !== day) lastInvesting = undefined;
   let fallbackReason: string;
   try {

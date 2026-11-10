@@ -4,6 +4,8 @@ from fred_macro import start_fred_macro_bot, get_macro_data, get_turkey_research
 from tcmb_rates import get_tcmb_rates
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from eulerpool_calendar import calendar as eulerpool_calendar
 
 # İki bağımsız botu içeri al
 from bist_news_bot import start_bist_news_bot, get_bist_news_data
@@ -75,6 +77,12 @@ def api_turkey_series():
 @app.get("/api/macro")
 def api_macro():
     return get_macro_data()
+
+
+@app.get("/api/macro/calendar")
+def api_macro_calendar():
+    payload, status = eulerpool_calendar.get()
+    return JSONResponse(payload, status_code=status, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/tcmb-rates")
