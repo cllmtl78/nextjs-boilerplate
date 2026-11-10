@@ -42,9 +42,10 @@ Testler kontrollü kaynak HTML'i ve çeviri yanıtları kullanır; canlı çevir
 Prompt içeriği çeviri önbelleği anahtarına dahildir. Prompt veya biçim sürümü değiştiğinde eski düz metin çevirileri yeni kurallarla tekrar üretilir. Haberler kademeli çevrildiği için yeniden dağıtımdan sonra geçmişin dolması birkaç dakika sürebilir.
 
 Yenilemede aynı güne ait tarayıcı önbelleği anında gösterilir; arka plandaki
-boş/geçici başarısız yanıtlar hazır haberleri silmez. Terminal tarayıcıda
-başlatılır; sunucunun boş HTML'i ile tarayıcı önbelleğinin farklı olması yüzünden
-haber alanının yeniden kurulması önlenir. Soğuk başlangıçta ilk çevrilebilir
+boş/geçici başarısız yanıtlar hazır haberleri silmez. Terminalin kutuları ve
+başlıkları ilk sunucu HTML'inde çizilir; tarayıcı önbelleği hydration sonrasında
+güvenle geri yüklenir. Boş tam sayfa yükleme ekranı ve içerik uyuşmazlığından
+kaynaklanan yeniden kurulum önlenir. Soğuk başlangıçta ilk çevrilebilir
 altı haber, günün tüm geçmişi toplanmadan hazırlanır. Sonrasında normal
 20'lik gruplar ve geçmiş toplama devam eder. Gerçek ilk hazırlık süresi kaynak,
 çeviri servisi ve kota durumuna bağlıdır.

@@ -1,4 +1,5 @@
 "use client";
+import { useCachedState } from "@/lib/use-cached-state";
 import { mergeKapFeed } from "@/lib/kap-feed";
 import { emptyFeedCache, mergeFeedCache, readFeedCache, subscribeFeedCache, writeFeedCache } from "@/lib/feed-cache";
 
@@ -705,7 +706,7 @@ export const decodeHtmlEntities = (str?: string | null): string => {
 
 
 export default function TerminalWorkspace() {
-  const [bistHaberleri, setBistHaberleri] = useState<TerminalHaber[]>(() => {
+  const [bistHaberleri, setBistHaberleri] = useCachedState<TerminalHaber[]>(() => {
     if (typeof window === "undefined") return [];
     try {
       const cached = localStorage.getItem(CACHE_KEY_BIST);
@@ -728,14 +729,14 @@ export default function TerminalWorkspace() {
       // ignore
     }
     return [];
-  });
+  }, []);
 
   const [globalLive, setGlobalLive] = useState<GlobalNewsItem[] | null>(null);
   const cachedGlobal = useSyncExternalStore(subscribeFeedCache,
     useCallback(() => readFeedCache<GlobalNewsItem>(CACHE_KEY_GLOBAL), []), emptyFeedCache<GlobalNewsItem>);
   const globalHaberler = globalLive ?? cachedGlobal;
 
-  const [loadingBist, setLoadingBist] = useState<boolean>(() => {
+  const [loadingBist, setLoadingBist] = useCachedState<boolean>(() => {
     if (typeof window === "undefined") return true;
     try {
       const cached = localStorage.getItem(CACHE_KEY_BIST);
@@ -753,13 +754,13 @@ export default function TerminalWorkspace() {
       // ignore
     }
     return true;
-  });
+  }, true);
 
   const [loadingGlobal, setLoadingGlobal] = useState(true);
 
   const [seciliHaber, setSeciliHaber] = useState<TerminalHaber | null>(null);
   const [selectedKap, setSelectedKap] = useState<KapItem | null>(null);
-  const [kapBildirimleri, setKapBildirimleri] = useState<KapItem[]>(() => {
+  const [kapBildirimleri, setKapBildirimleri] = useCachedState<KapItem[]>(() => {
     if (typeof window === "undefined") return [];
     checkAndResetKapDailyCache();
     try {
@@ -777,9 +778,9 @@ export default function TerminalWorkspace() {
       // ignore
     }
     return [];
-  });
+  }, []);
 
-  const [loadingKap, setLoadingKap] = useState<boolean>(() => {
+  const [loadingKap, setLoadingKap] = useCachedState<boolean>(() => {
     if (typeof window === "undefined") return true;
     checkAndResetKapDailyCache();
     try {
@@ -795,7 +796,7 @@ export default function TerminalWorkspace() {
       // ignore
     }
     return true;
-  });
+  }, true);
   const [newlyArrivedIds, setNewlyArrivedIds] = useState<Set<string>>(new Set());
 
   const knownIdsRef = useRef(new Set<string>());
@@ -817,7 +818,7 @@ export default function TerminalWorkspace() {
     lockedKapTimesRef.current.clear();
     isInitialLoadRef.current = true;
     try { resetDailyNewsCache(localStorage); } catch { /* Storage may be unavailable. */ }
-  }), []);
+  }), [setBistHaberleri, setKapBildirimleri]);
 
   const loadGlobalNews = useCallback(async () => {
     if (globalRequestRef.current) return;
@@ -895,7 +896,7 @@ export default function TerminalWorkspace() {
     } finally {
       setLoadingBist(false);
     }
-  }, []);
+  }, [setBistHaberleri, setLoadingBist]);
 
   useEffect(() => {
     const initialTimer = setTimeout(() => {

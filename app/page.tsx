@@ -1,9 +1,9 @@
-import TerminalClient from "@/components/TerminalClient";
+import TerminalWorkspace from "@/components/TerminalWorkspace";
 
 export default function Home() {
   return (
     <div className="terminal-page">
-      <TerminalClient />
+      <TerminalWorkspace />
     </div>
   );
 }

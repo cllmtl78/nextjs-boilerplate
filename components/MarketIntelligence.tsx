@@ -1,5 +1,6 @@
 "use client";
 
+import { useCachedState } from "@/lib/use-cached-state";
 import { useState, useEffect } from "react";
 import OfficialNews from "@/components/OfficialNews";
 import type { TerminalHaber } from "@/components/TerminalWorkspace";
@@ -214,7 +215,7 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
   onSelectNews: (item: TerminalHaber) => void;
 }) {
   // Canlı Sektör Verisi (Önbellek varsa anında başlat, FOUC önle)
-  const [sectors, setSectors] = useState<SectorItem[]>(() => {
+  const [sectors, setSectors] = useCachedState<SectorItem[]>(() => {
     if (typeof window === "undefined") return [];
     try {
       const cachedBist = localStorage.getItem(CACHE_BIST_DATA);
@@ -228,10 +229,10 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
       // ignore
     }
     return [];
-  });
+  }, []);
 
   // Canlı Takvim State (Önbellek varsa anında başlat)
-  const [calendarEvents, setCalendarEvents] = useState<EconomicCalendarItem[]>(() => {
+  const [calendarEvents, setCalendarEvents] = useCachedState<EconomicCalendarItem[]>(() => {
     if (typeof window === "undefined") return [];
     try {
       const todayStr = istanbulDay(Date.now());
@@ -250,9 +251,9 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
       // ignore
     }
     return [];
-  });
+  }, []);
 
-  const [loadingCalendar, setLoadingCalendar] = useState<boolean>(() => {
+  const [loadingCalendar, setLoadingCalendar] = useCachedState<boolean>(() => {
     if (typeof window === "undefined") return true;
     try {
       const todayStr = istanbulDay(Date.now());
@@ -268,7 +269,7 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
       // ignore
     }
     return true;
-  });
+  }, true);
 
   const [calendarError, setCalendarError] = useState(false);
   const [calendarFallback, setCalendarFallback] = useState(false);
@@ -353,7 +354,7 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
       isMounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [setSectors]);
 
   // 2. Canlı Takvim Verisi Çekme (TradingView API /api/calendar + Günlük Otomatik Sıfırlama)
   useEffect(() => {
@@ -415,7 +416,7 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
       clearInterval(interval);
       stopDayWatch();
     };
-  }, []);
+  }, [setCalendarEvents, setLoadingCalendar]);
 
   return (
     <div className="terminal-grid terminal-secondary-grid">
