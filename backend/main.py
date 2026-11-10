@@ -1,11 +1,11 @@
 import os
-from macroradar import start_macroradar_bot, get_insights
 from fred_macro import start_fred_macro_bot, get_macro_data, get_turkey_research
 from tcmb_rates import get_tcmb_rates
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from eulerpool_calendar import calendar as eulerpool_calendar
+from treasury_debt import debt as treasury_debt
 
 # İki bağımsız botu içeri al
 from bist_news_bot import start_bist_news_bot, get_bist_news_data
@@ -31,7 +31,6 @@ start_global_news_bot()
 start_official_news_bot()
 start_crypto_news_bot()
 start_fred_macro_bot()
-start_macroradar_bot()
 
 @app.get("/")
 def health():
@@ -64,11 +63,6 @@ def api_crypto_news():
     return get_crypto_news_data()
 
 
-@app.get("/api/macro/insights")
-def api_macro_insights():
-    return get_insights()
-
-
 @app.get("/api/macro/turkey-series")
 def api_turkey_series():
     return get_turkey_research()
@@ -82,6 +76,12 @@ def api_macro():
 @app.get("/api/macro/calendar")
 def api_macro_calendar():
     payload, status = eulerpool_calendar.get()
+    return JSONResponse(payload, status_code=status, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/macro/us-debt")
+def api_us_national_debt():
+    payload, status = treasury_debt.get()
     return JSONResponse(payload, status_code=status, headers={"Cache-Control": "no-store"})
 
 

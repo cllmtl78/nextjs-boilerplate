@@ -1,3 +1,5 @@
+> Tarihsel karşılaştırmalar özelliği Makro sayfasından kaldırıldı. İlgili arka plan işçisi artık başlatılmaz; `/api/macro/insights` rotası kaldırılmıştır. Aşağıdaki bilgiler eski bağımsız modülün referansıdır.
+
 # MacroRadar tarihsel karşılaştırmalar
 
 Makro sayfasının temel 9 FRED göstergesine iki bağımsız analiz kutusu eklenir:

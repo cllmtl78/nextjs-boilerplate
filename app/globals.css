@@ -511,6 +511,13 @@ body {
 .macro-card-wide .macro-card-history { padding-top: 0; margin-top: 0; }
 .macro-card-wide .macro-spark svg { height: 140px; }
 .macro-card-wide .macro-card-value { margin-top: 14px; font-size: 34px; }
+.debt-card { align-items: center; }
+.debt-exact { margin-top: 7px; color: #94a3b8; font: 10px var(--font-mono), monospace; overflow-wrap: anywhere; }
+.debt-breakdown { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 18px; padding-top: 13px; border-top: 1px solid var(--border-subtle); }
+.debt-breakdown span { display: block; color: #64748b; font-size: 10px; line-height: 1.6; }
+.debt-breakdown strong { display: block; margin-top: 4px; color: #cbd5e1; font: 500 13px var(--font-mono), monospace; }
+.debt-breakdown small { color: #64748b; font-size: 9px; font-weight: 400; }
+.debt-card .macro-card-summary, .debt-card .macro-card-history { width: 100%; }
 .macro-empty { padding: 60px 20px; text-align: center; border: 1px solid var(--border-subtle); border-radius: 8px; }
 .macro-empty h2 { color: #cbd5e1; font-size: 15px; }
 .macro-empty p { color: #64748b; font-size: 12px; margin-top: 10px; }

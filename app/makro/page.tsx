@@ -3,7 +3,7 @@ import MacroDashboard from "@/components/MacroDashboard";
 
 export const metadata: Metadata = {
   title: "Makro | BPT Finans",
-  description: "ABD faiz, tahvil, enflasyon, istihdam ve Fed bilançosu göstergeleri.",
+  description: "ABD faiz, tahvil, enflasyon, istihdam, Fed bilançosu ve ulusal borç göstergeleri.",
 };
 
 export default function MacroPage() {
