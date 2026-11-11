@@ -1115,7 +1115,7 @@ body {
 }
 
 .feed-panel-heading {
-  height: 42px;
+  height: 34px;
   padding-inline: 14px;
   background: linear-gradient(110deg, #121d2e, #101726 75%);
   border-bottom-color: rgb(148 163 184 / 12%);
@@ -1183,6 +1183,32 @@ body {
 .kap-feed-type { color: #94a3b8; font-size: 9px; }
 .kap-feed-subject { color: #edf2f8; }
 .kap-feed-trailing { display: flex; align-items: center; gap: 6px; }
+
+.kap-panel-heading { gap: 8px; }
+.kap-panel-heading h2 { white-space: nowrap; }
+.kap-search { position: relative; flex: 0 1 108px; min-width: 80px; }
+.kap-search svg { position: absolute; left: 7px; top: 50%; transform: translateY(-50%); width: 12px; height: 12px; color: #7c8ba4; pointer-events: none; }
+.kap-search input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  padding: 2px 5px 2px 24px;
+  border: 1px solid rgb(148 163 184 / 18%);
+  border-radius: 4px;
+  background: rgb(7 11 20 / 50%);
+  color: #e2e8f0;
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+}
+.kap-search input::placeholder { color: #94a3b8; }
+.kap-search input:focus-visible { outline: 1px solid #38bdf8; outline-offset: 1px; border-color: #38bdf8; }
+.kap-search-empty { padding: 20px 12px; text-align: center; color: #94a3b8; font-size: 12px; line-height: 1.6; }
+
+@media (max-width: 768px) {
+  .kap-search input { font-size: 16px; }
+  .kap-search input::placeholder { font-size: 11px; }
+}
 
 @media (max-width: 1100px) {
   .kap-feed-row { grid-template-columns: 50px minmax(0, 1fr) auto; gap: 7px; padding-inline: 6px; }

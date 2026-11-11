@@ -760,6 +760,7 @@ export default function TerminalWorkspace() {
 
   const [seciliHaber, setSeciliHaber] = useState<TerminalHaber | null>(null);
   const [selectedKap, setSelectedKap] = useState<KapItem | null>(null);
+  const [kapSearch, setKapSearch] = useState("");
   const [kapBildirimleri, setKapBildirimleri] = useCachedState<KapItem[]>(() => {
     if (typeof window === "undefined") return [];
     checkAndResetKapDailyCache();
@@ -779,6 +780,9 @@ export default function TerminalWorkspace() {
     }
     return [];
   }, []);
+
+  const kapQuery = kapSearch.trim().toUpperCase();
+  const filteredKap = kapBildirimleri.filter(item => (item.code || "").toUpperCase().includes(kapQuery));
 
   const [loadingKap, setLoadingKap] = useCachedState<boolean>(() => {
     if (typeof window === "undefined") return true;
@@ -1126,13 +1130,30 @@ export default function TerminalWorkspace() {
         <div className="terminal-stack">
           {/* Üst: KAP Bildirimleri */}
           <section className="pane-kap rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[255px] overflow-hidden">
-            <div className="feed-panel-heading h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
+            <div className="feed-panel-heading kap-panel-heading h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
               <div className="flex items-center">
                 <h2 className="font-mono text-xs font-semibold tracking-wider text-slate-200">
                   <span className="text-[#38bdf8] font-bold mr-1.5">/</span>
                   KAP Bildirimleri
                 </h2>
               </div>
+              <label className="kap-search">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                  <circle cx="10.5" cy="10.5" r="6.5" />
+                  <path d="m16 16 4 4" />
+                </svg>
+                <input
+                  type="search"
+                  aria-label="Hisse koduna göre KAP ara"
+                  placeholder="Kod ara"
+                  value={kapSearch}
+                  onChange={event => setKapSearch(event.target.value)}
+                  onKeyDown={event => { if (event.key === "Escape") setKapSearch(""); }}
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                />
+              </label>
             </div>
 
             <div className="pane-scroll px-1 py-0 overflow-x-hidden">
@@ -1142,8 +1163,10 @@ export default function TerminalWorkspace() {
                 <div className="p-6 text-center font-mono text-xs text-slate-500/80 flex flex-col items-center justify-center h-40 select-none">
                   <span>Bugüne ait yeni KAP bildirimi henüz bulunmuyor...</span>
                 </div>
+              ) : filteredKap.length === 0 ? (
+                <p role="status" className="kap-search-empty">Bu hisse koduyla eşleşen bildirim bulunamadı.</p>
               ) : (
-                kapBildirimleri.map((item) => {
+                filteredKap.map((item) => {
                   const targetUrl = item.url || item.link || item.kapUrl || (item.id ? `https://www.kap.org.tr/tr/Bildirim/${item.id}` : "");
                   const displaySubject = item.subject || item.title || "";
 
@@ -1157,9 +1180,9 @@ export default function TerminalWorkspace() {
                         <span title={item.code} className="kap-feed-code">
                           {item.code}
                         </span>
-                        <span title={item.type} className="kap-feed-type">
+                        {item.type && item.type.trim().toUpperCase() !== "KAP" && <span title={item.type} className="kap-feed-type">
                           {item.type}
-                        </span>
+                        </span>}
                       </div>
                       <p className="kap-feed-subject text-xs text-slate-200 line-clamp-2 leading-4 group-hover:text-white [overflow-wrap:anywhere]">
                         {displaySubject}
