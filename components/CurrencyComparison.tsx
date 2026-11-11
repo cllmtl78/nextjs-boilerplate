@@ -72,7 +72,7 @@ export default function CurrencyComparison() {
 
   return <>
     <section className="comparison-panel rounded-lg border border-white/[0.06] bg-[#0d1322] overflow-hidden" aria-labelledby="currency-comparison-title">
-      <div className="h-10 px-4 flex items-center justify-between gap-2 border-b border-white/[0.06] bg-slate-900/40 shrink-0">
+      <div className="feed-panel-heading px-4 flex items-center justify-between gap-2 border-b border-white/[0.06] shrink-0">
         <h2 id="currency-comparison-title" className="font-mono text-xs font-semibold tracking-wider text-slate-200"><span className="text-[#38bdf8] font-bold mr-1.5">/</span>Kur karşılaştırması</h2>
         <button type="button" className="comparison-settings" aria-label="Karşılaştırma para birimlerini seç" title="Para birimlerini değiştir" aria-haspopup="dialog" onClick={() => {
           setDraftBase(base); setDraftQuotes([...quotes]); setCatalogError(false); setSettings(true); dialog.current?.showModal();

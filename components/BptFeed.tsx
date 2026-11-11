@@ -48,7 +48,7 @@ export default function BptFeed({ backendUrl }: { backendUrl: string }) {
   }, [backendUrl]);
 
   return <section className="bpt-feed rounded-lg border border-white/[0.06] bg-[#0d1322] overflow-hidden" aria-labelledby="bpt-feed-title">
-    <div className="h-10 px-4 flex items-center border-b border-white/[0.06] bg-slate-900/40">
+    <div className="feed-panel-heading px-4 flex items-center border-b border-white/[0.06] shrink-0">
       <h2 id="bpt-feed-title" className="font-mono text-xs font-semibold tracking-wider text-slate-200">
         <span className="text-[#38bdf8] font-bold mr-1.5">/</span>BPT Finans
       </h2>
@@ -57,11 +57,11 @@ export default function BptFeed({ backendUrl }: { backendUrl: string }) {
     {items.length > 0 ? <div className="bpt-feed-track" role="region" aria-label="BPT Finans paylaşımları, en yeni solda" tabIndex={0}>
       {items.map(item => <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer" className="bpt-post">
         <div className="flex flex-wrap items-center gap-2 font-mono text-[10px]">
-          <span className="row-time tabular-nums">{item.zaman}</span>
-          <span className="px-1.5 py-0.5 rounded bg-[#0a1120] border border-slate-700/60 text-slate-300 text-[9.5px] tracking-wide">[BPT FİNANS]</span>
-          <span className="text-slate-400">X</span>
+          <span className="feed-time tabular-nums">{item.zaman}</span>
+          <span className="feed-source">[BPT FİNANS]</span>
+          <span className="feed-time">X</span>
         </div>
-        <p className="mt-2 text-xs leading-5 text-slate-200 whitespace-pre-line">{item.baslik}</p>
+        <p className="feed-headline mt-2 text-xs leading-5 whitespace-pre-line">{item.baslik}</p>
       </a>)}
     </div> : <p className="p-6 text-center text-xs font-mono text-slate-500">
       {state === "starting" ? "Paylaşımlar kontrol ediliyor..." : state === "unavailable" ? "BPT Finans paylaşımlarına şu anda ulaşılamıyor." : "Bugüne ait paylaşım bulunamadı."}

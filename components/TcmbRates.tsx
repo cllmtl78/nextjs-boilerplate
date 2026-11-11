@@ -39,7 +39,7 @@ export default function TcmbRates({ backendUrl }: { backendUrl: string }) {
   return <section className="tcmb-panel rounded-lg border border-white/[0.06] bg-[#0d1322] overflow-hidden">
     <h2>
       <button type="button" onClick={() => setOpen(current => !current)} aria-expanded={open} aria-controls="tcmb-rates-content"
-        className="w-full min-h-10 px-4 py-2 flex items-center justify-between gap-3 bg-slate-900/40 text-left">
+        className="feed-panel-heading w-full px-4 flex items-center justify-between gap-3 text-left">
         <span className="font-mono text-xs font-semibold tracking-wider text-slate-200"><span className="text-[#38bdf8] font-bold mr-1.5">/</span>TCMB Kurlar</span>
         <ChevronDown size={14} aria-hidden="true" className={`shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
