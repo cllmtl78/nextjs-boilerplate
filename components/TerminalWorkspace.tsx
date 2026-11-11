@@ -12,6 +12,7 @@ import TcmbRates from "@/components/TcmbRates";
 import BptFeed from "@/components/BptFeed";
 import OfficialNews from "@/components/OfficialNews";
 import KapContent, { type KapContentBlock } from "@/components/KapContent";
+import ReaderDialog from "@/components/ReaderDialog";
 import { cleanWireText as cleanGlobalWireText, istanbulDay } from "@/lib/wire-text";
 import { isCurrentNewsDay, isCurrentNewsItem, watchIstanbulDay, resetDailyNewsCache } from "@/lib/news-day";
 
@@ -993,17 +994,6 @@ export default function TerminalWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setSelectedKap(null);
-        setSeciliHaber(null);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
 
   return (
     <div className="terminal-workspace">
@@ -1245,152 +1235,35 @@ export default function TerminalWorkspace() {
 
       {/* HABER DETAY MODALI */}
       {seciliHaber && (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-fadeIn"
-          onClick={() => setSeciliHaber(null)}
-          role="dialog"
-          aria-modal="true"
+        <ReaderDialog
+          source={seciliHaber.kaynak}
+          kind={seciliHaber.kategori === "kripto" ? "Kripto haberi" : seciliHaber.kategori === "resmi" ? "Resmî açıklama" : "Haber akışı"}
+          time={seciliHaber.time || seciliHaber.zaman}
+          title={decodeHtmlEntities(seciliHaber.baslik)}
+          href={seciliHaber.url}
+          onClose={() => setSeciliHaber(null)}
         >
-          <div
-            className="w-full max-w-2xl max-h-[calc(100dvh-2rem)] bg-[#0b0f19] border border-[#2563eb]/40 rounded-xl shadow-[0_0_50px_rgba(37,99,235,0.15)] overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-[#2563eb] to-transparent" />
-
-            <div className="px-4 sm:px-6 pt-5 pb-4 shrink-0 gap-4 border-b border-white/[0.06] flex items-center justify-between">
-              <div className="flex min-w-0 flex-wrap items-center gap-3">
-                <span className="font-mono text-xs font-bold text-white bg-[#2563eb] px-2.5 py-1 rounded tracking-wider shadow-sm uppercase">
-                  {seciliHaber.kaynak}
-                </span>
-                <span className="font-mono text-xs text-slate-400">
-                  {seciliHaber.time || seciliHaber.zaman}
-                </span>
-              </div>
-              <button
-                onClick={() => setSeciliHaber(null)}
-                className="flex items-center gap-1.5 text-xs font-mono text-slate-400 hover:text-white px-2.5 py-1 rounded-md hover:bg-white/[0.06] transition"
-              >
-                <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700">ESC</span>
-                <span>✕</span>
-              </button>
-            </div>
-
-            <div className="p-4 sm:p-6 min-h-0 space-y-5 max-h-[65vh] overflow-y-auto">
-              <h2 className="text-lg font-bold text-slate-100 leading-snug tracking-tight">
-                {decodeHtmlEntities(seciliHaber.baslik)}
-              </h2>
-              {seciliHaber.kategori !== "kripto" && (
-              <p className="text-sm text-slate-300 leading-relaxed font-normal whitespace-pre-line">
-                {decodeHtmlEntities(
-                  seciliHaber.paragraflar && seciliHaber.paragraflar.length > 0
-                    ? seciliHaber.paragraflar.join("\n\n")
-                    : seciliHaber.detay || seciliHaber.ozet || "Haber detayları piyasa kaynakları üzerinden canlı aktarılmıştır."
-                )}
-              </p>
-              )}
-            </div>
-
-            <div className="px-4 sm:px-6 py-4 shrink-0 flex-wrap gap-4 bg-[#080c14] border-t border-white/[0.06] flex items-center justify-end">
-              <div className="flex min-w-0 flex-wrap items-center gap-3">
-                <button
-                  onClick={() => setSeciliHaber(null)}
-                  className="text-xs font-medium text-slate-400 hover:text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition"
-                >
-                  Kapat
-                </button>
-                {seciliHaber.url && seciliHaber.url !== "#" ? (
-                  <a
-                    href={seciliHaber.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-xs font-semibold text-white bg-[#2563eb] hover:bg-[#1d4ed8] px-5 py-2.5 rounded-lg shadow-lg shadow-[#2563eb]/25 transition active:scale-95"
-                  >
-                    <span>Kaynağında Oku</span>
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                  </a>
-                ) : (
-                  <span className="text-xs text-slate-500 font-mono">Terminal Orijinal Kayıt</span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+          {seciliHaber.kategori !== "kripto" && <p className="whitespace-pre-line">{decodeHtmlEntities(
+            seciliHaber.paragraflar?.length ? seciliHaber.paragraflar.join("\n\n")
+              : seciliHaber.detay || seciliHaber.ozet || "Haber detayları piyasa kaynakları üzerinden canlı aktarılmıştır."
+          )}</p>}
+        </ReaderDialog>
       )}
 
       {/* KAP DETAY MODALI */}
       {selectedKap && (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
-          onClick={() => setSelectedKap(null)}
-          role="dialog"
-          aria-modal="true"
+        <ReaderDialog
+          source={selectedKap.code}
+          kind={selectedKap.type && selectedKap.type.trim().toUpperCase() !== "KAP" ? `KAP bildirimi · ${selectedKap.type}` : "KAP bildirimi"}
+          time={selectedKap.time}
+          title={selectedKap.title}
+          href={selectedKap.url || selectedKap.link || selectedKap.kapUrl || (selectedKap.id ? `https://www.kap.org.tr/tr/Bildirim/${selectedKap.id}` : "https://www.kap.org.tr/tr/")}
+          footerNote={`Kamuyu Aydınlatma Platformu · #${selectedKap.id}`}
+          onClose={() => setSelectedKap(null)}
         >
-          <div
-            className="w-full max-w-2xl max-h-[calc(100dvh-2rem)] bg-[#0b0f19] border border-[#2563eb]/40 rounded-xl shadow-[0_0_50px_rgba(37,99,235,0.15)] overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-[#38bdf8] to-transparent" />
-
-            <div className="px-4 sm:px-6 py-4 shrink-0 gap-4 border-b border-white/[0.06] flex items-center justify-between">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <span className="font-mono text-xs font-bold text-white bg-[#2563eb] px-2.5 py-1 rounded tracking-wider">
-                  {selectedKap.code}
-                </span>
-                <span className="font-mono text-xs text-[#38bdf8] bg-[#38bdf8]/10 px-2 py-0.5 rounded border border-[#38bdf8]/20">
-                  {selectedKap.type}
-                </span>
-                <span className="font-mono text-xs text-slate-400 ml-2">
-                  {selectedKap.time}
-                </span>
-              </div>
-              <button
-                onClick={() => setSelectedKap(null)}
-                className="shrink-0 text-slate-400 hover:text-white text-sm font-mono px-2 py-1 rounded hover:bg-white/[0.06] transition"
-              >
-                ✕ ESC
-              </button>
-            </div>
-
-            <div className="p-4 sm:p-6 min-h-0 space-y-5 max-h-[65vh] overflow-y-auto">
-              <h2 className="text-base font-bold text-slate-100 leading-snug">
-                {selectedKap.title}
-              </h2>
-              {selectedKap.subject && selectedKap.subject !== selectedKap.title && (
-                <div className="text-xs font-semibold text-[#38bdf8] bg-slate-900/80 p-2.5 rounded border border-white/[0.04]">
-                  Konu: {selectedKap.subject}
-                </div>
-              )}
-              <KapContent content={selectedKap.content} summary={selectedKap.summary} />
-            </div>
-
-            <div className="px-4 sm:px-6 py-4 shrink-0 flex-wrap gap-4 bg-[#080c14] border-t border-white/[0.06] flex items-center justify-between">
-              <span className="text-[11px] font-mono text-slate-500">
-                Kaynak: Kamuyu Aydınlatma Platformu (#{selectedKap.id})
-              </span>
-              <div className="flex min-w-0 flex-wrap items-center gap-3">
-                <button
-                  onClick={() => setSelectedKap(null)}
-                  className="shrink-0 text-xs text-slate-400 hover:text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition"
-                >
-                  Kapat
-                </button>
-                <a
-                  href={selectedKap.url || selectedKap.link || selectedKap.kapUrl || (selectedKap.id ? `https://www.kap.org.tr/tr/Bildirim/${selectedKap.id}` : "https://www.kap.org.tr/tr/")}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-xs font-semibold text-white bg-[#2563eb] hover:bg-blue-600 px-5 py-2.5 rounded-lg shadow-lg shadow-blue-500/20 transition active:scale-95"
-                >
-                  <span>KAP&apos;ta Görüntüle / Kaynağa Git</span>
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
+          {selectedKap.subject && selectedKap.subject !== selectedKap.title && <div className="reader-subject">{selectedKap.subject}</div>}
+          <KapContent content={selectedKap.content} summary={selectedKap.summary} />
+        </ReaderDialog>
       )}
     </div>
   );
