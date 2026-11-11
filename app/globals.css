@@ -183,7 +183,7 @@ body {
   line-height: 1.4;
   letter-spacing: 1.56px;
   white-space: nowrap;
-  color: #f4dba0;
+  color: #f8e5b6;
   background: #11100c;
   padding: 6px 10.8px;
   border: 1px solid rgb(193 150 66 / 48%);
@@ -201,7 +201,7 @@ body {
   left: 50%;
   width: 180px;
   height: 180px;
-  background: conic-gradient(#11100c, #30240f 18%, #684b1c 32%, #17130b 48%, #0c0c0b 62%, #4a3514 80%, #11100c);
+  background: conic-gradient(#11100c, #3a2c13 18%, #7c5b24 32%, #1c170d 48%, #0c0c0b 62%, #59411a 80%, #11100c);
   transform: translate(-50%, -50%) rotate(0deg);
   animation: terminal-gold-rotate 8s linear infinite;
 }
