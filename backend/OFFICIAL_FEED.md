@@ -1,7 +1,7 @@
 # Resmî kurumlar — Nitter RSS
 
-`official_news_bot.py` sekiz tanımlı hesabın `/{account}/rss` adresini beş dakikada
-bir kontrol eder. `GET /api/official-news` bugünün (Europe/Istanbul) kendi
+`official_news_bot.py` sekiz tanımlı hesabın `/{account}/rss` adresini tarama turu tamamlandıktan 60 saniye sonra
+yeniden kontrol eder. `GET /api/official-news` bugünün (Europe/Istanbul) kendi
 paylaşımlarını, hesap bazlı durum ve hata bilgisini döndürür. Retweet ve Nitter'ın
 `R to` etiketlediği yanıtlar alınmaz. Metinler çevrilmez, HTML çalıştırılmaz;
 kaynak bağlantısı asıl X paylaşımına gider. Görsel/video indirilmez.
@@ -43,7 +43,7 @@ yalnızca backend deploy edilmelidir.
 
 ## BPT Finans
 
-Aynı toplayıcı `bptfinans` hesabını da beş dakikada bir kontrol eder.
+Aynı toplayıcı `bptfinans` hesabını da tarama turu tamamlandıktan 60 saniye sonra yeniden kontrol eder.
 `GET /api/bpt-news` yalnızca bu hesabı döndürür; resmî hesaplar ve BPT durumları
 birbirinden ayrıdır. BPT kayıtları `/api/official-news` içine karışmaz.
 Metin ve orijinal X bağlantısı kullanılır; görseller, retweetler ve yanıtlar
@@ -53,3 +53,8 @@ modal açmadan yeni sekmede asıl tweete gider. Kaynak etiketi `[BPT FİNANS] X`
 Yeni kayıtlar mevcut isteğe bağlı haber zilini kullanır, ilk yükleme sessizdir.
 Kullanıcı mizuki.st üzerindeki `/bptfinans/rss` adresinin çalıştığını doğruladı;
 bu değişiklik canlı ağ yerine örnek RSS ve tarayıcı test verileriyle doğrulandı.
+
+BPT Finans kutusu backend'i 15 saniyede bir kontrol eder. Yeni bir en güncel
+paylaşım geldiğinde yatay liste en soldaki yeni karta kayar; aynı yanıt tekrar
+alındığında kullanıcının kaydırma konumu korunur. Kaynak Nitter sunucusunun RSS
+önbelleği, ağ süreleri ve yedek sunucu denemeleri toplam gecikmeyi etkileyebilir.

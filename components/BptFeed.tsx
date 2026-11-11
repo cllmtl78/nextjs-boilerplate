@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isCurrentNewsItem, watchIstanbulDay } from "@/lib/news-day";
 import { observeFeedArrivals } from "@/lib/notification-sound";
 
@@ -11,6 +11,19 @@ const validPost = (item: Post) => item && typeof item.baslik === "string" &&
 export default function BptFeed({ backendUrl }: { backendUrl: string }) {
   const [items, setItems] = useState<Post[]>([]);
   const [state, setState] = useState("starting");
+  const trackRef = useRef<HTMLDivElement>(null);
+  const newestRef = useRef<Post | null>(null);
+  useEffect(() => {
+    const newest = items[0];
+    const previous = newestRef.current;
+    if (newest && newest.id !== previous?.id && (!previous || newest.timestamp >= previous.timestamp)) {
+      trackRef.current?.scrollTo({
+        left: 0,
+        behavior: previous && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto",
+      });
+    }
+    newestRef.current = newest || null;
+  }, [items]);
   useEffect(() => {
     let disposed = false;
     let running = false;
@@ -39,7 +52,7 @@ export default function BptFeed({ backendUrl }: { backendUrl: string }) {
       } finally { running = false; }
     };
     void load();
-    const interval = setInterval(() => void load(), 60000);
+    const interval = setInterval(() => void load(), 15000);
     const unwatch = watchIstanbulDay(() => {
       setItems(current => current.filter(item => isCurrentNewsItem(item)));
       void load();
@@ -54,7 +67,7 @@ export default function BptFeed({ backendUrl }: { backendUrl: string }) {
       </h2>
     </div>
     {state === "unavailable" && items.length > 0 && <p className="px-4 py-2 text-xs text-slate-500">Paylaşımlar şu anda güncellenemiyor.</p>}
-    {items.length > 0 ? <div className="bpt-feed-track" role="region" aria-label="BPT Finans paylaşımları, en yeni solda" tabIndex={0}>
+    {items.length > 0 ? <div ref={trackRef} className="bpt-feed-track" role="region" aria-label="BPT Finans paylaşımları, en yeni solda" tabIndex={0}>
       {items.map(item => <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer" className="bpt-post">
         <div className="flex flex-wrap items-center gap-2 font-mono text-[10px]">
           <span className="feed-time tabular-nums">{item.zaman}</span>

@@ -138,5 +138,5 @@ def start_official_news_bot():
                 poll_once()
             except Exception as exc:
                 print(f'[Resmi] Toplayıcı hatası: {type(exc).__name__}', flush=True)
-            time.sleep(300)
+            time.sleep(60)
     threading.Thread(target=run, daemon=True, name='official-news').start()
