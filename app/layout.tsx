@@ -17,7 +17,7 @@ const monoFont = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BPT Finans | Canlı Piyasa & Haber Terminali",
+  title: "BPT Finans | Terminal",
   description: "Borsa İstanbul, KAP bildirimleri, TCMB duyuruları ve küresel finans haberleri anlık terminali.",
 };
 
