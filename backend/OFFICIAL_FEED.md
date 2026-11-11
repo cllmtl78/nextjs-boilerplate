@@ -6,15 +6,19 @@ paylaşımlarını, hesap bazlı durum ve hata bilgisini döndürür. Retweet ve
 `R to` etiketlediği yanıtlar alınmaz. Metinler çevrilmez, HTML çalıştırılmaz;
 kaynak bağlantısı asıl X paylaşımına gider. Görsel/video indirilmez.
 
-Varsayılan sunucu: `https://nitter.mizuki.st` (kullanıcının RSS erişimini doğruladığı sunucu). Render backend ortam değişkeniyle
-sunucu değiştirilebilir veya en fazla üç sunucu sırasıyla denenebilir:
+Varsayılan sıra: `https://nitter.pp.ua` → `https://shitter.thepixora.com` →
+`https://nitter.netbub.com`. HTTP/bağlantı hatası veya geçersiz RSS yanıtında
+sıradaki sunucu denenir; ilk geçerli RSS yanıtında durulur. Render backend ortam
+değişkeniyle bu sıra değiştirilebilir (en fazla üç sunucu):
 
 ```
-NITTER_INSTANCES=https://nitter.mizuki.st,https://another-verified-instance.example
+NITTER_INSTANCES=https://nitter.pp.ua,https://shitter.thepixora.com,https://nitter.netbub.com
 ```
 
-İkinci adres sadece biçim örneğidir; çalışan sunucu olarak eklemeyin. Herhangi
-bir anahtar veya X oturum çerezi gerekmez. Boş/geçersiz ayar veri çekmez.
+Herhangi bir anahtar veya X oturum çerezi gerekmez. Boş/geçersiz ayar veri çekmez.
+Render'da eski `NITTER_INSTANCES` değeri varsa varsayılanları geçersiz kılar;
+yeni sırayı kullanmak için değer güncellenmeli veya kaldırılmalıdır.
+Sunucu değişse de paylaşım kimliği aynı kaldığından tekrarlar birleştirilir.
 
 Loglar: `[Resmi] @hesap: N güncel paylaşım`, HTTP hatası, bağlantı hatası veya
 geçersiz RSS. HTTP 200 dönen reklam/güvenlik sayfası başarı kabul edilmez.
@@ -33,10 +37,9 @@ python -m unittest discover -s backend -p test_official_news_bot.py
 ```
 
 Önceki nitter.click kaynağının RSS adresi kullanıcıda 403 döndürdü.
-Yeni mizuki.st kaynağı kullanıcı tarafından erişilebilir olarak bildirildi;
-bu ortamdan canlı Nitter akışı doğrulanmadı. Deploy sonrası backend
-logları ve `/api/official-news` yanıtı kontrol edilmeli. Backend ve frontend
-birlikte deploy edilmelidir.
+Yeni varsayılan sunucuların canlı erişilebilirliği garanti edilmez. Deploy sonrası backend
+logları ve `/api/official-news` yanıtı kontrol edilmeli. Bu değişiklik için
+yalnızca backend deploy edilmelidir.
 
 ## BPT Finans
 
