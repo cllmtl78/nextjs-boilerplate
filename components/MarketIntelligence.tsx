@@ -422,7 +422,7 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
     <div className="terminal-grid terminal-secondary-grid">
       {/* ================= 1. KOLON: / BIST Sektör (h-[380px]) ================= */}
       <div className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[380px] overflow-hidden">
-        <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
+        <div className="feed-panel-heading h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
           <div className="flex items-center">
             <span className="font-mono text-xs font-bold tracking-wider text-slate-200">
               <span className="text-[#38bdf8] mr-1.5 font-bold">/</span>
@@ -506,7 +506,7 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
 
       {/* ================= 2. KOLON: / TAKVİM (Ferah Tipografi & Skeleton Loader) ================= */}
       <div className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[380px] overflow-hidden">
-        <div className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
+        <div className="feed-panel-heading h-10 px-4 flex items-center justify-between border-b border-white/[0.06] bg-slate-900/40 shrink-0">
           <div className="flex items-center">
             <span className="font-mono text-xs font-bold tracking-wider text-slate-200">
               <span className="text-[#38bdf8] mr-1.5 font-bold">/</span>
@@ -610,7 +610,7 @@ export default function MarketIntelligence({ backendUrl, onSelectNews }: {
 
       {/* Kripto haber akışı */}
       <div className="rounded-lg border border-white/[0.06] bg-[#0d1322] flex flex-col h-[380px] overflow-hidden">
-        <div className="h-10 px-4 flex items-center border-b border-white/[0.06] bg-slate-900/40 shrink-0">
+        <div className="feed-panel-heading h-10 px-4 flex items-center border-b border-white/[0.06] bg-slate-900/40 shrink-0">
           <h2 className="font-mono text-xs font-semibold tracking-wider text-slate-200">
             <span className="text-[#38bdf8] font-bold mr-1.5">/</span>
             Kripto

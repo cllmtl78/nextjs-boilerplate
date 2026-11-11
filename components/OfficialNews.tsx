@@ -61,10 +61,10 @@ export default function OfficialNews({ backendUrl, onSelect, endpoint = "officia
     {items.length ? items.map(item => <button key={item.id} onClick={() => onSelect(item)}
       className={bistStyle ? "terminal-row group w-full text-left" : "block w-full text-left px-4 py-2 border-b border-white/[0.06] hover:bg-white/[0.03]"}>
       <div className={bistStyle ? "flex items-center gap-2 font-mono text-[10.5px]" : "flex items-center gap-2 text-[10px] font-mono mb-1"}>
-        <span className={bistStyle ? "row-time tabular-nums text-slate-500" : "text-slate-500"}>{item.zaman}</span>
-        <span className="px-1.5 py-0.5 rounded bg-[#0a1120] border border-slate-700/60 text-slate-300 font-mono text-[9.5px] uppercase tracking-wide">[{item.kaynak.toLocaleUpperCase("tr-TR")}]</span>
+        <span className="feed-time tabular-nums">{item.zaman}</span>
+        <span className="feed-source">[{item.kaynak.toLocaleUpperCase("tr-TR")}]</span>
       </div>
-      <p className={bistStyle ? "row-headline font-normal text-slate-200 group-hover:text-[#38bdf8] cursor-pointer transition text-xs leading-4" : "text-xs leading-4 font-normal text-slate-200 line-clamp-3 whitespace-pre-line"}>{item.baslik}</p>
+      <p className={bistStyle ? "row-headline font-normal text-slate-200 group-hover:text-[#38bdf8] cursor-pointer transition text-xs leading-4" : "feed-headline text-xs leading-4 font-normal text-slate-200 line-clamp-3 whitespace-pre-line"}>{item.baslik}</p>
     </button>) : <p className="p-6 text-center text-xs font-mono text-slate-500">
       {state === "starting" ? "Paylaşımlar kontrol ediliyor..." : state === "unavailable" ? `${feedName} akışına şu anda ulaşılamıyor.` : pending ? "Haberler Türkçeye çevrilmeyi bekliyor." : "Bugüne ait paylaşım bulunamadı."}
     </p>}
