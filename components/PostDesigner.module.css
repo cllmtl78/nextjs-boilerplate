@@ -102,3 +102,15 @@
   .controls { border-top: 0; border-radius: 0 0 16px 16px; padding-top: 6px; }
   .controls > .field:first-child { border-top: 1px solid #1e293b; padding-top: 22px; }
 }
+
+.field.compactField { margin-top: 16px; padding-top: 14px; }
+.compactField label { gap: 7px; margin-bottom: 8px; font-size: 11px; }
+.compactField label > span { width: 20px; height: 20px; border-radius: 6px; font-size: 8px; }
+.compactField input[type="text"] { padding: 7px 10px; font-size: 13px; line-height: 1.5; border-radius: 7px; }
+.compactField .options { gap: 6px; }
+.compactField .options button { min-height: 36px; padding: 7px 10px; border-radius: 7px; font-size: 11px; }
+.compactField .options button > span:last-child { padding: 2px 6px; font-size: 9px; }
+@media (max-width: 768px) {
+  .compactField input[type="text"] { font-size: 16px; }
+  .compactField .options button { min-height: 40px; }
+}

@@ -148,8 +148,8 @@ export default function PostDesigner() {
       </div>
       <section className={styles.controls} aria-label="Post düzenleme alanları">
         <div className={styles.field}><label id="post-description-label"><span>02</span>Haber açıklaması</label><PostTextEditor key={editorReset} value={description} onChange={value => { setDescription(value); setMessage(""); }} />{overflow && <p className={styles.warning} role="alert">Metin tasarıma sığmıyor. PNG indirmek için açıklamayı biraz kısalt.</p>}</div>
-        <div className={styles.field}><label htmlFor="post-location"><span>03</span>Konum</label><input id="post-location" type="text" value={location} maxLength={24} onChange={event => { setLocation(event.target.value); setMessage(""); }} placeholder="DÜNYA" /></div>
-        <div className={styles.field}><label><span>04</span>Tasarım detayları</label><div className={styles.options}>
+        <div className={`${styles.field} ${styles.compactField}`}><label htmlFor="post-location"><span>03</span>Konum</label><input id="post-location" type="text" value={location} maxLength={24} onChange={event => { setLocation(event.target.value); setMessage(""); }} placeholder="DÜNYA" /></div>
+        <div className={`${styles.field} ${styles.compactField}`}><label><span>04</span>Tasarım detayları</label><div className={styles.options}>
           <button type="button" aria-pressed={decorations.quote} onClick={() => setDecorations(value => ({ ...value, quote: !value.quote }))}><span>Tırnak işareti</span><span aria-hidden="true">{decorations.quote ? "Açık" : "Kapalı"}</span></button>
           <button type="button" aria-pressed={decorations.swipe} onClick={() => setDecorations(value => ({ ...value, swipe: !value.swipe }))}><span>Fotoğrafı kaydır</span><span aria-hidden="true">{decorations.swipe ? "Açık" : "Kapalı"}</span></button>
         </div></div>
