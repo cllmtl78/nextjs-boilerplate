@@ -20,6 +20,21 @@
 .field > p { color: #7c8ba4; font-size: 10px; line-height: 1.7; margin-top: 8px; }
 .field textarea, .field input[type="text"] { width: 100%; min-width: 0; display: block; padding: 12px; border: 1px solid #2c3a50; border-radius: 5px; background: #080e1a; color: #e2e8f0; font: 14px/1.65 "BPT Rubik", sans-serif; }
 .field textarea { resize: vertical; min-height: 180px; max-height: 420px; }
+.textToolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 8px; border: 1px solid #2c3a50; border-bottom: 0; border-radius: 5px 5px 0 0; background: #111b2b; }
+.textToolbar button { padding: 5px 10px; border: 1px solid #334155; border-radius: 4px; color: #cbd5e1; font: 12px "BPT Rubik", sans-serif; }
+.textToolbar button:first-child { font-weight: 700; }
+.textToolbar button[aria-pressed="true"] { color: #bae6fd; border-color: #38bdf877; background: #38bdf814; }
+.textToolbar > span { color: #7c8ba4; font-size: 9px; }
+.richInput { display: block; width: 100%; min-height: 190px; max-height: 420px; padding: 12px; border: 1px solid #2c3a50; border-radius: 0 0 5px 5px; background: #080e1a; color: #e2e8f0; font: 400 14px/1.65 "BPT Rubik", sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; overflow-y: auto; }
+.richInput strong, .richInput b { font-weight: 700; }
+.photoControls { margin-top: 18px; }
+.photoControls label { display: flex; justify-content: space-between; margin: 12px 0 3px; color: #94a3b8; font-size: 11px; font-weight: 400; }
+.photoControls output { color: #bae6fd; font: 10px var(--font-mono), monospace; }
+.photoControls input[type="range"] { width: 100%; min-height: 30px; accent-color: #38bdf8; }
+.photoControls > p { color: #7c8ba4; font-size: 9px; line-height: 1.7; margin-top: 8px; }
+.photoButtons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.photoButtons button { padding: 8px 10px; border: 1px solid #334155; border-radius: 4px; color: #94a3b8; font-size: 10px; }
+.photoButtons button[aria-pressed="true"] { color: #bae6fd; border-color: #38bdf877; }
 .field input[type="text"] { font-weight: 500; }
 .file { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .upload { display: flex; align-items: center; gap: 12px; width: 100%; padding: 17px 14px; border: 1px dashed #3b536c; border-radius: 6px; color: #7dd3fc; text-align: left; background: #38bdf805; }
@@ -36,7 +51,7 @@
 .reset { display: flex; align-items: center; gap: 6px; padding: 12px 4px; color: #94a3b8; font-size: 11px; }
 .privacy { color: #64748b; font-size: 9px; line-height: 1.7; margin-top: 13px; }
 .designer button:disabled { opacity: .4; cursor: not-allowed; }
-.designer :is(button, input, textarea):focus-visible { outline: 2px solid #38bdf8; outline-offset: 3px; }
+.designer :is(button, input, textarea, [contenteditable]):focus-visible { outline: 2px solid #38bdf8; outline-offset: 3px; }
 @media (max-width: 768px) {
   .designer { margin-top: 5px; }
   .heading { margin-bottom: 18px; align-items: flex-start; }
@@ -47,6 +62,7 @@
   .canvasWrap { max-width: 320px; }
   .controls { padding: 18px; }
   .field textarea, .field input[type="text"] { font-size: 16px; }
+  .richInput { font-size: 16px; }
   .actions { padding: 12px 0; }
   .download { min-height: 46px; }
 }

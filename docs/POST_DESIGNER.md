@@ -10,19 +10,27 @@ Kullanıcının verdiği 1080 × 1350 Figma SVG'sinden sol şerit, BPT logosu, m
 yazısı, ikonlar ve mavi efekt korunmuştur. Kaynak SVG'deki haber metni ve konum
 eğrileri kaldırılmış; bu iki alan Canvas üzerinde yeniden çizilir.
 `public/post-template/template.svg` fotoğraf için yer tutucular içerir;
-tek başına gösterilmek yerine `buildPostBackground` tarafından hazırlanır.
+tek başına gösterilmek yerine `buildPostOverlay` tarafından sabit bir katmana
+dönüştürülür. Fotoğraf bu katmanın altında ayrı çizilir.
 Varsayılan fotoğraf aynı görselin WebP sürümüdür.
 
 Metinler Rubik Bold (700), Rubik Regular (400); konum Rubik Medium (500)
 kullanır. Değişken font ve OFL lisansı `public/post-template/fonts` içindedir.
-Açıklamanın ilk paragrafı kalın, boş satırdan sonraki paragraflar normaldir.
+Açıklama varsayılan olarak kalındır. Zengin metin alanında seçili bölümler
+Kalın / İnce düğmeleriyle ayrı biçimlendirilebilir. Panodan yalnızca düz metin
+alınır; HTML içeriği eklenmez. Satır sonları ve metin parçalarının kalınlıkları
+PNG çıktısında korunur. Metin alanı y=876 konumunda başlar, 396 piksel yüksekliğe
+kadar uzanır ve sağda 24 piksel pay bırakır.
 Konum Türkçe büyük harfle yazılır. Çok uzun metin otomatik küçülür; minimum
 boyutta hâlâ sığmıyorsa indirme engellenir, metin sessizce kesilmez.
 
 ## Fotoğraf ve indirme
 
 JPG, PNG ve WebP desteklenir; dosya sınırı 20 MB'dir. Yeni fotoğraf merkeze
-alınarak çerçeveyi doldurur. Büyük görseller cihazda küçültülür. Yalnızca
+alınarak çerçeveyi doldurur. %50–%300 yakınlık, yatay/dikey kaydırıcılar ve
+isteğe bağlı dokunmatik/fare sürükleme ile fotoğraf hareket ettirilebilir.
+%100 altında koyu kenar boşlukları oluşabilir. Ortala düğmesi fotoğrafı
+başlangıç kadrajına döndürür. Büyük görseller cihazda küçültülür. Yalnızca
 fotoğraf değişir; mavi efekt ve marka katmanları şablondan korunur.
 
 Önizleme ve PNG indirmesi aynı 1080 × 1350 Canvas'ı kullanır. Harici çeviri,
