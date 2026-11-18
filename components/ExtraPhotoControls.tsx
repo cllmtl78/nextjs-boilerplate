@@ -26,7 +26,7 @@ export default function ExtraPhotoControls({ value, disabled, onChange, onAdded,
     } catch (cause) { onError(cause instanceof Error ? cause.message : "Ek fotoğraf açılamadı."); }
     finally { setLoading(false); }
   };
-  const slider = (key: "width" | "height" | "radius", label: string, min: number, max: number, step = 1, suffix = "") => value && <div>
+  const slider = (key: "radius", label: string, min: number, max: number, step = 1, suffix = "") => value && <div>
     <label htmlFor={`extra-${key}`}>{label}<output>{Math.round(value[key])}{suffix}</output></label>
     <input id={`extra-${key}`} type="range" min={min} max={max} step={step} value={value[key]} disabled={disabled || loading} onChange={event => onChange({ ...value, [key]: Number(event.target.value) })} />
   </div>;
@@ -36,8 +36,14 @@ export default function ExtraPhotoControls({ value, disabled, onChange, onAdded,
     <button type="button" className={styles.upload} disabled={disabled || loading} onClick={() => fileRef.current?.click()}><ImagePlus size={18} aria-hidden="true" /><span>{loading ? "Fotoğraf hazırlanıyor…" : value ? "Ek fotoğrafı değiştir" : "Üste fotoğraf ekle"}</span></button>
     {value && <>
       <div className={styles.photoControls}>
-        {slider("width", "Genişlik", 100, 1080, 1, " px")}
-        {slider("height", "Yükseklik", 100, 1350, 1, " px")}
+        <div>
+          <label htmlFor="extra-scale">Yakınlık<output>{Math.round(value.width / 600 * 100)}%</output></label>
+          <input id="extra-scale" type="range" min="10" max="250" value={Math.round(value.width / 600 * 100)} disabled={disabled || loading} onChange={event => {
+            const width = 600 * Number(event.target.value) / 100;
+            const height = value.height * width / value.width;
+            onChange({ ...value, width, height, x: value.x + (value.width - width) / 2, y: value.y + (value.height - height) / 2 });
+          }} />
+        </div>
         {slider("radius", "Köşe yuvarlaklığı", 0, 100, 1, "%")}
         <div className={styles.photoButtons}>
           <button type="button" disabled={disabled || loading} onClick={() => setCropping(true)}><Crop size={15} aria-hidden="true" />Fotoğrafı kırp</button>
