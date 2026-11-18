@@ -118,9 +118,11 @@ export default function PostDesigner() {
   };
 
   return <div className={styles.designer}>
-    <div className={styles.heading}><div><span className={styles.eyebrow}>BPT FİNANS / TASARIM</span><h1>Haberini hazırla.</h1></div><span className={styles.dimensions}>1080 × 1350 <span>PNG</span></span></div>
+    <div className={styles.heading}><span className={styles.eyebrow}>BPT FİNANS / TASARIM</span></div>
     <div className={styles.layout}>
+      <div className={styles.leftColumn}>
       <section className={styles.preview} aria-label="Post önizlemesi">
+        <div className={styles.previewMeta}><span className={styles.dimensions}>1080 × 1350 <span>PNG</span></span></div>
         <div className={styles.canvasWrap} aria-busy={busy}>
           <canvas ref={canvasRef} width={POST_WIDTH} height={POST_HEIGHT} aria-label={`BPT Finans postu. Konum: ${location}. ${description.map(run => run.text).join("")}`}
             style={{ touchAction: draggingEnabled ? "none" : "auto", cursor: draggingEnabled ? "grab" : "default" }}
@@ -129,7 +131,7 @@ export default function PostDesigner() {
           {busy && <div className={styles.loading} role="status">Tasarım hazırlanıyor…</div>}
         </div>
       </section>
-      <section className={styles.controls} aria-label="Post düzenleme alanları">
+      <section className={styles.photoPanel} aria-label="Fotoğraf ayarları">
         <div className={styles.field}><label htmlFor="post-photo"><span>01</span>Haber fotoğrafı</label><input ref={fileRef} id="post-photo" className={styles.file} tabIndex={-1} type="file" accept="image/jpeg,image/png,image/webp" onChange={event => void upload(event)} disabled={busy} /><button type="button" className={styles.upload} disabled={busy || !background} onClick={() => fileRef.current?.click()}><ImagePlus size={21} aria-hidden="true" /><span>Fotoğraf seç<small>{photoName}</small></span></button><p>JPG, PNG veya WebP · En fazla 20 MB.</p>
           <div className={styles.photoButtons}>
             <button type="button" disabled={busy} aria-pressed={draggingEnabled} onClick={() => setDraggingEnabled(value => !value)}>{draggingEnabled ? "Sürükleme açık" : "Sürükleme kapalı"}</button>
@@ -142,6 +144,9 @@ export default function PostDesigner() {
             <div className={styles.photoButtons}><button type="button" disabled={busy} onClick={() => changePhoto(DEFAULT_PHOTO_TRANSFORM)}>Ortala</button></div>
           </div>}
         </div>
+      </section>
+      </div>
+      <section className={styles.controls} aria-label="Post düzenleme alanları">
         <div className={styles.field}><label id="post-description-label"><span>02</span>Haber açıklaması</label><PostTextEditor key={editorReset} value={description} onChange={value => { setDescription(value); setMessage(""); }} />{overflow && <p className={styles.warning} role="alert">Metin tasarıma sığmıyor. PNG indirmek için açıklamayı biraz kısalt.</p>}</div>
         <div className={styles.field}><label htmlFor="post-location"><span>03</span>Konum</label><input id="post-location" type="text" value={location} maxLength={24} onChange={event => { setLocation(event.target.value); setMessage(""); }} placeholder="DÜNYA" /></div>
         <div className={styles.field}><label><span>04</span>Tasarım detayları</label><div className={styles.options}>
