@@ -19,6 +19,7 @@ export default function PostDesigner() {
   const [background, setBackground] = useState<PostScene | null>(null);
   const [photoTransform, setPhotoTransform] = useState<PhotoTransform>(DEFAULT_PHOTO_TRANSFORM);
   const [draggingEnabled, setDraggingEnabled] = useState(true);
+  const [activeTab, setActiveTab] = useState<"photo" | "description">("photo");
   const [manual, setManual] = useState(false);
   const [decorations, setDecorations] = useState({ quote: false, swipe: false });
   const pendingTransform = useRef<PhotoTransform | null>(null);
@@ -131,7 +132,6 @@ export default function PostDesigner() {
   return <div className={styles.designer}>
     <div className={styles.heading}><span className={styles.eyebrow}>BPT FİNANS / TASARIM</span></div>
     <div className={styles.layout}>
-      <div className={styles.leftColumn}>
       <section className={styles.preview} aria-label="Post önizlemesi">
         <div className={styles.canvasWrap} aria-busy={busy}>
           <canvas ref={canvasRef} width={POST_WIDTH} height={POST_HEIGHT} aria-label={`BPT Finans postu. Konum: ${location}. ${description.map(run => run.text).join("")}`}
@@ -141,7 +141,17 @@ export default function PostDesigner() {
           {busy && <div className={styles.loading} role="status">Tasarım hazırlanıyor…</div>}
         </div>
       </section>
-      <section className={styles.photoPanel} aria-label="Fotoğraf ayarları">
+      <section className={styles.controls} aria-label="Post düzenleme alanları">
+        <div className={styles.editorTabs} role="tablist" aria-label="Düzenleme sekmeleri" onKeyDown={event => {
+          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+          event.preventDefault();
+          const next = event.key === "Home" ? "photo" : event.key === "End" ? "description" : activeTab === "photo" ? "description" : "photo";
+          setActiveTab(next); document.getElementById(`${next}-tab`)?.focus();
+        }}>
+          <button type="button" id="photo-tab" role="tab" aria-controls="photo-panel" aria-selected={activeTab === "photo"} tabIndex={activeTab === "photo" ? 0 : -1} onClick={() => setActiveTab("photo")}>Haber Fotoğrafı</button>
+          <button type="button" id="description-tab" role="tab" aria-controls="description-panel" aria-selected={activeTab === "description"} tabIndex={activeTab === "description" ? 0 : -1} onClick={() => setActiveTab("description")}>Haber Açıklaması</button>
+        </div>
+        <div id="photo-panel" role="tabpanel" aria-labelledby="photo-tab" className={styles.tabPanel} hidden={activeTab !== "photo"}>
         <div className={styles.field}><label htmlFor="post-photo"><span>01</span>Haber fotoğrafı</label><input ref={fileRef} id="post-photo" className={styles.file} tabIndex={-1} type="file" accept="image/jpeg,image/png,image/webp" onChange={event => void upload(event)} disabled={busy} /><button type="button" className={styles.upload} disabled={busy || !background} onClick={() => fileRef.current?.click()}><ImagePlus size={21} aria-hidden="true" /><span>Fotoğraf seç<small>{photoName}</small></span></button><p>JPG, PNG veya WebP · En fazla 20 MB.</p>
           <div className={styles.photoButtons}>
             <button type="button" disabled={busy} aria-pressed={draggingEnabled} onClick={() => setDraggingEnabled(value => !value)}>{draggingEnabled ? "Sürükleme açık" : "Sürükleme kapalı"}</button>
@@ -159,15 +169,15 @@ export default function PostDesigner() {
           <button type="button" aria-pressed={photoTarget === "base"} onClick={() => setPhotoTarget("base")}>Ana fotoğrafı sürükle</button>
           <button type="button" aria-pressed={photoTarget === "extra"} onClick={() => setPhotoTarget("extra")}>Ek fotoğrafı sürükle</button>
         </div>}
-      </section>
-      </div>
-      <section className={styles.controls} aria-label="Post düzenleme alanları">
+        </div>
+        <div id="description-panel" role="tabpanel" aria-labelledby="description-tab" className={styles.tabPanel} hidden={activeTab !== "description"}>
         <div className={styles.field}><label id="post-description-label"><span>02</span>Haber açıklaması</label><PostTextEditor key={editorReset} value={description} onChange={value => { setDescription(value); setMessage(""); }} />{overflow && <p className={styles.warning} role="alert">Metin tasarıma sığmıyor. PNG indirmek için açıklamayı biraz kısalt.</p>}</div>
         <div className={`${styles.field} ${styles.compactField}`}><label htmlFor="post-location"><span>03</span>Konum</label><input id="post-location" type="text" value={location} maxLength={24} onChange={event => { setLocation(event.target.value); setMessage(""); }} placeholder="DÜNYA" /></div>
         <div className={`${styles.field} ${styles.compactField}`}><label><span>04</span>Tasarım detayları</label><div className={styles.options}>
           <button type="button" aria-pressed={decorations.quote} onClick={() => setDecorations(value => ({ ...value, quote: !value.quote }))}><span>Tırnak işareti</span><span aria-hidden="true">{decorations.quote ? "Açık" : "Kapalı"}</span></button>
           <button type="button" aria-pressed={decorations.swipe} onClick={() => setDecorations(value => ({ ...value, swipe: !value.swipe }))}><span>Fotoğrafı kaydır</span><span aria-hidden="true">{decorations.swipe ? "Açık" : "Kapalı"}</span></button>
         </div></div>
+        </div>
         {error && <div className={styles.error} role="alert">{error}{!background && <button type="button" onClick={() => setRetry(value => value + 1)} disabled={busy}>Tekrar dene</button>}</div>}
         {message && <p className={styles.success} role="status">{message}</p>}
         <div className={styles.actions}><button type="button" className={styles.download} disabled={busy || exporting || overflow || !background} onPointerDown={event => { if (event.pointerType === "touch") downloadTouchRef.current = { x: event.clientX, y: event.clientY }; }}

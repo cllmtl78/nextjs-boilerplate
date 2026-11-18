@@ -89,19 +89,6 @@
 .designer button { transition: background-color .15s, border-color .15s, color .15s; }
 .designer button:not(:disabled) { cursor: pointer; }
 @media (hover: hover) { .photoButtons button:hover, .options button:hover, .reset:hover { border-color: #526c88; color: #f1f5f9; } }
-/* The editor uses page scrolling; photo controls live below the preview. */
-.leftColumn { min-width: 0; display: grid; gap: 16px; }
-.preview { position: static; }
-.previewMeta { display: flex; justify-content: flex-end; margin: 0 2px 10px; }
-.previewMeta .dimensions { font-size: 9px; gap: 2px; padding: 0; }
-.previewMeta .dimensions span { font-size: 8px; }
-.photoPanel { min-width: 0; padding: 20px 24px; border: 1px solid #263247; border-radius: 16px; background: linear-gradient(160deg, #111b2c, #0c1320 65%); }
-@media (max-width: 768px) {
-  .leftColumn { display: contents; }
-  .photoPanel { padding: 18px; margin-bottom: -16px; border-bottom: 0; border-radius: 16px 16px 0 0; }
-  .controls { border-top: 0; border-radius: 0 0 16px 16px; padding-top: 6px; }
-  .controls > .field:first-child { border-top: 1px solid #1e293b; padding-top: 22px; }
-}
 
 .field.compactField { margin-top: 16px; padding-top: 14px; }
 .compactField label { gap: 7px; margin-bottom: 8px; font-size: 11px; }
@@ -140,4 +127,21 @@
   .cropDialogHeader { padding: 14px 14px 10px; }
   .cropRatios { padding: 0 14px 12px; }
   .cropDialogFooter { padding: 12px 14px; }
+}
+
+.layout { grid-template-columns: minmax(0, 1.08fr) minmax(360px, 1fr); gap: 24px; align-items: stretch; }
+.preview { position: static; display: flex; align-items: center; justify-content: center; min-height: 660px; }
+.controls { display: flex; flex-direction: column; min-height: 660px; }
+.editorTabs { display: flex; gap: 5px; padding: 5px; margin-bottom: 22px; border: 1px solid #29394e; border-radius: 10px; background: #080e1a; }
+.editorTabs button { flex: 1; min-width: 0; min-height: 40px; padding: 9px 8px; border: 1px solid transparent; border-radius: 7px; color: #8497b0; font-size: 12px; font-weight: 600; }
+.editorTabs button[aria-selected="true"] { background: #38bdf815; border-color: #38bdf84d; color: #bae6fd; box-shadow: 0 2px 8px #0002; }
+.tabPanel { flex: 1; min-width: 0; }
+.tabPanel[hidden] { display: none; }
+.controls > .actions { padding-top: 24px; margin-top: auto; }
+@media (max-width: 768px) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .preview { min-height: 0; padding: 20px 12px; }
+  .controls { min-height: 620px; }
+  .editorTabs { margin-bottom: 18px; }
+  .editorTabs button { font-size: 11px; }
 }
