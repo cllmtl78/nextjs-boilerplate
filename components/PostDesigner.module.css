@@ -89,3 +89,8 @@
 .designer button { transition: background-color .15s, border-color .15s, color .15s; }
 .designer button:not(:disabled) { cursor: pointer; }
 @media (hover: hover) { .photoButtons button:hover, .options button:hover, .reset:hover { border-color: #526c88; color: #f1f5f9; } }
+@media (min-width: 769px) {
+  .preview { align-self: start; }
+  .canvasWrap { width: min(100%, 450px, calc(80dvh - 148px)); }
+  .controls { max-height: calc(100dvh - 165px); overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; scrollbar-color: #334155 transparent; scrollbar-gutter: stable; }
+}
