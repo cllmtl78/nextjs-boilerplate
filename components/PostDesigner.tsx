@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState, type ChangeEvent, type PointerEvent } from "react";
 import { ArrowDownToLine, ImagePlus, RotateCcw } from "lucide-react";
-import { blobDataUrl, buildPostOverlay, loadPostImage, DEFAULT_DESCRIPTION, DEFAULT_PHOTO_TRANSFORM, drawPost, POST_HEIGHT, POST_WIDTH, prepareUploadedPhoto, type PostScene, type PostTextRun, type PhotoTransform } from "@/lib/post-designer";
+import { blobDataUrl, buildPostOverlay, loadPostImage, DEFAULT_DESCRIPTION, DEFAULT_PHOTO_TRANSFORM, drawPost, POST_HEIGHT, POST_WIDTH, prepareUploadedPhoto, type ExtraPhoto, type PostScene, type PostTextRun, type PhotoTransform } from "@/lib/post-designer";
 import PostTextEditor from "./PostTextEditor";
+import ExtraPhotoControls from "./ExtraPhotoControls";
 import styles from "./PostDesigner.module.css";
 
 export default function PostDesigner() {
@@ -12,7 +13,9 @@ export default function PostDesigner() {
   const downloadTouchRef = useRef<{ x: number; y: number } | null>(null);
   const lastTouchDownloadRef = useRef(0);
   const assetsRef = useRef<PostScene | null>(null);
-  const dragRef = useRef<{ x: number; y: number; original: PhotoTransform } | null>(null);
+  const dragRef = useRef<{ x: number; y: number; original: PhotoTransform; target: "base" | "extra" } | null>(null);
+  const [extraPhoto, setExtraPhoto] = useState<ExtraPhoto | null>(null);
+  const [photoTarget, setPhotoTarget] = useState<"base" | "extra">("base");
   const [background, setBackground] = useState<PostScene | null>(null);
   const [photoTransform, setPhotoTransform] = useState<PhotoTransform>(DEFAULT_PHOTO_TRANSFORM);
   const [draggingEnabled, setDraggingEnabled] = useState(true);
@@ -54,11 +57,11 @@ export default function PostDesigner() {
     if (!background) return;
     const frame = requestAnimationFrame(() => {
       if (!canvasRef.current) return;
-      try { setOverflow(drawPost(canvasRef.current, background, description, location, photoTransform, decorations).overflow); }
+      try { setOverflow(drawPost(canvasRef.current, background, description, location, photoTransform, decorations, extraPhoto).overflow); }
       catch (cause) { setError(cause instanceof Error ? cause.message : "Önizleme hazırlanamadı."); }
     });
     return () => cancelAnimationFrame(frame);
-  }, [background, description, location, photoTransform, decorations]);
+  }, [background, description, location, photoTransform, decorations, extraPhoto]);
 
   const upload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -77,6 +80,7 @@ export default function PostDesigner() {
     setDescription([{ text: DEFAULT_DESCRIPTION, bold: true }]); setEditorReset(value => value + 1); setLocation("DÜNYA"); setPhotoName("Şablondaki fotoğraf");
     if (assetsRef.current) setBackground(assetsRef.current);
     setPhotoTransform(DEFAULT_PHOTO_TRANSFORM); setDraggingEnabled(true); setManual(false); setDecorations({ quote: false, swipe: false });
+    setExtraPhoto(null); setPhotoTarget("base");
     setError(""); setMessage("");
   };
   const changePhoto = (change: Partial<PhotoTransform>) => {
@@ -89,13 +93,20 @@ export default function PostDesigner() {
     pendingTransform.current = { ...drag.original, x: Math.max(-POST_WIDTH, Math.min(POST_WIDTH, drag.original.x + (event.clientX - drag.x) * scale)), y: Math.max(-POST_HEIGHT, Math.min(POST_HEIGHT, drag.original.y + (event.clientY - drag.y) * scale)) };
     if (dragFrame.current === null) dragFrame.current = requestAnimationFrame(() => {
       dragFrame.current = null;
-      if (canvasRef.current && background && pendingTransform.current) drawPost(canvasRef.current, background, description, location, pendingTransform.current, decorations);
+      if (canvasRef.current && background && pendingTransform.current) {
+        const next = pendingTransform.current;
+        drawPost(canvasRef.current, background, description, location, drag.target === "base" ? next : photoTransform, decorations, drag.target === "extra" && extraPhoto ? { ...extraPhoto, x: next.x, y: next.y } : extraPhoto);
+      }
     });
   };
   const finishDrag = () => {
     if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current);
     dragFrame.current = null;
-    if (pendingTransform.current) setPhotoTransform(pendingTransform.current);
+    if (pendingTransform.current) {
+      const next = pendingTransform.current;
+      if (dragRef.current?.target === "extra") setExtraPhoto(current => current ? { ...current, x: next.x, y: next.y } : null);
+      else setPhotoTransform(next);
+    }
     pendingTransform.current = null; dragRef.current = null;
   };
   useEffect(() => () => { if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current); }, []);
@@ -103,7 +114,7 @@ export default function PostDesigner() {
     if (!canvasRef.current || !background || busy || exporting || overflow) return;
     setExporting(true); setError(""); setMessage("");
     try {
-      const result = drawPost(canvasRef.current, background, description, location, photoTransform, decorations);
+      const result = drawPost(canvasRef.current, background, description, location, photoTransform, decorations, extraPhoto);
       if (result.overflow) { setOverflow(true); return; }
       const canvas = canvasRef.current;
       const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error("PNG oluşturulamadı.")), "image/png"));
@@ -122,11 +133,10 @@ export default function PostDesigner() {
     <div className={styles.layout}>
       <div className={styles.leftColumn}>
       <section className={styles.preview} aria-label="Post önizlemesi">
-        <div className={styles.previewMeta}><span className={styles.dimensions}>1080 × 1350 <span>PNG</span></span></div>
         <div className={styles.canvasWrap} aria-busy={busy}>
           <canvas ref={canvasRef} width={POST_WIDTH} height={POST_HEIGHT} aria-label={`BPT Finans postu. Konum: ${location}. ${description.map(run => run.text).join("")}`}
             style={{ touchAction: draggingEnabled ? "none" : "auto", cursor: draggingEnabled ? "grab" : "default" }}
-            onPointerDown={event => { if (!draggingEnabled || busy) return; event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { x: event.clientX, y: event.clientY, original: photoTransform }; }}
+            onPointerDown={event => { if (!draggingEnabled || busy) return; event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { x: event.clientX, y: event.clientY, original: photoTarget === "extra" && extraPhoto ? { zoom: 1, x: extraPhoto.x, y: extraPhoto.y } : photoTransform, target: photoTarget }; }}
             onPointerMove={movePhoto} onPointerUp={finishDrag} onPointerCancel={finishDrag}>Post önizlemesi için güncel bir tarayıcı kullan.</canvas>
           {busy && <div className={styles.loading} role="status">Tasarım hazırlanıyor…</div>}
         </div>
@@ -144,6 +154,11 @@ export default function PostDesigner() {
             <div className={styles.photoButtons}><button type="button" disabled={busy} onClick={() => changePhoto(DEFAULT_PHOTO_TRANSFORM)}>Ortala</button></div>
           </div>}
         </div>
+        <ExtraPhotoControls value={extraPhoto} disabled={busy || !background} onChange={value => { setExtraPhoto(value); setMessage(""); if (!value) setPhotoTarget("base"); }} onAdded={() => { setPhotoTarget("extra"); setDraggingEnabled(true); }} onError={setError} />
+        {extraPhoto && <div className={styles.photoButtons} role="group" aria-label="Sürüklenecek fotoğraf">
+          <button type="button" aria-pressed={photoTarget === "base"} onClick={() => setPhotoTarget("base")}>Ana fotoğrafı sürükle</button>
+          <button type="button" aria-pressed={photoTarget === "extra"} onClick={() => setPhotoTarget("extra")}>Ek fotoğrafı sürükle</button>
+        </div>}
       </section>
       </div>
       <section className={styles.controls} aria-label="Post düzenleme alanları">

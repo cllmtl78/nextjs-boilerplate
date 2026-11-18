@@ -50,7 +50,6 @@ export default function PostTextEditor({ value, onChange }: { value: PostTextRun
     <div className={styles.textToolbar} role="group" aria-label="Metin kalınlığı">
       <button type="button" aria-pressed={format === "bold"} onPointerDown={event => event.preventDefault()} onClick={() => applyFormat(true)}>Kalın</button>
       <button type="button" aria-pressed={format === "regular"} onPointerDown={event => event.preventDefault()} onClick={() => applyFormat(false)}>İnce</button>
-      <span>Metni seç, kalınlığını değiştir.</span>
     </div>
     <div ref={editorRef} id="post-description" role="textbox" aria-labelledby="post-description-label" aria-multiline="true" contentEditable suppressContentEditableWarning spellCheck={false} className={styles.richInput}
       onInput={publish}

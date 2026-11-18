@@ -114,3 +114,9 @@
   .compactField input[type="text"] { font-size: 16px; }
   .compactField .options button { min-height: 40px; }
 }
+.textToolbar { padding: 5px 8px; gap: 6px; }
+.textToolbar button { min-height: 28px; padding: 4px 9px; font-size: 11px; }
+.extraPhoto { margin-top: 20px; padding-top: 18px; border-top: 1px solid #1e293b; }
+.extraPhoto > label { font-size: 12px; }
+.cropTitle { margin: 14px 0 4px; padding-top: 12px; border-top: 1px solid #293b51; color: #cbd5e1; font-size: 11px; font-weight: 600; }
+.extraPhoto .photoButtons button { display: flex; align-items: center; justify-content: center; gap: 6px; }

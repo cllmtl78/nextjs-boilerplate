@@ -6,6 +6,15 @@ export type PostTextRun = { text: string; bold: boolean };
 export type PhotoTransform = { zoom: number; x: number; y: number };
 export type PostScene = { photo: HTMLImageElement; overlay: HTMLImageElement; original: boolean; quote?: HTMLImageElement; swipe?: HTMLImageElement };
 export type PostDecorations = { quote: boolean; swipe: boolean };
+export type ExtraPhoto = { image: HTMLImageElement; x: number; y: number; width: number; height: number; radius: number; cropZoom: number; cropX: number; cropY: number };
+
+/** Source crop stays inside the photo, including when zoomed or moved to an edge. */
+export function extraPhotoCrop(photo: ExtraPhoto) {
+  const ratio = Math.max(photo.width / photo.image.naturalWidth, photo.height / photo.image.naturalHeight) * photo.cropZoom;
+  const width = photo.width / ratio, height = photo.height / ratio;
+  return { x: (photo.image.naturalWidth - width) * (photo.cropX + 100) / 200, y: (photo.image.naturalHeight - height) * (photo.cropY + 100) / 200, width, height };
+}
+
 export const DEFAULT_PHOTO_TRANSFORM: PhotoTransform = { zoom: 1, x: 0, y: 0 };
 
 export function photoFrame(original: boolean, transform: PhotoTransform) {
@@ -149,7 +158,7 @@ export async function prepareUploadedPhoto(file: File): Promise<PostPhoto> {
 
 const foregroundCache = new WeakMap<HTMLImageElement, { key: string; canvas: HTMLCanvasElement; result: { overflow: boolean; fontSize: number } }>();
 
-export function drawPost(canvas: HTMLCanvasElement, scene: PostScene, description: PostTextRun[], location: string, transform: PhotoTransform = DEFAULT_PHOTO_TRANSFORM, decorations: PostDecorations = { quote: false, swipe: false }) {
+export function drawPost(canvas: HTMLCanvasElement, scene: PostScene, description: PostTextRun[], location: string, transform: PhotoTransform = DEFAULT_PHOTO_TRANSFORM, decorations: PostDecorations = { quote: false, swipe: false }, extra: ExtraPhoto | null = null) {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Bu tarayıcı görsel düzenlemeyi desteklemiyor.");
   ctx.clearRect(0, 0, POST_WIDTH, POST_HEIGHT);
@@ -160,6 +169,15 @@ export function drawPost(canvas: HTMLCanvasElement, scene: PostScene, descriptio
   ctx.save(); ctx.beginPath(); ctx.rect(frame.x, frame.y, frame.width, frame.height); ctx.clip();
   ctx.drawImage(scene.photo, frame.x + (frame.width - width) / 2, frame.y + (frame.height - photoHeight) / 2, width, photoHeight);
   ctx.restore();
+  // Both photos are below the fixed blue effect, branding and text.
+  if (extra) {
+    const crop = extraPhotoCrop(extra);
+    ctx.save(); ctx.beginPath();
+    ctx.roundRect(extra.x, extra.y, extra.width, extra.height, Math.min(extra.width, extra.height) * extra.radius / 200);
+    ctx.clip();
+    ctx.drawImage(extra.image, crop.x, crop.y, crop.width, crop.height, extra.x, extra.y, extra.width, extra.height);
+    ctx.restore();
+  }
   const key = JSON.stringify([description, location, decorations]);
   let cached = foregroundCache.get(scene.overlay);
   if (!cached || cached.key !== key) {

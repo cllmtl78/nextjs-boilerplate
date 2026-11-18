@@ -51,3 +51,14 @@ test("zoom stays centered and pan changes only the photo frame", () => {
 test("original photo starts with the original Figma crop", () => {
   assert.deepEqual(photoFrame(true, { zoom: 1, x: 0, y: 0 }), { x: -717, y: -15, width: 2609, height: 1463 });
 });
+
+test("extra photo crop covers its frame and stays within source bounds", async () => {
+  const { extraPhotoCrop } = await import("./post-designer");
+  const image = { naturalWidth: 1200, naturalHeight: 800 } as HTMLImageElement;
+  for (const cropZoom of [1, 2, 4]) for (const cropX of [-100, 0, 100]) for (const cropY of [-100, 0, 100]) {
+    const crop = extraPhotoCrop({ image, x: 0, y: 0, width: 400, height: 600, radius: 0, cropZoom, cropX, cropY });
+    assert.ok(crop.x >= 0 && crop.y >= 0);
+    assert.ok(crop.x + crop.width <= 1200 && crop.y + crop.height <= 800);
+    assert.ok(Math.abs(crop.width / crop.height - 2 / 3) < 0.000001);
+  }
+});

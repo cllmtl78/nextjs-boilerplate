@@ -49,3 +49,7 @@ ekranlar kontrol edilmelidir.
 Fotoğraf sürükleme varsayılan olarak açıktır. “Manuel sürükle” yakınlık ve konum kaydırıcılarını açar. Sürükleme olayları `requestAnimationFrame` ile birleştirilir; sabit katmanlar ve metin ayrı bir tuvalde önbelleğe alınır. Fotoğraf hareket ederken metin ölçümü ve satır düzeni tekrar hesaplanmaz; React konum durumu sürükleme bitince güncellenir.
 
 Yeni SVG’den alınan `quote.svg` ve `swipe.svg` kaynak konumlarını korur. İki detay da başlangıçta kapalıdır ve PNG’ye önizlemeyle aynı şekilde eklenir. Tırnak işareti haber metninden önce çizilir; metnin arkasında kalır. Haber metni y=833 konumunda başlar; alt sınır korunur.
+
+### Ek fotoğraf
+
+“Üste fotoğraf ekle” ikinci bir yerel fotoğraf katmanı ekler. Ana fotoğraf yerinde kalır. Ek fotoğrafın genişliği, yüksekliği, köşe yuvarlaklığı ve kırpma yakınlığı ayrı ayarlanır; kırpma konumu iki eksende kaynak fotoğrafın sınırları içinde kalır. Sürükleme hedefi ana veya ek fotoğraf olarak seçilir. İkinci fotoğraf her zaman sabit mavi efekt, logo ve metinden önce çizilir; PNG ile önizleme aynı çizim yolunu kullanır. Kaldırma yalnızca ek fotoğrafı siler; genel sıfırlama tüm tasarımı başlangıca döndürür. Fotoğraflar ve düzenlemeler sayfa belleğinde tutulmaya devam eder.
