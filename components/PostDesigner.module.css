@@ -66,3 +66,26 @@
   .actions { padding: 12px 0; }
   .download { min-height: 46px; }
 }
+.preview { padding: 12px; border-radius: 16px; background: linear-gradient(145deg, #162137, #0a101d); box-shadow: 0 16px 45px #0003; }
+.controls { border-radius: 16px; background: linear-gradient(160deg, #111b2c, #0c1320 65%); box-shadow: 0 16px 45px #0002; }
+.field label > span { display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid #38bdf82b; border-radius: 7px; background: #38bdf80a; }
+.upload { border-style: solid; border-radius: 10px; padding: 18px 14px; background: #38bdf80a; }
+.photoButtons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+.photoButtons button { min-height: 42px; padding: 9px; border-radius: 8px; background: #080e1a80; color: #cbd5e1; font-size: 11px; }
+.photoButtons button[aria-pressed="true"], .photoButtons button[aria-expanded="true"] { color: #bae6fd; background: #38bdf815; border-color: #38bdf866; }
+.photoControls { margin-top: 12px; padding: 4px 14px 14px; border: 1px solid #293b51; border-radius: 10px; background: #080e1a66; }
+.field input[type="text"] { border-radius: 9px; }
+.textToolbar { border-radius: 9px 9px 0 0; padding: 9px; gap: 8px; }
+.textToolbar button { min-height: 36px; border-radius: 6px; padding: 7px 13px; }
+.richInput { border-radius: 0 0 9px 9px; padding: 14px; }
+.options { display: grid; gap: 8px; }
+.options button { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 46px; padding: 11px 13px; border: 1px solid #2c3a50; border-radius: 9px; color: #cbd5e1; background: #080e1a80; font-size: 12px; text-align: left; }
+.options button > span:last-child { padding: 3px 7px; border-radius: 5px; background: #1e293b; color: #94a3b8; font-size: 10px; }
+.options button[aria-pressed="true"] { border-color: #38bdf866; background: #38bdf80d; }
+.options button[aria-pressed="true"] > span:last-child { background: #38bdf822; color: #7dd3fc; }
+.download { min-height: 46px; border-radius: 9px; background: linear-gradient(135deg, #087da8, #075879); border-color: #38bdf899; color: #fff; box-shadow: 0 4px 16px #0284c71a; }
+.download:hover { background: linear-gradient(135deg, #0994c6, #086b90); }
+.reset { min-height: 44px; padding: 10px; border: 1px solid #2c3a50; border-radius: 9px; }
+.designer button { transition: background-color .15s, border-color .15s, color .15s; }
+.designer button:not(:disabled) { cursor: pointer; }
+@media (hover: hover) { .photoButtons button:hover, .options button:hover, .reset:hover { border-color: #526c88; color: #f1f5f9; } }

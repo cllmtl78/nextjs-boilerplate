@@ -43,3 +43,9 @@ Figma API'si veya ücretli bir servis gerekmez. iOS'ta indirme Dosyalar /
 karakterleri koruduğunu kontrol eder. Tarayıcıda fotoğraf değiştirme, boş ve
 uzun metin, konum, sıfırlama, çıktı boyutu, sabit marka katmanları ve mobil
 ekranlar kontrol edilmelidir.
+
+### Önizleme ve isteğe bağlı detaylar
+
+Fotoğraf sürükleme varsayılan olarak açıktır. “Manuel sürükle” yakınlık ve konum kaydırıcılarını açar. Sürükleme olayları `requestAnimationFrame` ile birleştirilir; sabit katmanlar ve metin ayrı bir tuvalde önbelleğe alınır. Fotoğraf hareket ederken metin ölçümü ve satır düzeni tekrar hesaplanmaz; React konum durumu sürükleme bitince güncellenir.
+
+Yeni SVG’den alınan `quote.svg` ve `swipe.svg` kaynak konumlarını korur. İki detay da başlangıçta kapalıdır ve PNG’ye önizlemeyle aynı şekilde eklenir. Tırnak işareti haber metninden önce çizilir; metnin arkasında kalır. Haber metni y=833 konumunda başlar; alt sınır korunur.

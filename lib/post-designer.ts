@@ -4,7 +4,8 @@ export const DEFAULT_DESCRIPTION = "Altın, gümüş ve bakır gibi emtialarda y
 export type PostPhoto = { data: string; original: boolean };
 export type PostTextRun = { text: string; bold: boolean };
 export type PhotoTransform = { zoom: number; x: number; y: number };
-export type PostScene = { photo: HTMLImageElement; overlay: HTMLImageElement; original: boolean };
+export type PostScene = { photo: HTMLImageElement; overlay: HTMLImageElement; original: boolean; quote?: HTMLImageElement; swipe?: HTMLImageElement };
+export type PostDecorations = { quote: boolean; swipe: boolean };
 export const DEFAULT_PHOTO_TRANSFORM: PhotoTransform = { zoom: 1, x: 0, y: 0 };
 
 export function photoFrame(original: boolean, transform: PhotoTransform) {
@@ -146,7 +147,9 @@ export async function prepareUploadedPhoto(file: File): Promise<PostPhoto> {
   } finally { URL.revokeObjectURL(url); }
 }
 
-export function drawPost(canvas: HTMLCanvasElement, scene: PostScene, description: PostTextRun[], location: string, transform: PhotoTransform = DEFAULT_PHOTO_TRANSFORM) {
+const foregroundCache = new WeakMap<HTMLImageElement, { key: string; canvas: HTMLCanvasElement; result: { overflow: boolean; fontSize: number } }>();
+
+export function drawPost(canvas: HTMLCanvasElement, scene: PostScene, description: PostTextRun[], location: string, transform: PhotoTransform = DEFAULT_PHOTO_TRANSFORM, decorations: PostDecorations = { quote: false, swipe: false }) {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Bu tarayıcı görsel düzenlemeyi desteklemiyor.");
   ctx.clearRect(0, 0, POST_WIDTH, POST_HEIGHT);
@@ -157,20 +160,35 @@ export function drawPost(canvas: HTMLCanvasElement, scene: PostScene, descriptio
   ctx.save(); ctx.beginPath(); ctx.rect(frame.x, frame.y, frame.width, frame.height); ctx.clip();
   ctx.drawImage(scene.photo, frame.x + (frame.width - width) / 2, frame.y + (frame.height - photoHeight) / 2, width, photoHeight);
   ctx.restore();
+  const key = JSON.stringify([description, location, decorations]);
+  let cached = foregroundCache.get(scene.overlay);
+  if (!cached || cached.key !== key) {
+    const layer = document.createElement("canvas"); layer.width = POST_WIDTH; layer.height = POST_HEIGHT;
+    const result = drawForeground(layer, scene, description, location, decorations);
+    cached = { key, canvas: layer, result }; foregroundCache.set(scene.overlay, cached);
+  }
+  ctx.drawImage(cached.canvas, 0, 0);
+  return cached.result;
+}
+
+function drawForeground(canvas: HTMLCanvasElement, scene: PostScene, description: PostTextRun[], location: string, decorations: PostDecorations) {
+  const ctx = canvas.getContext("2d")!;
   ctx.drawImage(scene.overlay, 0, 0, POST_WIDTH, POST_HEIGHT);
+  if (decorations.quote && scene.quote) ctx.drawImage(scene.quote, 0, 0, POST_WIDTH, POST_HEIGHT);
+  if (decorations.swipe && scene.swipe) ctx.drawImage(scene.swipe, 0, 0, POST_WIDTH, POST_HEIGHT);
   let size = 39;
   let lines: PostTextRun[][] = [];
   let height = 0;
   for (; size >= 26; size--) {
     lines = wrapStyledPostText(description, 902, (text, bold) => { ctx.font = `${bold ? 700 : 400} ${size}px "BPT Rubik"`; return ctx.measureText(text).width; });
     height = lines.length * size * 1.1;
-    if (height <= 396) break;
+    if (height <= 439) break;
   }
-  const overflow = height > 396;
+  const overflow = height > 439;
   ctx.save();
-  ctx.beginPath(); ctx.rect(154, 868, 902, 410); ctx.clip();
+  ctx.beginPath(); ctx.rect(154, 825, 902, 453); ctx.clip();
   ctx.fillStyle = "#fff"; ctx.textBaseline = "top";
-  let y = 876;
+  let y = 833;
   for (const line of lines) {
     let x = 154;
     for (const run of line) {
