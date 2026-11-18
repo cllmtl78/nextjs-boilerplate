@@ -66,19 +66,36 @@ export function readEditorRuns(root: HTMLElement): PostTextRun[] {
     const last = runs.at(-1);
     if (last?.bold === bold) last.text += text; else runs.push({ text, bold });
   };
+  // Browsers split/merge editable paragraphs into nested blocks on Enter/Backspace.
+  // Keep a pending block boundary across inline wrappers instead of relying on sibling indexes.
+  let pendingBreak = false;
+  const lastCharacter = () => runs.at(-1)?.text.at(-1);
+  const flushBoundary = (bold: boolean) => { if (pendingBreak) { append("\n", bold); pendingBreak = false; } };
   const walk = (parent: Node, inherited: boolean) => {
-    Array.from(parent.childNodes).forEach((node, index) => {
-      if (node.nodeType === Node.TEXT_NODE) { append(node.textContent || "", inherited); return; }
-      if (!(node instanceof HTMLElement)) return;
-      const block = ["DIV", "P"].includes(node.tagName);
-      if (block && index > 0) append("\n", inherited);
-      if (node.tagName === "BR") {
-        if (parent.childNodes.length > 1) append("\n", inherited);
+    Array.from(parent.childNodes).forEach(node => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = (node.textContent || "").replace(/\u200b/g, "").replace(/\u00a0/g, " ");
+        if (text) { flushBoundary(inherited); append(text, inherited); }
         return;
       }
+      if (!(node instanceof HTMLElement)) return;
       const weight = node.style.fontWeight;
       const bold = weight ? weight === "bold" || Number(weight) >= 600 : ["B", "STRONG"].includes(node.tagName) ? true : inherited;
+      if (node.tagName === "BR") {
+        // A terminal BR (possibly inside inline formatting) is the browser's empty-line placeholder.
+        let tail: Node = node;
+        while (!tail.nextSibling && tail.parentNode && tail.parentNode !== root && tail.parentNode instanceof HTMLElement && !["DIV", "P"].includes(tail.parentNode.tagName)) tail = tail.parentNode;
+        flushBoundary(bold);
+        if (tail.nextSibling) append("\n", bold);
+        return;
+      }
+      const block = ["DIV", "P"].includes(node.tagName);
+      if (block) {
+        if (pendingBreak) flushBoundary(bold);
+        else if (lastCharacter() && lastCharacter() !== "\n") append("\n", bold);
+      }
       walk(node, bold);
+      if (block) pendingBreak = true;
     });
   };
   walk(root, false);
@@ -195,15 +212,9 @@ function drawForeground(canvas: HTMLCanvasElement, scene: PostScene, description
   ctx.drawImage(scene.overlay, 0, 0, POST_WIDTH, POST_HEIGHT);
   if (decorations.quote && scene.quote) ctx.drawImage(scene.quote, 0, 0, POST_WIDTH, POST_HEIGHT);
   if (decorations.swipe && scene.swipe) ctx.drawImage(scene.swipe, 0, 0, POST_WIDTH, POST_HEIGHT);
-  let size = 39;
-  let lines: PostTextRun[][] = [];
-  let height = 0;
-  for (; size >= 26; size--) {
-    lines = wrapStyledPostText(description, 902, (text, bold) => { ctx.font = `${bold ? 700 : 400} ${size}px "BPT Rubik"`; return ctx.measureText(text).width; });
-    height = lines.length * size * 1.1;
-    if (height <= 439) break;
-  }
-  const overflow = height > 439;
+  const size = 39;
+  const lines = wrapStyledPostText(description, 902, (text, bold) => { ctx.font = `${bold ? 700 : 400} ${size}px "BPT Rubik"`; return ctx.measureText(text).width; });
+  const overflow = lines.length * size * 1.1 > 439;
   ctx.save();
   ctx.beginPath(); ctx.rect(154, 825, 902, 453); ctx.clip();
   ctx.fillStyle = "#fff"; ctx.textBaseline = "top";
@@ -211,10 +222,10 @@ function drawForeground(canvas: HTMLCanvasElement, scene: PostScene, description
   for (const line of lines) {
     let x = 154;
     for (const run of line) {
-      ctx.font = `${run.bold ? 700 : 400} ${Math.max(size, 26)}px "BPT Rubik"`;
+      ctx.font = `${run.bold ? 700 : 400} ${size}px "BPT Rubik"`;
       ctx.fillText(run.text, x, y); x += ctx.measureText(run.text).width;
     }
-    y += Math.max(size, 26) * 1.1;
+    y += size * 1.1;
   }
   ctx.restore();
   ctx.save(); ctx.translate(70, 945); ctx.rotate(-Math.PI / 2);
@@ -223,5 +234,5 @@ function drawForeground(canvas: HTMLCanvasElement, scene: PostScene, description
   ctx.font = `500 ${labelSize}px "BPT Rubik"`;
   while (ctx.measureText(label).width > 200 && labelSize > 10) { labelSize--; ctx.font = `500 ${labelSize}px "BPT Rubik"`; }
   ctx.fillStyle = "#000"; ctx.textBaseline = "alphabetic"; ctx.fillText(label, 0, 0); ctx.restore();
-  return { overflow, fontSize: Math.max(size, 26) };
+  return { overflow, fontSize: size };
 }

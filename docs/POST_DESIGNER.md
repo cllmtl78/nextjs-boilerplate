@@ -21,8 +21,8 @@ Kalın / İnce düğmeleriyle ayrı biçimlendirilebilir. Panodan yalnızca düz
 alınır; HTML içeriği eklenmez. Satır sonları ve metin parçalarının kalınlıkları
 PNG çıktısında korunur. Metin alanı y=876 konumunda başlar, 396 piksel yüksekliğe
 kadar uzanır ve sağda 24 piksel pay bırakır.
-Konum Türkçe büyük harfle yazılır. Çok uzun metin otomatik küçülür; minimum
-boyutta hâlâ sığmıyorsa indirme engellenir, metin sessizce kesilmez.
+Konum Türkçe büyük harfle yazılır. Haber açıklaması her zaman 39 px boyutunda kalır.
+439 px yüksekliğindeki alana sığmıyorsa uyarı gösterilir ve indirme engellenir; metin otomatik küçültülmez.
 
 ## Fotoğraf ve indirme
 
@@ -58,4 +58,6 @@ Kırpma, isteğe bağlı yüklenen `react-advanced-cropper` penceresinde yapıl�
 
 ### Düzenleme sekmeleri
 
-Fotoğraf ve açıklama ayarları masaüstü ve mobilde tek bir panel içinde iki sekmeye ayrılır. Başlangıç sekmesi “Haber Fotoğrafı”dır. “Haber Açıklaması” sekmesi metin, konum ve tasarım detaylarını içerir. Paneller sekme değişiminde kaldırılmaz; fotoğraf, kırpma, metin biçimi ve diğer ayarlar korunur. PNG ve sıfırlama eylemleri sekmelerin dışında ortak kalır. Sekmeler yön tuşları, Home ve End ile de seçilebilir. Masaüstünde önizleme daraltılmıştır; iki kart aynı satırda en az 660 px yükseklikle eşitlenir ve gerektiğinde sayfayla birlikte uzar.
+Fotoğraf ve açıklama ayarları masaüstü ve mobilde tek bir panel içinde iki sekmeye ayrılır. Başlangıç sekmesi “Haber Fotoğrafı”dır. “Haber Açıklaması” sekmesi metin, konum ve tasarım detaylarını içerir. Paneller sekme değişiminde kaldırılmaz; fotoğraf, kırpma, metin biçimi ve diğer ayarlar korunur. PNG ve sıfırlama eylemleri sekmelerin dışında ortak kalır. Sekmeler yön tuşları, Home ve End ile de seçilebilir. Masaüstünde önizleme daraltılmıştır; iki kart 690 px sabit yükseklikte eşitlenir. Mobilde ayar kartı 650 px yüksekliğindedir; önizleme ekran genişliğine göre sabit oranını korur. Sekmelerin içerikleri kendi içinde kayar, açıklama girişinin yüksekliği 190 px ile sabittir.
+
+Enter/Backspace sonrasında oluşan iç içe DIV/P ve BR yapıları, satır sınırları korunarak okunur. Bloklar arasındaki sınırlar inline kalınlık etiketlerinin içinden de taşınır; tarayıcının boş satır BR yer tutucuları fazladan satır olarak eklenmez.

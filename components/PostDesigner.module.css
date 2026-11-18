@@ -145,3 +145,17 @@
   .editorTabs { margin-bottom: 18px; }
   .editorTabs button { font-size: 11px; }
 }
+
+/* Keep both cards stable; only their editing content scrolls. */
+.preview, .controls { height: 690px; min-height: 0; max-height: 690px; overflow: hidden; }
+.preview .canvasWrap { flex: 0 1 450px; width: min(100%, 450px); }
+.editorTabs { flex-shrink: 0; }
+.tabPanel { min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; scrollbar-color: #334155 transparent; padding: 2px 4px 6px 0; }
+.richInput { height: 190px; min-height: 190px; max-height: 190px; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; scrollbar-color: #334155 transparent; }
+.controls > .actions { flex-shrink: 0; margin-top: 0; padding-top: 18px; }
+.controls > .error, .controls > .success { flex-shrink: 0; max-height: 75px; overflow-y: auto; }
+@media (max-width: 768px) {
+  .preview { height: auto; min-height: 0; max-height: none; padding: 20px 12px; }
+  .controls { height: 650px; max-height: 650px; min-height: 0; }
+  .preview .canvasWrap { flex: 0 1 320px; }
+}
