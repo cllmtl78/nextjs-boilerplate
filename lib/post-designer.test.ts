@@ -62,3 +62,12 @@ test("extra photo crop covers its frame and stays within source bounds", async (
     assert.ok(Math.abs(crop.width / crop.height - 2 / 3) < 0.000001);
   }
 });
+
+test("reopening or resizing an extra photo keeps its selected source region", async () => {
+  const { extraPhotoCrop } = await import("./post-designer");
+  const image = { naturalWidth: 1200, naturalHeight: 800 } as HTMLImageElement;
+  const photo = { image, x: 120, y: 300, width: 500, height: 500, radius: 30, cropZoom: 1, cropX: 0, cropY: 0, sourceCrop: { x: 300, y: 100, width: 400, height: 400 } };
+  assert.deepEqual(extraPhotoCrop(photo), photo.sourceCrop);
+  const resized = extraPhotoCrop({ ...photo, width: 600, height: 300 });
+  assert.deepEqual(resized, { x: 300, y: 200, width: 400, height: 200 });
+});

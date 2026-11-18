@@ -120,3 +120,24 @@
 .extraPhoto > label { font-size: 12px; }
 .cropTitle { margin: 14px 0 4px; padding-top: 12px; border-top: 1px solid #293b51; color: #cbd5e1; font-size: 11px; font-weight: 600; }
 .extraPhoto .photoButtons button { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.cropDialog { position: fixed; inset: 0; width: min(820px, calc(100% - 32px)); max-height: calc(100dvh - 32px); margin: auto; padding: 0; overflow-y: auto; border: 1px solid #33465f; border-radius: 16px; background: #0d1422; color: #e2e8f0; box-shadow: 0 24px 100px #0009; }
+.cropDialog::backdrop { background: #020611cf; backdrop-filter: blur(6px); }
+.cropDialogHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 20px 22px 14px; }
+.cropDialogHeader h2 { font-size: 17px; font-weight: 600; }
+.cropDialogHeader p { max-width: 55ch; margin-top: 6px; font-size: 11px; color: #94a3b8; line-height: 1.6; }
+.cropDialogHeader > button { display: grid; place-items: center; min-width: 36px; min-height: 36px; border: 1px solid #293b51; border-radius: 8px; }
+.cropRatios { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 22px 14px; }
+.cropRatios button, .cropZoomButtons button { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 12px; min-height: 36px; border: 1px solid #334155; border-radius: 7px; color: #b7c5d9; font-size: 11px; }
+.cropRatios button[aria-pressed="true"] { background: #38bdf81a; border-color: #38bdf880; color: #bae6fd; }
+.cropStage { position: relative; background: #030711; }
+.interactiveCropper { height: clamp(230px, 48dvh, 480px); background: #030711; }
+.cropLoading { position: absolute; inset: 0; display: grid; place-items: center; color: #94a3b8; font-size: 12px; pointer-events: none; }
+.cropZoomButtons { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; }
+.cropDialogFooter { display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 14px 22px 20px; border-top: 1px solid #253146; }
+.cropDialogFooter .download { flex: 0 1 200px; }
+@media (max-width: 768px) {
+  .cropDialog { width: calc(100% - 16px); max-height: calc(100dvh - 16px); border-radius: 12px; }
+  .cropDialogHeader { padding: 14px 14px 10px; }
+  .cropRatios { padding: 0 14px 12px; }
+  .cropDialogFooter { padding: 12px 14px; }
+}

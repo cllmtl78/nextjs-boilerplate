@@ -6,13 +6,14 @@ export type PostTextRun = { text: string; bold: boolean };
 export type PhotoTransform = { zoom: number; x: number; y: number };
 export type PostScene = { photo: HTMLImageElement; overlay: HTMLImageElement; original: boolean; quote?: HTMLImageElement; swipe?: HTMLImageElement };
 export type PostDecorations = { quote: boolean; swipe: boolean };
-export type ExtraPhoto = { image: HTMLImageElement; x: number; y: number; width: number; height: number; radius: number; cropZoom: number; cropX: number; cropY: number };
+export type ExtraPhoto = { image: HTMLImageElement; x: number; y: number; width: number; height: number; radius: number; cropZoom: number; cropX: number; cropY: number; sourceCrop?: { x: number; y: number; width: number; height: number } };
 
 /** Source crop stays inside the photo, including when zoomed or moved to an edge. */
 export function extraPhotoCrop(photo: ExtraPhoto) {
-  const ratio = Math.max(photo.width / photo.image.naturalWidth, photo.height / photo.image.naturalHeight) * photo.cropZoom;
+  const source = photo.sourceCrop ?? { x: 0, y: 0, width: photo.image.naturalWidth, height: photo.image.naturalHeight };
+  const ratio = Math.max(photo.width / source.width, photo.height / source.height) * photo.cropZoom;
   const width = photo.width / ratio, height = photo.height / ratio;
-  return { x: (photo.image.naturalWidth - width) * (photo.cropX + 100) / 200, y: (photo.image.naturalHeight - height) * (photo.cropY + 100) / 200, width, height };
+  return { x: source.x + (source.width - width) * (photo.cropX + 100) / 200, y: source.y + (source.height - height) * (photo.cropY + 100) / 200, width, height };
 }
 
 export const DEFAULT_PHOTO_TRANSFORM: PhotoTransform = { zoom: 1, x: 0, y: 0 };

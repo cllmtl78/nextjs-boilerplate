@@ -1,14 +1,18 @@
 "use client";
 
 import { useRef, useState, type ChangeEvent } from "react";
-import { ImagePlus, Trash2 } from "lucide-react";
+import { Crop, ImagePlus, Trash2 } from "lucide-react";
 import { loadPostImage, prepareUploadedPhoto, type ExtraPhoto } from "@/lib/post-designer";
+import dynamic from "next/dynamic";
 import styles from "./PostDesigner.module.css";
+
+const ExtraPhotoCropDialog = dynamic(() => import("./ExtraPhotoCropDialog"), { ssr: false });
 
 type Props = { value: ExtraPhoto | null; disabled: boolean; onChange: (value: ExtraPhoto | null) => void; onAdded: () => void; onError: (message: string) => void };
 
 export default function ExtraPhotoControls({ value, disabled, onChange, onAdded, onError }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [cropping, setCropping] = useState(false);
   const [loading, setLoading] = useState(false);
   const upload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]; event.target.value = "";
@@ -22,8 +26,8 @@ export default function ExtraPhotoControls({ value, disabled, onChange, onAdded,
     } catch (cause) { onError(cause instanceof Error ? cause.message : "Ek fotoğraf açılamadı."); }
     finally { setLoading(false); }
   };
-  const slider = (key: "width" | "height" | "radius" | "cropZoom" | "cropX" | "cropY", label: string, min: number, max: number, step = 1, suffix = "") => value && <div>
-    <label htmlFor={`extra-${key}`}>{label}<output>{key === "cropZoom" ? Math.round(value[key] * 100) : Math.round(value[key])}{suffix}</output></label>
+  const slider = (key: "width" | "height" | "radius", label: string, min: number, max: number, step = 1, suffix = "") => value && <div>
+    <label htmlFor={`extra-${key}`}>{label}<output>{Math.round(value[key])}{suffix}</output></label>
     <input id={`extra-${key}`} type="range" min={min} max={max} step={step} value={value[key]} disabled={disabled || loading} onChange={event => onChange({ ...value, [key]: Number(event.target.value) })} />
   </div>;
   return <div className={`${styles.field} ${styles.extraPhoto}`}>
@@ -35,12 +39,12 @@ export default function ExtraPhotoControls({ value, disabled, onChange, onAdded,
         {slider("width", "Genişlik", 100, 1080, 1, " px")}
         {slider("height", "Yükseklik", 100, 1350, 1, " px")}
         {slider("radius", "Köşe yuvarlaklığı", 0, 100, 1, "%")}
-        <h3 className={styles.cropTitle}>Kırpma</h3>
-        {slider("cropZoom", "Fotoğrafı yakınlaştır", 1, 4, 0.01, "%")}
-        {slider("cropX", "Kırpma: sağa / sola", -100, 100, 1, "%")}
-        {slider("cropY", "Kırpma: yukarı / aşağı", -100, 100, 1, "%")}
-        <div className={styles.photoButtons}><button type="button" onClick={() => onChange({ ...value, cropZoom: 1, cropX: 0, cropY: 0 })}>Kırpmayı sıfırla</button><button type="button" onClick={() => onChange(null)}><Trash2 size={13} aria-hidden="true" />Fotoğrafı kaldır</button></div>
+        <div className={styles.photoButtons}>
+          <button type="button" disabled={disabled || loading} onClick={() => setCropping(true)}><Crop size={15} aria-hidden="true" />Fotoğrafı kırp</button>
+          <button type="button" disabled={disabled || loading} onClick={() => onChange(null)}><Trash2 size={13} aria-hidden="true" />Fotoğrafı kaldır</button>
+        </div>
       </div>
+      {cropping && <ExtraPhotoCropDialog photo={value} onApply={photo => { onChange(photo); setCropping(false); }} onClose={() => setCropping(false)} />}
     </>}
   </div>;
 }
