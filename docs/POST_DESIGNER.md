@@ -26,8 +26,8 @@ Konum Türkçe büyük harfle yazılır. Haber açıklaması her zaman 39 px boy
 
 ## Fotoğraf ve indirme
 
-JPG, PNG ve WebP desteklenir; dosya sınırı 20 MB'dir. Yeni fotoğraf merkeze
-alınarak çerçeveyi doldurur. %50–%300 yakınlık, yatay/dikey kaydırıcılar ve
+JPG, PNG ve WebP desteklenir; dosya sınırı 20 MB'dir. Yeni fotoğraf tamamı görünür ve en-boy oranı korunur şekilde merkeze
+alınarak tasarıma sığdırılır. %50–%300 yakınlık, yatay/dikey kaydırıcılar ve
 isteğe bağlı dokunmatik/fare sürükleme ile fotoğraf hareket ettirilebilir.
 %100 altında koyu kenar boşlukları oluşabilir. Ortala düğmesi fotoğrafı
 başlangıç kadrajına döndürür. Büyük görseller cihazda küçültülür. Yalnızca
@@ -61,3 +61,5 @@ Kırpma, isteğe bağlı yüklenen `react-advanced-cropper` penceresinde yapıl�
 Fotoğraf ve açıklama ayarları masaüstü ve mobilde tek bir panel içinde iki sekmeye ayrılır. Başlangıç sekmesi “Haber Fotoğrafı”dır. “Haber Açıklaması” sekmesi metin, konum ve tasarım detaylarını içerir. Paneller sekme değişiminde kaldırılmaz; fotoğraf, kırpma, metin biçimi ve diğer ayarlar korunur. PNG ve sıfırlama eylemleri sekmelerin dışında ortak kalır. Sekmeler yön tuşları, Home ve End ile de seçilebilir. Masaüstünde önizleme daraltılmıştır; iki kart 690 px sabit yükseklikte eşitlenir. Mobilde ayar kartı 650 px yüksekliğindedir; önizleme ekran genişliğine göre sabit oranını korur. Sekmelerin içerikleri kendi içinde kayar, açıklama girişinin yüksekliği 190 px ile sabittir.
 
 Enter/Backspace sonrasında oluşan iç içe DIV/P ve BR yapıları, satır sınırları korunarak okunur. Bloklar arasındaki sınırlar inline kalınlık etiketlerinin içinden de taşınır; tarayıcının boş satır BR yer tutucuları fazladan satır olarak eklenmez.
+
+Yüklenen ana fotoğraf başlangıçta tasarıma sığdırılır; otomatik doldurma kırpması uygulanmaz. Pan/zoom sırasında tam kaynak görüntü çizilir, hareketli bir ara çerçeve ile kesilmez. Yalnızca postun dış sınırı doğal görünür alanı belirler; sürükleyerek kenarlar yeniden görünür yapılabilir. Fotoğrafın oranına göre başlangıçta kenar boşlukları oluşabilir; yakınlık ayarı bunları kapatmak için kullanılabilir. Şablonun varsayılan fotoğrafının özgün kadrajı korunur.

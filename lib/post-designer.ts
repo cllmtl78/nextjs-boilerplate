@@ -23,6 +23,15 @@ export function photoFrame(original: boolean, transform: PhotoTransform) {
   return { x: base.x - base.width * (transform.zoom - 1) / 2 + transform.x, y: base.y - base.height * (transform.zoom - 1) / 2 + transform.y, width: base.width * transform.zoom, height: base.height * transform.zoom };
 }
 
+/** Uploaded photos start fully visible. Pan/zoom moves the complete image, never a cropped intermediate frame. */
+export function mainPhotoBounds(original: boolean, imageWidth: number, imageHeight: number, transform: PhotoTransform) {
+  const frame = photoFrame(original, transform);
+  const fit = original ? Math.max : Math.min;
+  const ratio = fit(frame.width / imageWidth, frame.height / imageHeight);
+  const width = imageWidth * ratio, height = imageHeight * ratio;
+  return { x: frame.x + (frame.width - width) / 2, y: frame.y + (frame.height - height) / 2, width, height };
+}
+
 export function wrapStyledPostText(runs: PostTextRun[], width: number, measure: (text: string, bold: boolean) => number): PostTextRun[][] {
   const append = (target: PostTextRun[], run: PostTextRun) => {
     if (!run.text) return;
@@ -181,12 +190,8 @@ export function drawPost(canvas: HTMLCanvasElement, scene: PostScene, descriptio
   if (!ctx) throw new Error("Bu tarayıcı görsel düzenlemeyi desteklemiyor.");
   ctx.clearRect(0, 0, POST_WIDTH, POST_HEIGHT);
   ctx.fillStyle = "#000"; ctx.fillRect(0, 0, POST_WIDTH, POST_HEIGHT);
-  const frame = photoFrame(scene.original, transform);
-  const ratio = Math.max(frame.width / scene.photo.naturalWidth, frame.height / scene.photo.naturalHeight);
-  const width = scene.photo.naturalWidth * ratio, photoHeight = scene.photo.naturalHeight * ratio;
-  ctx.save(); ctx.beginPath(); ctx.rect(frame.x, frame.y, frame.width, frame.height); ctx.clip();
-  ctx.drawImage(scene.photo, frame.x + (frame.width - width) / 2, frame.y + (frame.height - photoHeight) / 2, width, photoHeight);
-  ctx.restore();
+  const bounds = mainPhotoBounds(scene.original, scene.photo.naturalWidth, scene.photo.naturalHeight, transform);
+  ctx.drawImage(scene.photo, bounds.x, bounds.y, bounds.width, bounds.height);
   // Both photos are below the fixed blue effect, branding and text.
   if (extra) {
     const crop = extraPhotoCrop(extra);

@@ -71,3 +71,19 @@ test("reopening or resizing an extra photo keeps its selected source region", as
   const resized = extraPhotoCrop({ ...photo, width: 600, height: 300 });
   assert.deepEqual(resized, { x: 300, y: 200, width: 400, height: 200 });
 });
+
+test("uploaded landscape and portrait photos start fully visible without distortion", async () => {
+  const { mainPhotoBounds } = await import("./post-designer");
+  for (const [width, height] of [[2000, 1000], [1000, 2000], [1000, 1000]]) {
+    const bounds = mainPhotoBounds(false, width, height, { zoom: 1, x: 0, y: 0 });
+    assert.ok(bounds.x >= 0 && bounds.y >= 0);
+    assert.ok(bounds.x + bounds.width <= 1080 && bounds.y + bounds.height <= 1350);
+    assert.equal(bounds.width / bounds.height, width / height);
+  }
+});
+
+test("zoomed photos retain their full image bounds when dragged to reveal an edge", async () => {
+  const { mainPhotoBounds } = await import("./post-designer");
+  const bounds = mainPhotoBounds(false, 2000, 1000, { zoom: 2, x: 540, y: -150 });
+  assert.deepEqual(bounds, { x: 0, y: -15, width: 2160, height: 1080 });
+});
