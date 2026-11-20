@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type PointerEvent, type SetStateAction } from "react";
 import { ArrowDownToLine, ImagePlus, RotateCcw } from "lucide-react";
 import { blobDataUrl, buildPostOverlay, loadPostImage, DEFAULT_DESCRIPTION, DEFAULT_PHOTO_TRANSFORM, drawPost, POST_HEIGHT, POST_WIDTH, prepareUploadedPhoto, type ExtraPhoto, type PostScene, type PostTextRun, type PhotoTransform } from "@/lib/post-designer";
 import PostTextEditor from "./PostTextEditor";
@@ -14,7 +14,18 @@ export default function PostDesigner() {
   const lastTouchDownloadRef = useRef(0);
   const assetsRef = useRef<PostScene | null>(null);
   const dragRef = useRef<{ x: number; y: number; original: PhotoTransform; target: "base" | "extra" } | null>(null);
-  const [extraPhoto, setExtraPhoto] = useState<ExtraPhoto | null>(null);
+  const [extraState, setExtraState] = useState<{ photos: (ExtraPhoto & { id: string })[]; selected: string | null }>({ photos: [], selected: null });
+  const extraPhotos = extraState.photos;
+  const extraPhoto = extraPhotos.find(photo => photo.id === extraState.selected) ?? null;
+  const setExtraPhoto = (change: SetStateAction<ExtraPhoto | null>) => {
+    setExtraState(current => {
+      const selected = current.photos.find(photo => photo.id === current.selected) ?? null;
+      const next = typeof change === "function" ? change(selected) : change;
+      if (!selected) return current;
+      const photos = next ? current.photos.map(photo => photo.id === selected.id ? { ...next, id: photo.id } : photo) : current.photos.filter(photo => photo.id !== selected.id);
+      return { photos, selected: next ? selected.id : photos.at(-1)?.id ?? null };
+    });
+  };
   const [photoTarget, setPhotoTarget] = useState<"base" | "extra">("base");
   const [background, setBackground] = useState<PostScene | null>(null);
   const [photoTransform, setPhotoTransform] = useState<PhotoTransform>(DEFAULT_PHOTO_TRANSFORM);
@@ -58,11 +69,11 @@ export default function PostDesigner() {
     if (!background) return;
     const frame = requestAnimationFrame(() => {
       if (!canvasRef.current) return;
-      try { setOverflow(drawPost(canvasRef.current, background, description, location, photoTransform, decorations, extraPhoto).overflow); }
+      try { setOverflow(drawPost(canvasRef.current, background, description, location, photoTransform, decorations, extraPhotos).overflow); }
       catch (cause) { setError(cause instanceof Error ? cause.message : "Önizleme hazırlanamadı."); }
     });
     return () => cancelAnimationFrame(frame);
-  }, [background, description, location, photoTransform, decorations, extraPhoto]);
+  }, [background, description, location, photoTransform, decorations, extraPhotos]);
 
   const upload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -81,7 +92,7 @@ export default function PostDesigner() {
     setDescription([{ text: DEFAULT_DESCRIPTION, bold: true }]); setEditorReset(value => value + 1); setLocation("DÜNYA"); setPhotoName("Şablondaki fotoğraf");
     if (assetsRef.current) setBackground(assetsRef.current);
     setPhotoTransform(DEFAULT_PHOTO_TRANSFORM); setDraggingEnabled(true); setManual(false); setDecorations({ quote: false, swipe: false });
-    setExtraPhoto(null); setPhotoTarget("base");
+    setExtraState({ photos: [], selected: null }); setPhotoTarget("base");
     setError(""); setMessage("");
   };
   const changePhoto = (change: Partial<PhotoTransform>) => {
@@ -96,7 +107,7 @@ export default function PostDesigner() {
       dragFrame.current = null;
       if (canvasRef.current && background && pendingTransform.current) {
         const next = pendingTransform.current;
-        drawPost(canvasRef.current, background, description, location, drag.target === "base" ? next : photoTransform, decorations, drag.target === "extra" && extraPhoto ? { ...extraPhoto, x: next.x, y: next.y } : extraPhoto);
+        drawPost(canvasRef.current, background, description, location, drag.target === "base" ? next : photoTransform, decorations, drag.target === "extra" && extraPhoto ? extraPhotos.map(photo => photo.id === extraPhoto.id ? { ...photo, x: next.x, y: next.y } : photo) : extraPhotos);
       }
     });
   };
@@ -115,7 +126,7 @@ export default function PostDesigner() {
     if (!canvasRef.current || !background || busy || exporting || overflow) return;
     setExporting(true); setError(""); setMessage("");
     try {
-      const result = drawPost(canvasRef.current, background, description, location, photoTransform, decorations, extraPhoto);
+      const result = drawPost(canvasRef.current, background, description, location, photoTransform, decorations, extraPhotos);
       if (result.overflow) { setOverflow(true); return; }
       const canvas = canvasRef.current;
       const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error("PNG oluşturulamadı.")), "image/png"));
@@ -164,7 +175,17 @@ export default function PostDesigner() {
             <div className={styles.photoButtons}><button type="button" disabled={busy} onClick={() => changePhoto(DEFAULT_PHOTO_TRANSFORM)}>Ortala</button></div>
           </div>}
         </div>
-        <ExtraPhotoControls value={extraPhoto} disabled={busy || !background} onChange={value => { setExtraPhoto(value); setMessage(""); if (!value) setPhotoTarget("base"); }} onAdded={() => { setPhotoTarget("extra"); setDraggingEnabled(true); }} onError={setError} />
+        {extraPhotos.length > 0 && <div className={styles.extraPhotoList} role="group" aria-label="Ek fotoğraflar">
+          {extraPhotos.map((photo, index) => <button type="button" key={photo.id} aria-pressed={photo.id === extraState.selected} onClick={() => { setExtraState(current => ({ ...current, selected: photo.id })); setPhotoTarget("extra"); }}><span aria-hidden="true" style={{ backgroundImage: `url("${photo.image.src}")` }} />Ek fotoğraf {index + 1}</button>)}
+        </div>}
+        <ExtraPhotoControls key={extraState.selected ?? "empty"} value={extraPhoto} disabled={busy || !background} onChange={value => { setExtraPhoto(value); setMessage(""); if (!value && extraPhotos.length === 1) setPhotoTarget("base"); }} onUpload={(photo, append) => {
+          const id = crypto.randomUUID();
+          setExtraState(current => {
+            if (append || !current.selected) return { photos: [...current.photos, { ...photo, id }], selected: id };
+            return { ...current, photos: current.photos.map(existing => existing.id === current.selected ? { ...photo, id: existing.id } : existing) };
+          });
+          setPhotoTarget("extra"); setDraggingEnabled(true); setMessage("");
+        }} onError={setError} />
         {extraPhoto && <div className={styles.photoButtons} role="group" aria-label="Sürüklenecek fotoğraf">
           <button type="button" aria-pressed={photoTarget === "base"} onClick={() => setPhotoTarget("base")}>Ana fotoğrafı sürükle</button>
           <button type="button" aria-pressed={photoTarget === "extra"} onClick={() => setPhotoTarget("extra")}>Ek fotoğrafı sürükle</button>

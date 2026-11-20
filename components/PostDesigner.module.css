@@ -159,3 +159,8 @@
   .controls { height: 650px; max-height: 650px; min-height: 0; }
   .preview .canvasWrap { flex: 0 1 320px; }
 }
+.extraPhotoList { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 20px; }
+.extraPhotoList button { display: flex; align-items: center; gap: 7px; padding: 6px 9px 6px 6px; min-height: 42px; border: 1px solid #334155; border-radius: 8px; color: #94a3b8; font-size: 10px; background: #080e1a; }
+.extraPhotoList button[aria-pressed="true"] { color: #bae6fd; border-color: #38bdf877; background: #38bdf812; }
+.extraPhotoList button > span { width: 28px; height: 28px; border-radius: 4px; background-size: cover; background-position: center; }
+.addExtraPhoto { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; min-height: 40px; margin-top: 9px; border: 1px dashed #38bdf866; border-radius: 8px; background: #38bdf80a; color: #7dd3fc; font-size: 11px; }

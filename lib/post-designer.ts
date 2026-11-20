@@ -185,7 +185,7 @@ export async function prepareUploadedPhoto(file: File): Promise<PostPhoto> {
 
 const foregroundCache = new WeakMap<HTMLImageElement, { key: string; canvas: HTMLCanvasElement; result: { overflow: boolean; fontSize: number } }>();
 
-export function drawPost(canvas: HTMLCanvasElement, scene: PostScene, description: PostTextRun[], location: string, transform: PhotoTransform = DEFAULT_PHOTO_TRANSFORM, decorations: PostDecorations = { quote: false, swipe: false }, extra: ExtraPhoto | null = null) {
+export function drawPost(canvas: HTMLCanvasElement, scene: PostScene, description: PostTextRun[], location: string, transform: PhotoTransform = DEFAULT_PHOTO_TRANSFORM, decorations: PostDecorations = { quote: false, swipe: false }, extras: ExtraPhoto[] = []) {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Bu tarayıcı görsel düzenlemeyi desteklemiyor.");
   ctx.clearRect(0, 0, POST_WIDTH, POST_HEIGHT);
@@ -193,7 +193,7 @@ export function drawPost(canvas: HTMLCanvasElement, scene: PostScene, descriptio
   const bounds = mainPhotoBounds(scene.original, scene.photo.naturalWidth, scene.photo.naturalHeight, transform);
   ctx.drawImage(scene.photo, bounds.x, bounds.y, bounds.width, bounds.height);
   // Both photos are below the fixed blue effect, branding and text.
-  if (extra) {
+  for (const extra of extras) {
     const crop = extraPhotoCrop(extra);
     ctx.save(); ctx.beginPath();
     ctx.roundRect(extra.x, extra.y, extra.width, extra.height, Math.min(extra.width, extra.height) * extra.radius / 200);

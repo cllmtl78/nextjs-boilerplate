@@ -8,10 +8,11 @@ import styles from "./PostDesigner.module.css";
 
 const ExtraPhotoCropDialog = dynamic(() => import("./ExtraPhotoCropDialog"), { ssr: false });
 
-type Props = { value: ExtraPhoto | null; disabled: boolean; onChange: (value: ExtraPhoto | null) => void; onAdded: () => void; onError: (message: string) => void };
+type Props = { value: ExtraPhoto | null; disabled: boolean; onChange: (value: ExtraPhoto | null) => void; onUpload: (photo: ExtraPhoto, append: boolean) => void; onError: (message: string) => void };
 
-export default function ExtraPhotoControls({ value, disabled, onChange, onAdded, onError }: Props) {
+export default function ExtraPhotoControls({ value, disabled, onChange, onUpload, onError }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const appendRef = useRef(false);
   const [cropping, setCropping] = useState(false);
   const [loading, setLoading] = useState(false);
   const upload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -21,8 +22,7 @@ export default function ExtraPhotoControls({ value, disabled, onChange, onAdded,
     try {
       const prepared = await prepareUploadedPhoto(file);
       const image = await loadPostImage(prepared.data);
-      onChange({ image, x: 200, y: 350, width: 600, height: 400, radius: 0, cropZoom: 1, cropX: 0, cropY: 0 });
-      onAdded();
+      onUpload({ image, x: 200, y: 350, width: 600, height: 400, radius: 0, cropZoom: 1, cropX: 0, cropY: 0 }, appendRef.current || !value);
     } catch (cause) { onError(cause instanceof Error ? cause.message : "Ek fotoğraf açılamadı."); }
     finally { setLoading(false); }
   };
@@ -33,7 +33,8 @@ export default function ExtraPhotoControls({ value, disabled, onChange, onAdded,
   return <div className={`${styles.field} ${styles.extraPhoto}`}>
     <label htmlFor="extra-photo-file">Ek fotoğraf</label>
     <input ref={fileRef} id="extra-photo-file" type="file" className={styles.file} tabIndex={-1} accept="image/jpeg,image/png,image/webp" disabled={disabled || loading} onChange={event => void upload(event)} />
-    <button type="button" className={styles.upload} disabled={disabled || loading} onClick={() => fileRef.current?.click()}><ImagePlus size={18} aria-hidden="true" /><span>{loading ? "Fotoğraf hazırlanıyor…" : value ? "Ek fotoğrafı değiştir" : "Üste fotoğraf ekle"}</span></button>
+    <button type="button" className={styles.upload} disabled={disabled || loading} onClick={() => { appendRef.current = false; fileRef.current?.click(); }}><ImagePlus size={18} aria-hidden="true" /><span>{loading ? "Fotoğraf hazırlanıyor…" : value ? "Ek fotoğrafı değiştir" : "Üste fotoğraf ekle"}</span></button>
+    {value && <button type="button" className={styles.addExtraPhoto} disabled={disabled || loading} onClick={() => { appendRef.current = true; fileRef.current?.click(); }}><ImagePlus size={16} aria-hidden="true" />Yeni fotoğraf ekle</button>}
     {value && <>
       <div className={styles.photoControls}>
         <div>
